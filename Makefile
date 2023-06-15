@@ -8,8 +8,9 @@ SRC = main.c src/*.c
 OBJ = $(SRC:.c=.o)
 TARGET = soil_soldiers
 
+# when compiling with emscripten, add some specific flags
 ifeq ($(CC), emcc)
-	CFLAGS += -sWASM=0 -sUSE_SDL=2 -sFULL_ES2=1
+	CFLAGS += -sWASM=0 -sUSE_SDL=2 -sFULL_ES2=1 --shell-file shell.html
 	TARGET = soil_soldiers.html
 endif
 
