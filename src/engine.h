@@ -12,16 +12,20 @@ struct engine_s {
 	SDL_Renderer *renderer;
 	Uint32 window_id;
 	SDL_GLContext gl_ctx;
-	int is_running;
 	
 	game_t *game;
 	struct scene_s *scene;
 	float mouseX, mouseY;
 };
 
+// init & cleanup
 struct engine_s *engine_new();
 int engine_destroy(struct engine_s *engine);
 
+// scene handling
+void engine_setscene(struct engine_s *engine, struct scene_s *scene);
+
+// main loop
 void engine_update(struct engine_s *engine);
 void engine_draw(struct engine_s *engine);
 void engine_mainloop(struct engine_s *engine);

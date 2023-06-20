@@ -1,4 +1,5 @@
 #include "engine.h"
+#include <SDL.h>
 #include <SDL2_gfxPrimitives.h>
 #include "scenes/intro.h"
 
@@ -33,10 +34,10 @@ struct engine_s *engine_new() {
 	engine->gl_ctx = SDL_GL_CreateContext(engine->window);
 
 	// scene
-	struct intro_s *intro = intro_new(engine);
-	engine->scene = (struct scene_s *)intro;
-
-	engine->is_running = 1;
+	struct intro_s *intro = malloc(sizeof(struct intro_s));
+	intro_init(intro, engine);
+	engine->scene = NULL;
+	engine_setscene(engine, (struct scene_s *)intro);
 
 	// init game
 	engine->game = malloc(sizeof(*engine->game));
@@ -61,12 +62,30 @@ int engine_destroy(struct engine_s *engine) {
 	return 0;
 }
 
+// scene handling
+void engine_setscene(struct engine_s *engine, struct scene_s *new_scene) {
+	struct scene_s *old_scene = engine->scene;
+	engine->scene = NULL;
+
+	// cleanup previous scene
+	if (old_scene != NULL) {
+		scene_destroy(old_scene, engine);
+		free(old_scene);
+	}
+	
+	if (new_scene != NULL) {
+		engine->scene = new_scene;
+		scene_load(new_scene, engine);
+	}
+}
+
+// main loop
 void engine_update(struct engine_s *engine) {
 	SDL_Event event;
 	while (SDL_PollEvent(&event)) {
 		switch (event.type) {
 			case SDL_QUIT:
-				engine->is_running = 0;
+				engine_setscene(engine, NULL);
 				break;
 			case SDL_WINDOWEVENT:
 				if (event.window.windowID == engine->window_id && event.window.event == SDL_WINDOWEVENT_SIZE_CHANGED) {
@@ -89,10 +108,20 @@ void engine_update(struct engine_s *engine) {
 void engine_draw(struct engine_s *engine) {
 	glClear(GL_COLOR_BUFFER_BIT);
 	
-	// run scene
-	//introscene_draw(engine);
-	scene_draw(engine->scene, engine);
+	int w, h;
+	SDL_GetWindowSize(engine->window, &w, &h);
+	char text[128];
+	sprintf(text, "window: %dx%d", w, h);
+	stringColor(engine->renderer, 10, 10, text, 0xFF00FFFF);
 
+	SDL_version version;
+	SDL_GetVersion(&version);
+	sprintf(text, "version: %u.%u.%u", version.major, version.minor, version.patch);
+	stringColor(engine->renderer, 10, 20, text, 0xFF00FFFF);
+
+	// run scene
+	scene_update(engine->scene, engine, 1.0f / 60.0f);
+	scene_draw(engine->scene, engine);
 
 	SDL_RenderPresent(engine->renderer);
 	//SDL_GL_SwapWindow(engine->window);

@@ -2,12 +2,18 @@
 #define SCENE_H
 
 struct engine_s;
+struct scene_s;
+
+typedef void(*scene_load_fn)(struct scene_s *, struct engine_s *);
+typedef void(*scene_destroy_fn)(struct scene_s *, struct engine_s *);
+typedef void(*scene_update_fn)(struct scene_s *, struct engine_s *, float);
+typedef void(*scene_draw_fn)(struct scene_s *, struct engine_s *);
 
 struct scene_s {
-	void (*load)(struct scene_s *scene, struct engine_s *engine);
-	void (*destroy)(struct scene_s *scene, struct engine_s *engine);
-	void (*update)(struct scene_s *scene, struct engine_s *engine, float dt);
-	void (*draw)(struct scene_s *scene, struct engine_s *engine);
+	scene_load_fn load;
+	scene_destroy_fn destroy;
+	scene_update_fn update;
+	scene_draw_fn draw;
 };
 
 void scene_init(struct scene_s *scene, struct engine_s *engine);

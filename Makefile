@@ -2,9 +2,9 @@
 CC = gcc
 CFLAGS = -std=c99 -Wall -Wextra -pedantic -Wfloat-equal -Wshadow -Waggregate-return -Wno-unused-parameter -Wswitch-enum -Wcast-qual -Wnull-dereference -Wunused-result
 INCLUDES = -Isrc/ -I/usr/include/SDL2
-LIBS = -lSDL2 -lSDL2_gfx -lSDL2_mixer -lSDL2_net -lGL # -lSDL2_ttf
+LIBS = -lm -lSDL2 -lSDL2_gfx -lSDL2_mixer -lSDL2_net -lGL # -lSDL2_ttf
 
-SRC = main.c src/engine.c src/game.c src/scenes/scene.c src/scenes/intro.c src/scenes/mainmenu.c
+SRC = main.c src/engine.c src/game.c src/scenes/scene.c src/scenes/intro.c src/scenes/menu.c
 OBJ = $(SRC:.c=.o)
 TARGET = soil_soldiers
 
