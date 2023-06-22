@@ -3,7 +3,6 @@
 
 #include <SDL.h>
 #include <SDL_opengles2.h>
-#include "game.h"
 #include "scenes/scene.h"
 
 struct engine_s {
@@ -13,7 +12,6 @@ struct engine_s {
 	Uint32 window_id;
 	SDL_GLContext gl_ctx;
 	
-	game_t *game;
 	struct scene_s *scene;
 	float mouseX, mouseY;
 };

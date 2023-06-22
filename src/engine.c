@@ -3,12 +3,6 @@
 #include <SDL2_gfxPrimitives.h>
 #include "scenes/intro.h"
 
-void introscene_draw(struct engine_s *engine) {
-
-	thickLineColor(engine->renderer, 10, 10, engine->mouseX, engine->mouseY, 3, 0xffff00ff);
-	stringColor(engine->renderer, 20, 80, "hello: world", 0xffffffff);
-}
-
 struct engine_s *engine_new() {
 	if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_TIMER | SDL_INIT_GAMECONTROLLER | SDL_INIT_EVENTS)) {
 		SDL_Log("failed initializing SDL: %s\n", SDL_GetError());
@@ -39,10 +33,6 @@ struct engine_s *engine_new() {
 	engine->scene = NULL;
 	engine_setscene(engine, (struct scene_s *)intro);
 
-	// init game
-	engine->game = malloc(sizeof(*engine->game));
-	game_init(engine->game, 16, 16);
-
 	glClearColor(183.0f / 255.0f, 255.0f / 255.0f, 210.0f / 255.0f, 1.0f);
 	glViewport(0, 0, 450, 800);
 
@@ -50,9 +40,7 @@ struct engine_s *engine_new() {
 }
 
 int engine_destroy(struct engine_s *engine) {
-	// game
-	game_destroy(engine->game);
-	free(engine->game);
+	// scene
 	// windowing
 	SDL_DestroyWindow(engine->window);
 	SDL_DestroyRenderer(engine->renderer);

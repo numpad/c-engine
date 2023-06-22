@@ -1,6 +1,11 @@
 #ifndef SCENE_H
 #define SCENE_H
 
+//
+// base class for a scene.
+// TODO: put `engine_s *` into struct on init so `scene_*_fn` don't need it as param.
+//
+
 struct engine_s;
 struct scene_s;
 

@@ -4,7 +4,7 @@ CFLAGS = -std=c99 -Wall -Wextra -pedantic -Wfloat-equal -Wshadow -Waggregate-ret
 INCLUDES = -Isrc/ -I/usr/include/SDL2
 LIBS = -lm -lSDL2 -lSDL2_gfx -lSDL2_mixer -lSDL2_net -lGL # -lSDL2_ttf
 
-SRC = main.c src/engine.c src/game.c src/scenes/scene.c src/scenes/intro.c src/scenes/menu.c
+SRC = main.c src/engine.c src/scenes/game.c src/scenes/scene.c src/scenes/intro.c src/scenes/menu.c
 OBJ = $(SRC:.c=.o)
 TARGET = soil_soldiers
 
@@ -15,7 +15,7 @@ ifeq ($(CC), emcc)
 	TARGET = soil_soldiers.html
 endif
 
-.PHONY: all clean
+.PHONY: all
 
 all: $(TARGET)
 

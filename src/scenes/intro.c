@@ -1,5 +1,6 @@
 #include "intro.h"
 #include <stdlib.h>
+#include <math.h>
 #include <SDL.h>
 #include <SDL2_gfxPrimitives.h>
 #include "scene.h"
