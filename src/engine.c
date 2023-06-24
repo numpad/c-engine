@@ -76,17 +76,14 @@ void engine_update(struct engine_s *engine) {
 				engine_setscene(engine, NULL);
 				break;
 			case SDL_WINDOWEVENT:
-				if (event.window.windowID == engine->window_id && event.window.event == SDL_WINDOWEVENT_SIZE_CHANGED) {
+				if (/* event.window.windowID == engine->window_id && */ event.window.event == SDL_WINDOWEVENT_SIZE_CHANGED) {
 					glViewport(0, 0, event.window.data1, event.window.data2);
 				}
 				break;
 			case SDL_MOUSEBUTTONDOWN:
 			case SDL_MOUSEBUTTONUP:
 			{
-				SDL_MouseButtonEvent *mouse_event = (SDL_MouseButtonEvent *)&event;
-				engine->mouseX = mouse_event->x;
-				engine->mouseY = mouse_event->y;
-				glClearColor(engine->mouseX / 450.0f, engine->mouseY / 800.0f, 0.0f, 1.0f);
+				//SDL_MouseButtonEvent *mouse_event = (SDL_MouseButtonEvent *)&event;
 				break;
 			}
 		}

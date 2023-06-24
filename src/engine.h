@@ -13,7 +13,6 @@ struct engine_s {
 	SDL_GLContext gl_ctx;
 	
 	struct scene_s *scene;
-	float mouseX, mouseY;
 };
 
 // init & cleanup

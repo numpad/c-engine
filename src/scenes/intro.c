@@ -24,7 +24,7 @@ static void intro_draw(struct intro_s *scene, struct engine_s *engine) {
 	int mx, my;
 	const Uint32 buttons = SDL_GetMouseState(&mx, &my);
 	if (SDL_BUTTON(buttons) & 1) {
-		scene->timer += 0.01f;
+		scene->timer += 0.05f;
 		if (scene->timer >= 1.0f) {
 			struct menu_s *menu = malloc(sizeof(struct menu_s));
 			menu_init(menu, engine);
@@ -40,7 +40,6 @@ static void intro_draw(struct intro_s *scene, struct engine_s *engine) {
 
 	boxColor(engine->renderer, mx - 50 * fill, my - 50 * fill, mx + 50 * fill, my + 50 * fill, 0xFF0000FF);
 	rectangleColor(engine->renderer, mx - 50, my - 50, mx + 50, my + 50, 0xFFFF0000);
-	thickLineColor(engine->renderer, 10, 10, engine->mouseX, engine->mouseY, 3, 0xffff00ff);
 	stringColor(engine->renderer, mx, my + 50, "intro scene", 0xffffffff);
 }
 
