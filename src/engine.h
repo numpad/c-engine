@@ -24,6 +24,7 @@ int engine_destroy(struct engine_s *engine);
 
 // scene handling
 void engine_setscene(struct engine_s *engine, struct scene_s *scene);
+void engine_setscene_dll(struct engine_s *engine, const char *filename);
 
 // main loop
 void engine_update(struct engine_s *engine);

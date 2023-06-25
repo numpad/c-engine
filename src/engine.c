@@ -1,10 +1,10 @@
 #include "engine.h"
 #include <SDL.h>
-#include <SDL2_gfxPrimitives.h>
 #define NANOVG_GLES2_IMPLEMENTATION
 #include <nanovg_gl.h>
 #undef NANOVG_GLES2_IMPLEMENTATION
 #include "scenes/intro.h"
+#include "scenes/menu.h"
 
 struct engine_s *engine_new() {
 	if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_TIMER | SDL_INIT_GAMECONTROLLER | SDL_INIT_EVENTS)) {
@@ -59,7 +59,10 @@ int engine_destroy(struct engine_s *engine) {
 	return 0;
 }
 
+//
 // scene handling
+//
+
 void engine_setscene(struct engine_s *engine, struct scene_s *new_scene) {
 	struct scene_s *old_scene = engine->scene;
 	engine->scene = NULL;
@@ -76,6 +79,23 @@ void engine_setscene(struct engine_s *engine, struct scene_s *new_scene) {
 	}
 }
 
+#ifdef DEBUG
+#include <dlfcn.h>
+void engine_setscene_dll(struct engine_s *engine, const char *filename) {
+	void *handle = dlopen(filename, RTLD_NOW);
+
+	void(*fn_init)(struct menu_s *, struct engine_s *) = dlsym(handle, "menu_init");
+
+	struct menu_s *newscene = malloc(sizeof(struct menu_s *));
+	fn_init(newscene, engine);
+
+	dlclose(handle);
+}
+#else
+void engine_setscene_dll(struct engine_s *engine, const char *filename) {
+	fprintf(stderr, "dll loading disabled for non-debug builds!\n");
+}
+#endif
 // main loop
 void engine_update(struct engine_s *engine) {
 	SDL_Event event;
@@ -104,9 +124,7 @@ void engine_update(struct engine_s *engine) {
 void engine_draw(struct engine_s *engine) {
 	glClear(GL_COLOR_BUFFER_BIT);
 	
-	int width, height;
-	SDL_GetWindowSize(engine->window, &width, &height);
-	nvgBeginFrame(engine->vg, width, height, 1.0f);
+	nvgBeginFrame(engine->vg, engine->window_width, engine->window_height, 1.0f);
 
 	// run scene
 	scene_update(engine->scene, engine, 1.0f / 60.0f);

@@ -1,6 +1,5 @@
 #include "terrain.h"
 #include <stdlib.h>
-#include <SDL2_gfxPrimitives.h>
 #include "engine.h"
 
 void terrain_init(struct terrain_s *terrain, int w, int h) {

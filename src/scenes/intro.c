@@ -2,12 +2,12 @@
 #include <stdlib.h>
 #include <math.h>
 #include <SDL.h>
-#include <SDL2_gfxPrimitives.h>
 #include "scene.h"
 #include "engine.h"
 #include "menu.h"
 
 static void intro_load(struct intro_s *scene, struct engine_s *engine) {
+	nvgCreateFont(engine->vg, "PermanentMarker Regular", "res/font/PermanentMarker-Regular.ttf");
 }
 
 static void intro_destroy(struct intro_s *scene, struct engine_s *engine) {
@@ -21,8 +21,6 @@ static inline float ease_out_expo(float n) {
 }
 
 static void intro_draw(struct intro_s *scene, struct engine_s *engine) {
-	int width, height;
-	SDL_GetWindowSize(engine->window, &width, &height);
 	int mx, my;
 	const Uint32 buttons = SDL_GetMouseState(&mx, &my);
 	if (SDL_BUTTON(buttons) & 1) {
@@ -43,8 +41,6 @@ static void intro_draw(struct intro_s *scene, struct engine_s *engine) {
 	// boxColor(engine->renderer, mx - 50 * fill, my - 50 * fill, mx + 50 * fill, my + 50 * fill, 0xFF0000FF);
 	// rectangleColor(engine->renderer, mx - 50, my - 50, mx + 50, my + 50, 0xFFFF0000);
 	// stringColor(engine->renderer, mx, my + 50, "intro scene", 0xffffffff);
-	nvgBeginFrame(engine->vg, width, height, 2.0);
-
 	nvgBeginPath(engine->vg);
 	nvgCircle(engine->vg, mx, my, 30.0f * fill);
 	nvgFillColor(engine->vg, nvgRGBA(200, 170, 190, 128));
@@ -56,7 +52,18 @@ static void intro_draw(struct intro_s *scene, struct engine_s *engine) {
 	nvgStrokeColor(engine->vg, nvgRGBA(150, 110, 130, 200));
 	nvgStroke(engine->vg);
 
-	nvgEndFrame(engine->vg);
+#ifdef DEBUG
+	nvgBeginPath(engine->vg);
+	nvgFillColor(engine->vg, nvgRGB(100, 220, 100));
+	nvgFontSize(engine->vg, 28.0f);
+	nvgText(engine->vg, 100.0f, 200.0f, "DEBUG = true", NULL);
+#else
+	nvgBeginPath(engine->vg);
+	nvgFillColor(engine->vg, nvgRGB(220, 100, 100));
+	nvgFontSize(engine->vg, 28.0f);
+	nvgText(engine->vg, 100.0f, 200.0f, "DEBUG = false", NULL);
+#endif
+
 }
 
 void intro_init(struct intro_s *intro, struct engine_s *engine) {
