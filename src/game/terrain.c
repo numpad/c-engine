@@ -24,7 +24,7 @@ void terrain_draw(struct terrain_s *terrain, struct engine_s *engine) {
 		for (int x = 0; x < terrain->width; ++x) {
 			const unsigned char density = terrain->density[x + y * terrain->width];
 			const int radius = (density / 255.0f);
-			filledCircleColor(engine->renderer, x * 10, y * 10, 10, 0xffff0000);
+			//filledCircleColor(engine->renderer, x * 10, y * 10, 10, 0xffff0000);
 		}
 	}
 }

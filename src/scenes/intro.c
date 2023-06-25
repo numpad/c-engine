@@ -21,6 +21,8 @@ static inline float ease_out_expo(float n) {
 }
 
 static void intro_draw(struct intro_s *scene, struct engine_s *engine) {
+	int width, height;
+	SDL_GetWindowSize(engine->window, &width, &height);
 	int mx, my;
 	const Uint32 buttons = SDL_GetMouseState(&mx, &my);
 	if (SDL_BUTTON(buttons) & 1) {
@@ -31,16 +33,30 @@ static void intro_draw(struct intro_s *scene, struct engine_s *engine) {
 			engine_setscene(engine, (struct scene_s *)menu);
 		}
 	} else {
-		scene->timer = 0.0f;
+		scene->timer *= 0.65f;
 	}
 
 	float fill = scene->timer;
 	if (fill > 1.0) fill = 1.0f;
 	fill = ease_out_expo(fill);
 
-	boxColor(engine->renderer, mx - 50 * fill, my - 50 * fill, mx + 50 * fill, my + 50 * fill, 0xFF0000FF);
-	rectangleColor(engine->renderer, mx - 50, my - 50, mx + 50, my + 50, 0xFFFF0000);
-	stringColor(engine->renderer, mx, my + 50, "intro scene", 0xffffffff);
+	// boxColor(engine->renderer, mx - 50 * fill, my - 50 * fill, mx + 50 * fill, my + 50 * fill, 0xFF0000FF);
+	// rectangleColor(engine->renderer, mx - 50, my - 50, mx + 50, my + 50, 0xFFFF0000);
+	// stringColor(engine->renderer, mx, my + 50, "intro scene", 0xffffffff);
+	nvgBeginFrame(engine->vg, width, height, 2.0);
+
+	nvgBeginPath(engine->vg);
+	nvgCircle(engine->vg, mx, my, 30.0f * fill);
+	nvgFillColor(engine->vg, nvgRGBA(200, 170, 190, 128));
+	nvgFill(engine->vg);
+
+	nvgBeginPath(engine->vg);
+	nvgCircle(engine->vg, mx, my, 20.0f + 10.0f * fill);
+	nvgStrokeWidth(engine->vg, 1.0f + 1.0f * fill);
+	nvgStrokeColor(engine->vg, nvgRGBA(150, 110, 130, 200));
+	nvgStroke(engine->vg);
+
+	nvgEndFrame(engine->vg);
 }
 
 void intro_init(struct intro_s *intro, struct engine_s *engine) {

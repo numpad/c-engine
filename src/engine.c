@@ -1,6 +1,9 @@
 #include "engine.h"
 #include <SDL.h>
 #include <SDL2_gfxPrimitives.h>
+#define NANOVG_GLES2_IMPLEMENTATION
+#include <nanovg_gl.h>
+#undef NANOVG_GLES2_IMPLEMENTATION
 #include "scenes/intro.h"
 
 struct engine_s *engine_new() {
@@ -12,10 +15,9 @@ struct engine_s *engine_new() {
 	struct engine_s *engine = malloc(sizeof(struct engine_s));
 	engine->window = SDL_CreateWindow("Soil Soldiers", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, 450, 800, SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_SHOWN);
 	engine->window_id = SDL_GetWindowID(engine->window);
-	engine->renderer = SDL_CreateRenderer(engine->window, -1, SDL_RENDERER_ACCELERATED);
 
-	if (engine->renderer == NULL) {
-		SDL_Log("failed initializing renderer\n");
+	if (engine->window == NULL) {
+		SDL_Log("failed initializing window\n");
 		return NULL;
 	}
 
@@ -27,23 +29,30 @@ struct engine_s *engine_new() {
 	SDL_GL_SetSwapInterval(1);
 	engine->gl_ctx = SDL_GL_CreateContext(engine->window);
 
+	engine->vg = nvgCreateGLES2(NVG_ANTIALIAS | NVG_STENCIL_STROKES);
+
 	// scene
 	struct intro_s *intro = malloc(sizeof(struct intro_s));
 	intro_init(intro, engine);
 	engine->scene = NULL;
 	engine_setscene(engine, (struct scene_s *)intro);
 
-	glClearColor(183.0f / 255.0f, 255.0f / 255.0f, 210.0f / 255.0f, 1.0f);
+	glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
 	glViewport(0, 0, 450, 800);
+	engine->window_width = 450;
+	engine->window_height = 800;
 
 	return engine;
 }
 
 int engine_destroy(struct engine_s *engine) {
 	// scene
+
+	// other
+	nvgDeleteGLES2(engine->vg);
+
 	// windowing
 	SDL_DestroyWindow(engine->window);
-	SDL_DestroyRenderer(engine->renderer);
 	SDL_GL_DeleteContext(engine->gl_ctx);
 
 	free(engine);
@@ -77,6 +86,8 @@ void engine_update(struct engine_s *engine) {
 				break;
 			case SDL_WINDOWEVENT:
 				if (/* event.window.windowID == engine->window_id && */ event.window.event == SDL_WINDOWEVENT_SIZE_CHANGED) {
+					engine->window_width = event.window.data1;
+					engine->window_height = event.window.data2;
 					glViewport(0, 0, event.window.data1, event.window.data2);
 				}
 				break;
@@ -93,23 +104,17 @@ void engine_update(struct engine_s *engine) {
 void engine_draw(struct engine_s *engine) {
 	glClear(GL_COLOR_BUFFER_BIT);
 	
-	int w, h;
-	SDL_GetWindowSize(engine->window, &w, &h);
-	char text[128];
-	sprintf(text, "window: %dx%d", w, h);
-	stringColor(engine->renderer, 10, 10, text, 0xFF00FFFF);
-
-	SDL_version version;
-	SDL_GetVersion(&version);
-	sprintf(text, "version: %u.%u.%u", version.major, version.minor, version.patch);
-	stringColor(engine->renderer, 10, 20, text, 0xFF00FFFF);
+	int width, height;
+	SDL_GetWindowSize(engine->window, &width, &height);
+	nvgBeginFrame(engine->vg, width, height, 1.0f);
 
 	// run scene
 	scene_update(engine->scene, engine, 1.0f / 60.0f);
 	scene_draw(engine->scene, engine);
 
-	SDL_RenderPresent(engine->renderer);
-	//SDL_GL_SwapWindow(engine->window);
+	nvgEndFrame(engine->vg);
+
+	SDL_GL_SwapWindow(engine->window);
 }
 
 void engine_mainloop(struct engine_s *engine) {

@@ -1,8 +1,8 @@
 
 CC = gcc
 CFLAGS = -std=c99 -Wall -Wextra -pedantic \
-		 -Wfloat-equal -Wshadow -Waggregate-return -Wno-unused-parameter \
-		 -Wswitch-enum -Wcast-qual -Wnull-dereference -Wunused-result
+		 -Wfloat-equal -Wshadow -Wno-unused-parameter \
+		 -Wswitch-enum -Wcast-qual -Wnull-dereference -Wunused-result # -Waggregate-return
 INCLUDES = -Isrc/ -I/usr/include/SDL2 -Ilib/nanovg/src
 LIBS = -lm -lGL -lSDL2 -lSDL2_gfx -lSDL2_mixer -lSDL2_net # -lSDL2_ttf
 

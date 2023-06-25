@@ -4,15 +4,18 @@
 #include <SDL.h>
 #include <SDL_opengles2.h>
 #include "scenes/scene.h"
+#include <nanovg.h>
 
 struct engine_s {
 	// windowing
 	SDL_Window *window;
-	SDL_Renderer *renderer;
 	Uint32 window_id;
 	SDL_GLContext gl_ctx;
 	
+	int window_width, window_height;
+
 	struct scene_s *scene;
+	struct NVGcontext *vg;
 };
 
 // init & cleanup
