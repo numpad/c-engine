@@ -5,12 +5,8 @@
 #include "engine.h"
 #include "gui/ugui.h"
 #include "scenes/game.h"
+#include "util/easing.h"
 
-float easeOutBack(float x) {
-	const float c1 = 1.70158f;
-	const float c3 = c1 + 1.0f;
-	return 1.0f + c3 * powf(x - 1.0f, 3.0f) + c1 * powf(x - 1.0f, 2.0f);
-}
 float easeOutExpo(float x) {
 	return x == 1.0f ? 1.0f : 1.0f - powf(2.0f, -10.0f * x);
 }
@@ -62,7 +58,7 @@ static void menu_draw(struct menu_s *menu, struct engine_s *engine) {
 
 	// play button
 	static float playpress_lin = 0.0f;
-	const float playpress = easeOutBack(playpress_lin);
+	const float playpress = ease_back_out(playpress_lin);
 	const float playpress2 = easeOutExpo(playpress_lin);
 	nvgBeginPath(vg);
 	nvgRoundedRect(vg, 50.0f + 8.0f * playpress2, engine->window_height - 500.0f + 12.0f * playpress, engine->window_width - 100.0f - 16.0f * playpress2, 75.0f - 24.0f * playpress, 3.0f);

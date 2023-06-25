@@ -2,14 +2,14 @@
 #define GAME_H
 
 #include "scenes/scene.h"
+#include "game/terrain.h"
 
 struct engine_s;
 
 struct game_s {
 	struct scene_s base;
-
-	unsigned char *world;
-	int world_width, world_height;
+	
+	struct terrain_s terrain;
 };
 
 

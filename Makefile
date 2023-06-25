@@ -9,6 +9,7 @@ LIBS = -lm -lGL -lSDL2 -lSDL2_mixer -lSDL2_net # -lSDL2_ttf
 SRC = main.c src/engine.c \
 	  src/scenes/scene.c src/scenes/game.c src/scenes/intro.c src/scenes/menu.c \
 	  src/game/terrain.c \
+	  src/util/easing.c \
 	  lib/nanovg/src/nanovg.c
 OBJ = $(SRC:.c=.o)
 TARGET = soil_soldiers
