@@ -5,7 +5,6 @@
 #undef NANOVG_GLES2_IMPLEMENTATION
 #include <SDL_net.h>
 #include "scenes/intro.h"
-#include "scenes/menu.h"
 
 struct engine_s *engine_new() {
 	if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_TIMER | SDL_INIT_GAMECONTROLLER | SDL_INIT_EVENTS)) {
@@ -88,20 +87,32 @@ void engine_setscene(struct engine_s *engine, struct scene_s *new_scene) {
 #ifdef DEBUG
 #include <dlfcn.h>
 void engine_setscene_dll(struct engine_s *engine, const char *filename) {
-	void *handle = dlopen(filename, RTLD_NOW);
+	static void *handle = NULL;
+	if (handle != NULL) {
+		dlclose(handle);
+	}
 
-	void(*fn_init)(struct menu_s *, struct engine_s *) = dlsym(handle, "menu_init");
+	handle = dlopen(filename, RTLD_LAZY);
 
-	struct menu_s *newscene = malloc(sizeof(struct menu_s *));
-	fn_init(newscene, engine);
+	struct scene_s *modscene = malloc(sizeof(struct scene_s));
+	void(*test_init)(struct scene_s *scene, struct engine_s *) = dlsym(handle, "test_init");
+	test_init(modscene, engine);
 
-	dlclose(handle);
+	scene_load(modscene, engine);
+	scene_update(modscene, engine, 1.0f / 60.0f);
+	scene_draw(modscene, engine);
+	scene_destroy(modscene, engine);
+
+	engine->scene = modscene;
+
+	// TODO: dlclose(handle);
 }
 #else
 void engine_setscene_dll(struct engine_s *engine, const char *filename) {
 	fprintf(stderr, "dll loading disabled for non-debug builds!\n");
 }
 #endif
+
 // main loop
 void engine_update(struct engine_s *engine) {
 	SDL_Event event;
@@ -117,6 +128,13 @@ void engine_update(struct engine_s *engine) {
 					glViewport(0, 0, event.window.data1, event.window.data2);
 				}
 				break;
+			case SDL_KEYDOWN: {
+				SDL_KeyboardEvent *key_event = (SDL_KeyboardEvent *)&event;
+				if (key_event->keysym.sym == SDLK_BACKSPACE) {
+					engine_setscene_dll(engine, "./libtest.so");
+				}
+				break;
+			}
 			case SDL_MOUSEBUTTONDOWN:
 			case SDL_MOUSEBUTTONUP:
 			{
