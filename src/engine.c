@@ -3,6 +3,7 @@
 #define NANOVG_GLES2_IMPLEMENTATION
 #include <nanovg_gl.h>
 #undef NANOVG_GLES2_IMPLEMENTATION
+#include <SDL_net.h>
 #include "scenes/intro.h"
 #include "scenes/menu.h"
 
@@ -18,6 +19,11 @@ struct engine_s *engine_new() {
 
 	if (engine->window == NULL) {
 		SDL_Log("failed initializing window\n");
+		return NULL;
+	}
+
+	if (SDLNet_Init() < 0) {
+		SDL_Log("failed initializing SDL_net\n");
 		return NULL;
 	}
 

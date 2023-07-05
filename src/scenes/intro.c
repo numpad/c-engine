@@ -6,14 +6,27 @@
 #include "engine.h"
 #include "menu.h"
 
+static void switch_to_menu_scene(struct engine_s *engine) {
+	struct menu_s *menu = malloc(sizeof(struct menu_s));
+	menu_init(menu, engine);
+	engine_setscene(engine, (struct scene_s *)menu);
+}
+
 static void intro_load(struct intro_s *scene, struct engine_s *engine) {
 	nvgCreateFont(engine->vg, "PermanentMarker Regular", "res/font/PermanentMarker-Regular.ttf");
+
+	scene->time_passed = 0.0f;
 }
 
 static void intro_destroy(struct intro_s *scene, struct engine_s *engine) {
 }
 
 static void intro_update(struct intro_s *scene, struct engine_s *engine, float dt) {
+	scene->time_passed += dt;
+
+	if (scene->time_passed >= 1.5f) {
+		switch_to_menu_scene(engine);
+	}
 }
 
 static inline float ease_out_expo(float n) {
@@ -26,9 +39,7 @@ static void intro_draw(struct intro_s *scene, struct engine_s *engine) {
 	if (SDL_BUTTON(buttons) & 1) {
 		scene->timer += 0.05f;
 		if (scene->timer >= 1.0f) {
-			struct menu_s *menu = malloc(sizeof(struct menu_s));
-			menu_init(menu, engine);
-			engine_setscene(engine, (struct scene_s *)menu);
+			switch_to_menu_scene(engine);
 		}
 	} else {
 		scene->timer *= 0.65f;

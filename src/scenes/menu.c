@@ -7,6 +7,10 @@
 #include "scenes/game.h"
 #include "util/easing.h"
 
+void mod_func(struct menu_s *menu, struct engine_s *engine) {
+	printf("hello from mod\n");
+}
+
 float easeOutExpo(float x) {
 	return x == 1.0f ? 1.0f : 1.0f - powf(2.0f, -10.0f * x);
 }

@@ -1,16 +1,16 @@
 
 CC = gcc
-CFLAGS = -std=c99 -Wall -Wextra -pedantic \
+CFLAGS = -std=c99 -fPIC -Wall -Wextra -pedantic \
 		 -Wfloat-equal -Wshadow -Wno-unused-parameter \
 		 -Wswitch-enum -Wcast-qual -Wnull-dereference -Wunused-result # -Waggregate-return
-INCLUDES = -Isrc/ -I/usr/include/SDL2 -Ilib/nanovg/src
+INCLUDES = -Isrc/ -I/usr/include/SDL2 -Ilib/nanovg/src -Ilib/stb
 LIBS = -lm -lGL -lSDL2 -lSDL2_mixer -lSDL2_net # -lSDL2_ttf
 
 SRC = main.c src/engine.c \
 	  src/scenes/scene.c src/scenes/game.c src/scenes/intro.c src/scenes/menu.c \
 	  src/game/terrain.c \
 	  src/util/easing.c \
-	  lib/nanovg/src/nanovg.c
+	  lib/nanovg/src/nanovg.c lib/stb/stb_ds.c
 OBJ = $(SRC:.c=.o)
 TARGET = soil_soldiers
 

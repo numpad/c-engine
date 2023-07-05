@@ -13,6 +13,7 @@ struct menu_s {
 	int vg_font;
 };
 
+void mod_func(struct menu_s *menu, struct engine_s *engine);
 void menu_init(struct menu_s *menu, struct engine_s *engine);
 
 #endif
