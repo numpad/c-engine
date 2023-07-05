@@ -92,7 +92,7 @@ void engine_setscene_dll(struct engine_s *engine, const char *filename) {
 		dlclose(handle);
 	}
 
-	handle = dlopen(filename, RTLD_LAZY);
+	handle = dlopen(filename, RTLD_NOW | RTLD_GLOBAL | RTLD_DEEPBIND);
 
 	struct scene_s *modscene = malloc(sizeof(struct scene_s));
 	void(*test_init)(struct scene_s *scene, struct engine_s *) = dlsym(handle, "test_init");
