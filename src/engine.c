@@ -5,6 +5,25 @@
 #undef NANOVG_GLES2_IMPLEMENTATION
 #include <SDL_net.h>
 #include "scenes/intro.h"
+#include "scenes/game.h"
+
+static Uint32 USR_EVENT_RELOAD = ((Uint32)-1);
+
+#ifdef __unix__
+#include <signal.h>
+void on_sigusr1(int signum) {
+	if (USR_EVENT_RELOAD != ((Uint32)-1)) {
+		SDL_Event event;
+		SDL_memset(&event, 0, sizeof(event)); /* or SDL_zero(event) */
+		event.type = USR_EVENT_RELOAD;
+		event.user.code = 0;
+		event.user.data1 = NULL;
+		event.user.data2 = NULL;
+		SDL_PushEvent(&event);
+	}
+	signal(SIGUSR1, on_sigusr1);
+}
+#endif
 
 struct engine_s *engine_new() {
 	if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_TIMER | SDL_INIT_GAMECONTROLLER | SDL_INIT_EVENTS)) {
@@ -26,15 +45,22 @@ struct engine_s *engine_new() {
 		return NULL;
 	}
 
-
+	// OpenGL config
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 2);
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
 	SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
 	SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
 	SDL_GL_SetSwapInterval(1);
 	engine->gl_ctx = SDL_GL_CreateContext(engine->window);
-
+	
+	// libs
 	engine->vg = nvgCreateGLES2(NVG_ANTIALIAS | NVG_STENCIL_STROKES);
+
+	// custom events
+	USR_EVENT_RELOAD = SDL_RegisterEvents(1);
+#ifdef __unix__
+	signal(SIGUSR1, on_sigusr1);
+#endif
 
 	// scene
 	struct intro_s *intro = malloc(sizeof(struct intro_s));
@@ -94,18 +120,13 @@ void engine_setscene_dll(struct engine_s *engine, const char *filename) {
 
 	handle = dlopen(filename, RTLD_NOW | RTLD_GLOBAL | RTLD_DEEPBIND);
 
-	struct scene_s *modscene = malloc(sizeof(struct scene_s));
-	void(*test_init)(struct scene_s *scene, struct engine_s *) = dlsym(handle, "test_init");
+	struct game_s *modscene = malloc(sizeof(struct game_s));
+	void(*test_init)(struct game_s *scene, struct engine_s *) = dlsym(handle, "game_init");
 	test_init(modscene, engine);
 
 	scene_load(modscene, engine);
-	scene_update(modscene, engine, 1.0f / 60.0f);
-	scene_draw(modscene, engine);
-	scene_destroy(modscene, engine);
+	engine->scene = (struct scene_s *)modscene;
 
-	engine->scene = modscene;
-
-	// TODO: dlclose(handle);
 }
 #else
 void engine_setscene_dll(struct engine_s *engine, const char *filename) {
@@ -129,10 +150,7 @@ void engine_update(struct engine_s *engine) {
 				}
 				break;
 			case SDL_KEYDOWN: {
-				SDL_KeyboardEvent *key_event = (SDL_KeyboardEvent *)&event;
-				if (key_event->keysym.sym == SDLK_BACKSPACE) {
-					engine_setscene_dll(engine, "./libtest.so");
-				}
+				// SDL_KeyboardEvent *key_event = (SDL_KeyboardEvent *)&event;
 				break;
 			}
 			case SDL_MOUSEBUTTONDOWN:
@@ -141,6 +159,10 @@ void engine_update(struct engine_s *engine) {
 				//SDL_MouseButtonEvent *mouse_event = (SDL_MouseButtonEvent *)&event;
 				break;
 			}
+		}
+
+		if (event.type == USR_EVENT_RELOAD) {
+			engine_setscene_dll(engine, "./scene_game.so");
 		}
 	}
 }

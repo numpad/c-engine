@@ -1,6 +1,11 @@
 
 *.o
+*.so
 soil_soldiers.html
 soil_soldiers.js
+soil_soldiers.data
 soil_soldiers
+
+.cache
+compile_commands.json
 

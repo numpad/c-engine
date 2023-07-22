@@ -9,6 +9,10 @@ struct terrain_s {
 	int width, height;
 	
 	float *polygon_edges;
+
+	// rendering
+	float x_offset, y_offset;
+	float x_scale, y_scale;
 };
 
 void terrain_init(struct terrain_s *terrain, int w, int h);
