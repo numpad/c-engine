@@ -113,6 +113,8 @@ void engine_setscene(struct engine_s *engine, struct scene_s *new_scene) {
 #ifdef DEBUG
 #include <dlfcn.h>
 void engine_setscene_dll(struct engine_s *engine, const char *filename) {
+	engine_setscene(engine, NULL);
+
 	static void *handle = NULL;
 	if (handle != NULL) {
 		dlclose(handle);
@@ -124,8 +126,7 @@ void engine_setscene_dll(struct engine_s *engine, const char *filename) {
 	void(*test_init)(struct game_s *scene, struct engine_s *) = dlsym(handle, "game_init");
 	test_init(modscene, engine);
 
-	scene_load(modscene, engine);
-	engine->scene = (struct scene_s *)modscene;
+	engine_setscene(engine, (struct scene_s *)modscene);
 
 }
 #else

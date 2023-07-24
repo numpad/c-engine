@@ -22,7 +22,7 @@ static void menu_update(struct menu_s *menu, struct engine_s *engine, float dt) 
 }
 
 static void menu_draw(struct menu_s *menu, struct engine_s *engine) {
-	const struct NVGcontext *vg = engine->vg;
+	struct NVGcontext *vg = engine->vg;
 
 	int mx, my;
 	Uint32 mousebtn = SDL_GetMouseState(&mx, &my);
@@ -67,7 +67,7 @@ static void menu_draw(struct menu_s *menu, struct engine_s *engine) {
 	nvgStrokeColor(vg, nvgRGBA(115, 100, 200, 255));
 	nvgStrokeWidth(vg, 3.0f);
 	nvgStroke(vg);
-	if (SDL_BUTTON(mousebtn) & 1) {
+	if (mousebtn & SDL_BUTTON(1)) {
 		if (mx > 50.0f && mx < engine->window_width - 50.0f && my > engine->window_height - 500.0f && my < engine->window_height - 425.0f) {
 			playpress_lin += 0.3f;
 			if (playpress_lin > 1.0f) {

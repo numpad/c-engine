@@ -21,6 +21,7 @@ void terrain_destroy(struct terrain_s *terrain);
 void terrain_draw(struct terrain_s *terrain, struct engine_s *engine);
 
 void terrain_polygonize(struct terrain_s *terrain);
+unsigned char *terrain_density_at(struct terrain_s *terrain, int x, int y);
 
 #endif
 

@@ -1,8 +1,10 @@
 #include "terrain.h"
+#include <math.h>
 #include <stdlib.h>
 #include <nanovg.h>
 #include <stb_ds.h>
 #include <stb_perlin.h>
+#include <time.h>
 #include "engine.h"
 
 static inline int get_cell_state(unsigned char value, unsigned char isovalue) {
@@ -21,14 +23,24 @@ void terrain_init(struct terrain_s *terrain, int w, int h) {
 	terrain->isovalue = 127;
 	terrain->polygon_edges = NULL;
 	// rendering
-	terrain->x_offset = 10.0f;
-	terrain->y_offset = 10.0f;
-	terrain->x_scale = 10.0f;
-	terrain->y_scale = 10.0f;
+	terrain->x_offset = 0.0f;
+	terrain->y_offset = 0.0f;
+	terrain->x_scale = 16.0f;
+	terrain->y_scale = 16.0f;
 
+	const int seed = time(NULL);
 	for (int y = 0; y < terrain->height; ++y) {
 		for (int x = 0; x < terrain->width; ++x) {
-			terrain->density[x + y * terrain->width] = 250;
+			const float sx = x / (float)terrain->width;
+			const float sy = y / (float)terrain->height;
+
+			float d = (
+				  0.3f * (1.0f - stb_perlin_noise3_seed(sx * 4.0f, sy * 8.0f, 0.0f, 0, 0, 0, seed))
+				+ 0.7f * (1.0f - stb_perlin_noise3_seed(sx * 4.0f, sy * 16.0f, 0.2f, 0, 0, 0, seed))
+			);
+			if (sy > 0.85f) d = sy;
+
+			*terrain_density_at(terrain, x, y) = 255 * fmin(d, 255.0f);
 		}
 	}
 
@@ -43,11 +55,11 @@ void terrain_destroy(struct terrain_s *terrain) {
 void terrain_draw(struct terrain_s *terrain, struct engine_s *engine) {
 	for (int y = 0; y < terrain->height; ++y) {
 		for (int x = 0; x < terrain->width; ++x) {
-			const unsigned char density = terrain->density[x + y * terrain->width];
+			const unsigned char density = *terrain_density_at(terrain, x, y);
 			float radius = ((float)density / 255.0f);
 			nvgBeginPath(engine->vg);
-			if (get_cell_state(terrain->density[x + y * terrain->width], terrain->isovalue) == 0) {
-				radius = 0.2f;
+			if (get_cell_state(*terrain_density_at(terrain, x, y), terrain->isovalue) == 0) {
+				radius = 0.1f;
 				nvgFillColor(engine->vg, nvgRGB(200, 200, 200));
 			} else {
 				nvgFillColor(engine->vg, nvgRGB(180 - 50.0f * (1.0f - radius), 120 - 50.0f * (1.0f - radius), 100 - 50.0f * (1.0f - radius)));
@@ -76,10 +88,10 @@ void terrain_polygonize(struct terrain_s *terrain) {
 	for (int y = 0; y < terrain->height - 1; ++y) {
 		for (int x = 0; x < terrain->width - 1; ++x) {
 			const int cell[4] = {
-				get_cell_state(terrain->density[(x + 0) + (y + 0) * terrain->width], terrain->isovalue),
-				get_cell_state(terrain->density[(x + 1) + (y + 0) * terrain->width], terrain->isovalue),
-				get_cell_state(terrain->density[(x + 1) + (y + 1) * terrain->width], terrain->isovalue),
-				get_cell_state(terrain->density[(x + 0) + (y + 1) * terrain->width], terrain->isovalue)
+				get_cell_state(*terrain_density_at(terrain, x + 0, y + 0), terrain->isovalue),
+				get_cell_state(*terrain_density_at(terrain, x + 1, y + 0), terrain->isovalue),
+				get_cell_state(*terrain_density_at(terrain, x + 1, y + 1), terrain->isovalue),
+				get_cell_state(*terrain_density_at(terrain, x + 0, y + 1), terrain->isovalue)
 			};
 	
 			float x0, y0, x1, y1;
@@ -172,5 +184,13 @@ void terrain_polygonize(struct terrain_s *terrain) {
 			}
 		}
 	}
+}
+
+unsigned char *terrain_density_at(struct terrain_s *terrain, int x, int y) {
+	if (x < 0 || y < 0 || x >= terrain->width || y >= terrain->height) {
+		return NULL;
+	}
+
+	return &(terrain->density[x + y * terrain->width]);
 }
 

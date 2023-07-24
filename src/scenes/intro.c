@@ -36,7 +36,7 @@ static inline float ease_out_expo(float n) {
 static void intro_draw(struct intro_s *scene, struct engine_s *engine) {
 	int mx, my;
 	const Uint32 buttons = SDL_GetMouseState(&mx, &my);
-	if (SDL_BUTTON(buttons) & 1) {
+	if (buttons & SDL_BUTTON(1)) {
 		scene->timer += 0.05f;
 		if (scene->timer >= 1.0f) {
 			switch_to_menu_scene(engine);
