@@ -25,9 +25,9 @@ void on_sigusr1(int signum) {
 }
 #endif
 
-struct engine_s *engine_new() {
+struct engine_s *engine_new(void) {
 	if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_TIMER | SDL_INIT_GAMECONTROLLER | SDL_INIT_EVENTS)) {
-		SDL_Log("failed initializing SDL: %s\n", SDL_GetError());
+		SDL_LogError(SDL_LOG_CATEGORY_ERROR, "failed initializing SDL: %s.\n", SDL_GetError());
 		return NULL;
 	}
 
@@ -36,12 +36,12 @@ struct engine_s *engine_new() {
 	engine->window_id = SDL_GetWindowID(engine->window);
 
 	if (engine->window == NULL) {
-		SDL_Log("failed initializing window\n");
+		SDL_LogError(SDL_LOG_CATEGORY_ERROR, "failed initializing SDL window.\n");
 		return NULL;
 	}
 
 	if (SDLNet_Init() < 0) {
-		SDL_Log("failed initializing SDL_net\n");
+		SDL_LogError(SDL_LOG_CATEGORY_ERROR, "failed initializing SDL_net.\n");
 		return NULL;
 	}
 
@@ -169,7 +169,7 @@ void engine_update(struct engine_s *engine) {
 }
 
 void engine_draw(struct engine_s *engine) {
-	glClear(GL_COLOR_BUFFER_BIT);
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
 	
 	nvgBeginFrame(engine->vg, engine->window_width, engine->window_height, 1.0f);
 

@@ -3,8 +3,7 @@
 #include <SDL.h>
 #include <nanovg.h>
 #include "engine.h"
-#include "gui/ugui.h"
-#include "scenes/game.h"
+#include "scenes/battlebadgers.h"
 #include "util/easing.h"
 
 float easeOutExpo(float x) {
@@ -73,9 +72,11 @@ static void menu_draw(struct menu_s *menu, struct engine_s *engine) {
 			if (playpress_lin > 1.0f) {
 				playpress_lin = 1.0f;
 
-				struct game_s *game = malloc(sizeof(struct game_s));
-				game_init(game, engine, 12, 12);
-				engine_setscene(engine, (struct scene_s *)game);
+				// struct game_s *game = malloc(sizeof(struct game_s));
+				// game_init(game, engine, 12, 12);
+				struct battlebadgers_s *game_battlebadgers = malloc(sizeof(struct battlebadgers_s));
+				battlebadgers_init(game_battlebadgers, engine);
+				engine_setscene(engine, (struct scene_s *)game_battlebadgers);
 			}
 		}
 	} else {
@@ -88,30 +89,30 @@ static void menu_draw(struct menu_s *menu, struct engine_s *engine) {
 	nvgFillColor(vg, nvgRGBA(0, 0, 0, 255));
 	nvgFontSize(vg, 32.0f - 4.0f * playpress);
 	nvgFontBlur(vg, 4.0f);
-	nvgTextBounds(vg, 0.0f, 0.0f, "Play", NULL, &bounds);
-	nvgText(vg, engine->window_width * 0.5f - bounds[2] * 0.5f, engine->window_height - 450.0f, "Play", NULL);
+	nvgTextBounds(vg, 0.0f, 0.0f, "Worms", NULL, &bounds);
+	nvgText(vg, engine->window_width * 0.5f - bounds[2] * 0.5f, engine->window_height - 450.0f, "Worms", NULL);
 	// shadow
 	nvgBeginPath(vg);
 	nvgFillColor(vg, nvgRGBA(255, 255, 255, 255));
 	nvgFontSize(vg, 32.0f - 4.0f * playpress);
 	nvgFontBlur(vg, 0.0f);
-	nvgTextBounds(vg, 0.0f, 0.0f, "Play", NULL, &bounds);
-	nvgText(vg, engine->window_width * 0.5f - bounds[2] * 0.5f, engine->window_height - 450.0f, "Play", NULL);
+	nvgTextBounds(vg, 0.0f, 0.0f, "Worms", NULL, &bounds);
+	nvgText(vg, engine->window_width * 0.5f - bounds[2] * 0.5f, engine->window_height - 450.0f, "Worms", NULL);
 
 	// customize
 	nvgBeginPath(vg);
 	nvgFillColor(vg, nvgRGBA(0, 0, 0, 255));
 	nvgFontSize(vg, 32.0f);
 	nvgFontBlur(vg, 4.0f);
-	nvgTextBounds(vg, 0.0f, 0.0f, "Customize", NULL, &bounds);
-	nvgText(vg, engine->window_width * 0.5f - bounds[2] * 0.5f, engine->window_height - 350.0f, "Customize", NULL);
+	nvgTextBounds(vg, 0.0f, 0.0f, "Battle Badgers", NULL, &bounds);
+	nvgText(vg, engine->window_width * 0.5f - bounds[2] * 0.5f, engine->window_height - 350.0f, "Battle Badgers", NULL);
 	// shadow
 	nvgBeginPath(vg);
 	nvgFillColor(vg, nvgRGBA(255, 255, 255, 255));
 	nvgFontSize(vg, 32.0f);
 	nvgFontBlur(vg, 0.0f);
-	nvgTextBounds(vg, 0.0f, 0.0f, "Customize", NULL, &bounds);
-	nvgText(vg, engine->window_width * 0.5f - bounds[2] * 0.5f, engine->window_height - 350.0f, "Customize", NULL);
+	nvgTextBounds(vg, 0.0f, 0.0f, "Battle Badgers", NULL, &bounds);
+	nvgText(vg, engine->window_width * 0.5f - bounds[2] * 0.5f, engine->window_height - 350.0f, "Battle Badgers", NULL);
 
 }
 

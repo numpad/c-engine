@@ -6,10 +6,11 @@ CFLAGS = -std=c99 -fPIC -Wall -Wextra -pedantic \
 INCLUDES = -Isrc/ -I/usr/include/SDL2 -Ilib/nanovg/src -Ilib/stb
 LIBS = -lm -lGL -lSDL2 -lSDL2_mixer -lSDL2_net # -lSDL2_ttf
 
-SCENES = src/scenes/game.c src/scenes/intro.c src/scenes/menu.c
+SCENES = src/scenes/game.c src/scenes/intro.c src/scenes/menu.c src/scenes/battlebadgers.c
 SRC = main.c src/engine.c \
 	  src/game/terrain.c \
-	  src/util/easing.c \
+	  src/util/easing.c src/util/fs.c \
+	  src/gl/shader.c \
 	  src/scenes/scene.c \
 	  lib/nanovg/src/nanovg.c lib/stb/stb_ds.c lib/stb/stb_perlin.c \
 	  $(SCENES) 

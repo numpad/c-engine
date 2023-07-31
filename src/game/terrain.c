@@ -23,8 +23,8 @@ void terrain_init(struct terrain_s *terrain, int w, int h) {
 	terrain->isovalue = 127;
 	terrain->polygon_edges = NULL;
 	// rendering
-	terrain->x_offset = 0.0f;
-	terrain->y_offset = 0.0f;
+	terrain->x_offset = 10.0f;
+	terrain->y_offset = 10.0f;
 	terrain->x_scale = 16.0f;
 	terrain->y_scale = 16.0f;
 
