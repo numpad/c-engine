@@ -7,12 +7,14 @@ typedef struct {
 	float x, y;
 	float vx, vy;
 	float r;
+	int fixed;
 } pos_s;
 
 struct battlebadgers_s {
 	struct scene_s base;
 
 	int bg_shader;
+	unsigned int bg_texture;
 	unsigned int bg_vbo;
 
 	pos_s *balls;

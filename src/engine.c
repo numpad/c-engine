@@ -5,7 +5,7 @@
 #undef NANOVG_GLES2_IMPLEMENTATION
 #include <SDL_net.h>
 #include "scenes/intro.h"
-#include "scenes/game.h"
+#include "scenes/battlebadgers.h"
 
 static Uint32 USR_EVENT_RELOAD = ((Uint32)-1);
 
@@ -78,6 +78,7 @@ struct engine_s *engine_new(void) {
 
 int engine_destroy(struct engine_s *engine) {
 	// scene
+	engine_setscene(engine, NULL);
 
 	// other
 	nvgDeleteGLES2(engine->vg);
@@ -122,8 +123,8 @@ void engine_setscene_dll(struct engine_s *engine, const char *filename) {
 
 	handle = dlopen(filename, RTLD_NOW | RTLD_GLOBAL | RTLD_DEEPBIND);
 
-	struct game_s *modscene = malloc(sizeof(struct game_s));
-	void(*test_init)(struct game_s *scene, struct engine_s *) = dlsym(handle, "game_init");
+	struct battlebadgers_s *modscene = malloc(sizeof(struct battlebadgers_s));
+	void(*test_init)(struct battlebadgers_s *scene, struct engine_s *) = dlsym(handle, "battlebadgers_init");
 	test_init(modscene, engine);
 
 	engine_setscene(engine, (struct scene_s *)modscene);
