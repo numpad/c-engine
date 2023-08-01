@@ -6,15 +6,7 @@ CFLAGS = -std=c99 -fPIC -Wall -Wextra -pedantic \
 INCLUDES = -Isrc/ -I/usr/include/SDL2 -Ilib/nanovg/src -Ilib/stb
 LIBS = -lm -lGL -lSDL2 -lSDL2_mixer -lSDL2_net # -lSDL2_ttf
 
-SCENES = src/scenes/game.c src/scenes/intro.c src/scenes/menu.c src/scenes/battlebadgers.c
-SRC = main.c src/engine.c \
-	  src/game/terrain.c \
-	  src/util/easing.c src/util/fs.c \
-	  src/gl/shader.c \
-	  src/scenes/scene.c \
-	  lib/nanovg/src/nanovg.c lib/stb/stb_ds.c lib/stb/stb_perlin.c \
-	  $(SCENES) 
-OBJ = $(SRC:.c=.o)
+BIN = bin/native/
 TARGET = soil_soldiers
 
 # when compiling with emscripten, add some specific flags
@@ -25,9 +17,20 @@ ifeq ($(CC), emcc)
 			  --preload-file res \
 			  --shell-file src/web/shell.html # -sUSE_SDL_TTF=2
 	TARGET = soil_soldiers.html
+	BIN = bin/emcc/
 endif
 
-.PHONY: all scenes
+SCENES = src/scenes/game.c src/scenes/intro.c src/scenes/menu.c src/scenes/battlebadgers.c
+SRC = main.c src/engine.c \
+	  src/game/terrain.c \
+	  src/util/easing.c src/util/fs.c \
+	  src/gl/shader.c \
+	  src/scenes/scene.c \
+	  lib/nanovg/src/nanovg.c lib/stb/stb_ds.c lib/stb/stb_perlin.c \
+	  $(SCENES) 
+OBJ = $(addprefix $(BIN),$(SRC:.c=.o))
+
+.PHONY: all clean scenes
 
 all: $(TARGET)
 
@@ -42,9 +45,13 @@ release: $(TARGET)
 $(TARGET): $(OBJ)
 	$(CC) $(CFLAGS) $(INCLUDES) -o $@ $^ $(LIBS)
 
-%.o: %.c
+$(BIN)%.o: %.c
+	mkdir -p $(@D)
 	$(CC) $(CFLAGS) $(INCLUDES) -c $< -o $@
 
 scenes:
 	$(CC) $(CFLAGS) -shared -o scene_game.so $(INCLUDES) $(LIBS) src/scenes/game.c
+
+clean:
+	rm -rf $(BIN) $(TARGET) "$(TARGET).data" "$(TARGET).html" "$(TARGET).js"
 
