@@ -3,7 +3,7 @@ CC = gcc
 CFLAGS = -std=c99 -fPIC -Wall -Wextra -pedantic \
 		 -Wfloat-equal -Wshadow -Wno-unused-parameter -Wl,--export-dynamic \
 		 -Wswitch-enum -Wcast-qual -Wnull-dereference -Wunused-result # -Waggregate-return
-INCLUDES = -Isrc/ -I/usr/include/SDL2 -Ilib/nanovg/src -Ilib/stb
+INCLUDES = -Isrc/ -I/usr/include/SDL2 -Ilib/stb -Ilib/nanovg/src
 LIBS = -lm -lGL -lSDL2 -lSDL2_mixer -lSDL2_net # -lSDL2_ttf
 
 BIN = bin/native/
@@ -26,7 +26,7 @@ SRC = main.c src/engine.c \
 	  src/util/easing.c src/util/fs.c \
 	  src/gl/shader.c \
 	  src/scenes/scene.c \
-	  lib/nanovg/src/nanovg.c lib/stb/stb_ds.c lib/stb/stb_perlin.c \
+	  lib/nanovg/src/nanovg.c lib/stb/stb_ds.c lib/stb/stb_perlin.c lib/stb/stb_image.c \
 	  $(SCENES) 
 OBJ = $(addprefix $(BIN),$(SRC:.c=.o))
 

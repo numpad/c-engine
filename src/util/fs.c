@@ -1,6 +1,6 @@
 #include "fs.h"
 
-#if defined(__linux__) || defined(__EMSCRIPTEN__)
+#if defined(__linux__) || defined(__EMSCRIPTEN__) || defined(EMSCRIPTEN)
 
 #include <stdio.h>
 #include <stdlib.h>

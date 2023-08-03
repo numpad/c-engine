@@ -26,7 +26,8 @@
 #include "fontstash.h"
 
 #ifndef NVG_NO_STB
-#define STB_IMAGE_IMPLEMENTATION
+// we're using our own version of stb_image so we don't need the define.
+// #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 #endif
 
