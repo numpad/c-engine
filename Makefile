@@ -1,9 +1,11 @@
 
 CC = gcc
-CFLAGS = -std=c99 -fPIC -Wall -Wextra -pedantic \
+CFLAGS = -std=gnu99 -fPIC -Wall -Wextra -pedantic \
 		 -Wfloat-equal -Wshadow -Wno-unused-parameter -Wl,--export-dynamic \
-		 -Wswitch-enum -Wcast-qual -Wnull-dereference -Wunused-result # -Waggregate-return
-INCLUDES = -Isrc/ -I/usr/include/SDL2 -Ilib/stb -Ilib/nanovg/src
+		 -Wswitch-enum -Wcast-qual -Wnull-dereference -Wunused-result \
+		 -DFLECS_CUSTOM_BUILD -DFLECS_SYSTEM -DFLECS_MODULE -DFLECS_PIPELINE -DFLECS_TIMER -DFLECS_HTTP -DFLECS_SNAPSHOT -DFLECS_PARSER -DFLECS_APP -DFLECS_OS_API_IMPL \
+		 # flecs needs gnu99
+INCLUDES = -Isrc/ -I/usr/include/SDL2 -Ilib/nanovg/src -Ilib/stb -Ilib/cglm/include -Ilib/flecs
 LIBS = -lm -lGL -lSDL2 -lSDL2_mixer -lSDL2_net # -lSDL2_ttf
 
 BIN = bin/native/
@@ -14,6 +16,10 @@ ifeq ($(CC), emcc)
 	# TODO: dont add everything to cflags, some flags should be used only during linking
 	CFLAGS += -sWASM=0 \
 			  -sUSE_SDL=2 -sUSE_SDL_NET=2 -sUSE_SDL_MIXER=2 -sFULL_ES2=1 \
+			  -s ALLOW_MEMORY_GROWTH=1 \
+			  -s EXPORTED_RUNTIME_METHODS=cwrap \
+			  -sMODULARIZE=1 \
+			  -sEXPORT_NAME="MyApp" \
 			  --preload-file res \
 			  --shell-file src/web/shell.html # -sUSE_SDL_TTF=2
 	TARGET = soil_soldiers.html
@@ -26,7 +32,10 @@ SRC = main.c src/engine.c \
 	  src/util/easing.c src/util/fs.c \
 	  src/gl/shader.c \
 	  src/scenes/scene.c \
-	  lib/nanovg/src/nanovg.c lib/stb/stb_ds.c lib/stb/stb_perlin.c lib/stb/stb_image.c \
+	  lib/nanovg/src/nanovg.c \
+	  lib/stb/stb_ds.c lib/stb/stb_perlin.c lib/stb/stb_image.c \
+	  lib/cglm/src/*.c \
+	  lib/flecs/flecs.c \
 	  $(SCENES) 
 OBJ = $(addprefix $(BIN),$(SRC:.c=.o))
 

@@ -6,13 +6,56 @@
 #include <nanovg.h>
 #include <stb_ds.h>
 #include <stb_image.h>
+#include <cglm/cglm.h>
+#include <flecs.h>
 #include "engine.h"
 #include "gl/shader.h"
 
-static void battlebadgers_load(struct battlebadgers_s *scene, struct engine_s *engine) {
-	scene->balls_len = 0;
-	scene->balls = NULL;
+typedef struct {
+	float x, y;
+} c_pos;
 
+typedef struct {
+	float x, y;
+} c_vel;
+
+typedef struct {
+	float radius;
+	float color[3];
+} c_circle;
+
+typedef struct {
+	float angle;
+} c_throwable;
+
+static void battlebadgers_load(struct battlebadgers_s *scene, struct engine_s *engine) {
+	// ecs
+	scene->world = ecs_init();
+
+	ECS_COMPONENT(scene->world, c_pos);
+	ECS_COMPONENT(scene->world, c_vel);
+	ECS_COMPONENT(scene->world, c_circle);
+
+	for (int y = 0; y < 10; ++y) {
+		for (int x = 0; x < 10; ++x) {
+			ecs_entity_t e = ecs_new_id(scene->world);
+			ecs_set(scene->world, e, c_pos, { 50.0f + 25.0f * x, 150.0f + 25.0f * y });
+			ecs_set(scene->world, e, c_circle, { 10.0f, 0.2f, 0.3f, 0.8f });
+		}
+	}
+
+	ecs_entity_t e = ecs_new_id(scene->world);
+	ecs_set(scene->world, e, c_pos, { engine->window_width * 0.5f, 40.0f });
+	ecs_set(scene->world, e, c_circle, { 10.0f, 0.8f, 0.3f, 0.3f });
+
+	scene->q_render = ecs_query_init(scene->world, &(ecs_query_desc_t) {
+		.filter.terms = {
+			{ ecs_id(c_pos) },
+			{ ecs_id(c_circle) },
+		},
+	});
+
+	// background
 	int tw, th, tn;
 	unsigned char *tpixels = stbi_load("res/image/space_bg.png", &tw, &th, &tn, 3);
 	if (tpixels != NULL) {
@@ -62,85 +105,39 @@ static void battlebadgers_load(struct battlebadgers_s *scene, struct engine_s *e
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
 	glUseProgram(0);
 
-
-
-	for (int i = 0; i < 10; ++i) {
-		scene->balls_len++;
-
-		pos_s ball;
-		ball.r = 15.0f;
-		ball.x = 200.0f + 30.0f * i;
-		ball.y = 400.0f;
-		ball.vx = 0.0f;
-		ball.vy = 0.0f;
-		ball.fixed = 1;
-
-		stbds_arrput(scene->balls, ball);
-	}
 }
 
 static void battlebadgers_destroy(struct battlebadgers_s *scene, struct engine_s *engine) {
 	shader_delete(scene->bg_shader);
+	ecs_fini(scene->world);
 }
 
 static void battlebadgers_update(struct battlebadgers_s *scene, struct engine_s *engine, float dt) {
 	int mx, my;
 	Uint32 mstate = SDL_GetMouseState(&mx, &my);
 
-	if (mstate & SDL_BUTTON(3) || mstate & SDL_BUTTON(1)) {
-		scene->balls_len++;
-
-		pos_s ball;
-		ball.r = 15.0f;
-		ball.x = mx;
-		ball.y = my;
-		ball.vx = 0.0f;
-		ball.vy = 0.0f;
-		ball.fixed = (mstate & SDL_BUTTON(1)) ? 1 : 0;
-
-		stbds_arrput(scene->balls, ball);
-	}
-
-	for (unsigned int i = 0; i < scene->balls_len; ++i) {
-		pos_s *ball = &scene->balls[i];
-
-		if (!ball->fixed) {
-			ball->vy += 0.35f;
-			ball->x += ball->vx;
-			ball->y += ball->vy;
-
-
-			for (unsigned int j = 0; j < scene->balls_len; ++j) {
-				pos_s *fixed_ball = &scene->balls[j];
-				if (!fixed_ball->fixed) continue;
-
-				const float dx = fabs(fixed_ball->x - ball->x);
-				const float dy = fabs(fixed_ball->y - ball->y);
-				const float d2 = (dx*dx + dy*dy);
-				const float r2 = (ball->r + fixed_ball->r) * (ball->r + fixed_ball->r);
-				if (d2 <= r2) {
-					ball->vy *= -1.0f;
-				}
-			}
-		}
-	}
 }
 
 static void battlebadgers_draw(struct battlebadgers_s *scene, struct engine_s *engine) {
 	NVGcontext *vg = engine->vg;
-	
-	for (unsigned int i = 0; i < scene->balls_len; ++i) {
-		nvgBeginPath(vg);
-		nvgCircle(vg, scene->balls[i].x, scene->balls[i].y, scene->balls[i].r);
-		nvgFillPaint(vg, nvgRadialGradient(vg, scene->balls[i].x - 5.0f, scene->balls[i].y - 5.0f, 2.0f, 15.0f,
-					nvgRGBf(1.0f, 1.0f, 1.0f), nvgRGBf(0.2f, 0.22f, 0.7f)));
-		nvgFill(vg);
 
-		nvgBeginPath(vg);
-		nvgCircle(vg, scene->balls[i].x, scene->balls[i].y, scene->balls[i].r);
-		nvgStrokeColor(vg, nvgRGBf(0.2f, 0.2f, 0.2f));
-		nvgStrokeWidth(vg, 3.0f);
-		nvgStroke(vg);
+	ecs_iter_t it = ecs_query_iter(scene->world, scene->q_render);
+	while (ecs_query_next(&it)) {
+		c_pos *pos = ecs_field(&it, c_pos, 1);
+		c_circle *circle = ecs_field(&it, c_circle, 2);
+
+		for (int i = 0; i < it.count; ++i) {
+			nvgBeginPath(vg);
+			nvgCircle(vg, pos[i].x, pos[i].y, circle[i].radius);
+			nvgFillPaint(vg, nvgRadialGradient(vg, pos[i].x - 5.0f, pos[i].y - 5.0f, 2.0f, 15.0f, nvgRGBf(1.0f, 1.0f, 1.0f), nvgRGBf(circle[i].color[0], circle[i].color[1], circle[i].color[2])));
+			nvgFill(vg);
+
+			nvgBeginPath(vg);
+			nvgCircle(vg, pos[i].x, pos[i].y, circle[i].radius);
+			nvgStrokeColor(vg, nvgRGBf(0.2f, 0.2f, 0.2f));
+			nvgStrokeWidth(vg, 3.0f);
+			nvgStroke(vg);
+		}
 	}
 
 	glUseProgram(scene->bg_shader);

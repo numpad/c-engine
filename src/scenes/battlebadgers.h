@@ -2,13 +2,7 @@
 #define WORMS_H
 
 #include "scene.h"
-
-typedef struct {
-	float x, y;
-	float vx, vy;
-	float r;
-	int fixed;
-} pos_s;
+#include <flecs.h>
 
 struct battlebadgers_s {
 	struct scene_s base;
@@ -17,8 +11,8 @@ struct battlebadgers_s {
 	unsigned int bg_texture;
 	unsigned int bg_vbo;
 
-	pos_s *balls;
-	unsigned int balls_len;
+	ecs_world_t *world;
+	ecs_query_t *q_render;
 };
 
 void battlebadgers_init(struct battlebadgers_s *, struct engine_s *);
