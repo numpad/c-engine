@@ -87,6 +87,9 @@ int engine_destroy(struct engine_s *engine) {
 	SDL_DestroyWindow(engine->window);
 	SDL_GL_DeleteContext(engine->gl_ctx);
 
+	SDLNet_Quit();
+	SDL_Quit();
+
 	free(engine);
 	return 0;
 }
