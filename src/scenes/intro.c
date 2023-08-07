@@ -15,6 +15,7 @@ static void switch_to_menu_scene(struct engine_s *engine) {
 static void intro_load(struct intro_s *scene, struct engine_s *engine) {
 	nvgCreateFont(engine->vg, "PermanentMarker Regular", "res/font/PermanentMarker-Regular.ttf");
 
+	scene->timer = 0.0f;
 	scene->time_passed = 0.0f;
 }
 
@@ -87,6 +88,5 @@ void intro_init(struct intro_s *intro, struct engine_s *engine) {
 	intro->base.update = (scene_update_fn)intro_update;
 	intro->base.draw = (scene_draw_fn)intro_draw;
 
-	intro->timer = 0.0f;
 }
 

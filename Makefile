@@ -30,7 +30,7 @@ SCENES = src/scenes/game.c src/scenes/intro.c src/scenes/menu.c src/scenes/battl
 SRC = main.c src/engine.c \
 	  src/game/terrain.c \
 	  src/util/easing.c src/util/fs.c \
-	  src/gl/shader.c \
+	  src/gl/shader.c src/gl/texture.c \
 	  src/scenes/scene.c \
 	  lib/nanovg/src/nanovg.c \
 	  lib/stb/stb_ds.c lib/stb/stb_perlin.c lib/stb/stb_image.c \

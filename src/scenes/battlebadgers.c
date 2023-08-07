@@ -9,6 +9,7 @@
 #include <cglm/cglm.h>
 #include <flecs.h>
 #include "engine.h"
+#include "gl/texture.h"
 #include "gl/shader.h"
 
 typedef struct {
@@ -29,7 +30,7 @@ typedef struct {
 } c_throwable;
 
 static void battlebadgers_load(struct battlebadgers_s *scene, struct engine_s *engine) {
-	// ecs
+	// ecc
 	scene->world = ecs_init();
 
 	ECS_COMPONENT(scene->world, c_pos);
@@ -39,14 +40,15 @@ static void battlebadgers_load(struct battlebadgers_s *scene, struct engine_s *e
 	for (int y = 0; y < 10; ++y) {
 		for (int x = 0; x < 10; ++x) {
 			ecs_entity_t e = ecs_new_id(scene->world);
-			ecs_set(scene->world, e, c_pos, { 50.0f + 25.0f * x, 150.0f + 25.0f * y });
-			ecs_set(scene->world, e, c_circle, { 10.0f, 0.2f, 0.3f, 0.8f });
+			ecs_set(scene->world, e, c_pos, { 50.0f + 40.0f * x, 250.0f + 35.0f * y });
+			ecs_set(scene->world, e, c_circle, { 10.0f, {0.2f, 0.3f, 0.8f }});
 		}
 	}
 
 	ecs_entity_t e = ecs_new_id(scene->world);
 	ecs_set(scene->world, e, c_pos, { engine->window_width * 0.5f, 40.0f });
-	ecs_set(scene->world, e, c_circle, { 10.0f, 0.8f, 0.3f, 0.3f });
+	ecs_set(scene->world, e, c_vel, { -2.0f, 1.0f });
+	ecs_set(scene->world, e, c_circle, { 10.0f, {0.8f, 0.3f, 0.3f }});
 
 	scene->q_render = ecs_query_init(scene->world, &(ecs_query_desc_t) {
 		.filter.terms = {
@@ -54,23 +56,15 @@ static void battlebadgers_load(struct battlebadgers_s *scene, struct engine_s *e
 			{ ecs_id(c_circle) },
 		},
 	});
+	scene->q_update_pos = ecs_query_init(scene->world, &(ecs_query_desc_t) {
+		.filter.terms = {
+			{ ecs_id(c_pos) },
+			{ ecs_id(c_vel) },
+		},
+	});
 
 	// background
-	int tw, th, tn;
-	unsigned char *tpixels = stbi_load("res/image/space_bg.png", &tw, &th, &tn, 3);
-	if (tpixels != NULL) {
-		glGenTextures(1, &scene->bg_texture);
-		glBindTexture(GL_TEXTURE_2D, scene->bg_texture);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, tw, th, 0, GL_RGB, GL_UNSIGNED_BYTE, tpixels);
-		glBindTexture(GL_TEXTURE_2D, 0);
-		stbi_image_free(tpixels);
-	}
-
+	scene->bg_texture = texture_from_image("res/image/space_bg.png", NULL);
 
 	// prepare background vertices
 	scene->bg_shader = shader_new("res/shader/background/vertex.glsl", "res/shader/background/fragment.glsl");
@@ -113,9 +107,22 @@ static void battlebadgers_destroy(struct battlebadgers_s *scene, struct engine_s
 }
 
 static void battlebadgers_update(struct battlebadgers_s *scene, struct engine_s *engine, float dt) {
+	const float GRAVITY = 0.2f;
+
 	int mx, my;
 	Uint32 mstate = SDL_GetMouseState(&mx, &my);
 
+	ecs_iter_t it = ecs_query_iter(scene->world, scene->q_update_pos);
+	while (ecs_query_next(&it)) {
+		c_pos *pos = ecs_field(&it, c_pos, 1);
+		c_vel *vel = ecs_field(&it, c_vel, 2);
+
+		for (int i = 0; i < it.count; ++i) {
+			vel[i].y += GRAVITY;
+			pos[i].x += vel[i].x;
+			pos[i].y += vel[i].y;
+		}
+	}
 }
 
 static void battlebadgers_draw(struct battlebadgers_s *scene, struct engine_s *engine) {
@@ -149,8 +156,8 @@ static void battlebadgers_draw(struct battlebadgers_s *scene, struct engine_s *e
 	glDrawArrays(GL_TRIANGLES, 0, 6);
 	glBindTexture(GL_TEXTURE_2D, 0);
 	glUseProgram(0);
-}
 
+}
 
 void battlebadgers_init(struct battlebadgers_s *battlebadgers, struct engine_s *engine) {
 	// init scene base

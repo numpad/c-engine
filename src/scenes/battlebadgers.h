@@ -12,7 +12,7 @@ struct battlebadgers_s {
 	unsigned int bg_vbo;
 
 	ecs_world_t *world;
-	ecs_query_t *q_render;
+	ecs_query_t *q_render, *q_update_pos;
 };
 
 void battlebadgers_init(struct battlebadgers_s *, struct engine_s *);
