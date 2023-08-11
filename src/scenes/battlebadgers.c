@@ -11,6 +11,8 @@
 #include "engine.h"
 #include "gl/texture.h"
 #include "gl/shader.h"
+#include "gl/vbuffer.h"
+#include "game/isoterrain.h"
 
 typedef struct {
 	float x, y;
@@ -63,6 +65,10 @@ static void battlebadgers_load(struct battlebadgers_s *scene, struct engine_s *e
 		},
 	});
 
+	// isoterrain
+	scene->terrain = malloc(sizeof(struct isoterrain_s));
+	isoterrain_init(scene->terrain, 3, 4);
+
 	// background
 	scene->bg_texture = texture_from_image("res/image/space_bg.png", NULL);
 
@@ -79,13 +85,10 @@ static void battlebadgers_load(struct battlebadgers_s *scene, struct engine_s *e
 
 	glUseProgram(scene->bg_shader);
 
-	glGenBuffers(1, &scene->bg_vbo);
-	glBindBuffer(GL_ARRAY_BUFFER, scene->bg_vbo);
-	glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
-
-	GLint a_position = glGetAttribLocation(scene->bg_shader, "a_position");
-	glVertexAttribPointer(a_position, 2, GL_FLOAT, GL_FALSE, 0, 0);
-	glEnableVertexAttribArray(a_position);
+	scene->bg_vbuf = malloc(sizeof(struct vbuffer_s));
+	vbuffer_init(scene->bg_vbuf);
+	vbuffer_set_data(scene->bg_vbuf, sizeof(vertices), vertices);
+	vbuffer_set_attrib(scene->bg_vbuf, scene->bg_shader, "a_position", 2, GL_FLOAT, 0, 0);
 
 	GLfloat mvp[] = {
 		1.0f, 0.0f, 0.0f, 0.0f,
@@ -103,6 +106,10 @@ static void battlebadgers_load(struct battlebadgers_s *scene, struct engine_s *e
 
 static void battlebadgers_destroy(struct battlebadgers_s *scene, struct engine_s *engine) {
 	shader_delete(scene->bg_shader);
+	vbuffer_destroy(scene->bg_vbuf);
+	free(scene->bg_vbuf);
+	isoterrain_destroy(scene->terrain);
+	free(scene->terrain);
 	ecs_fini(scene->world);
 }
 
@@ -128,6 +135,7 @@ static void battlebadgers_update(struct battlebadgers_s *scene, struct engine_s 
 static void battlebadgers_draw(struct battlebadgers_s *scene, struct engine_s *engine) {
 	NVGcontext *vg = engine->vg;
 
+	/*
 	ecs_iter_t it = ecs_query_iter(scene->world, scene->q_render);
 	while (ecs_query_next(&it)) {
 		c_pos *pos = ecs_field(&it, c_pos, 1);
@@ -146,16 +154,16 @@ static void battlebadgers_draw(struct battlebadgers_s *scene, struct engine_s *e
 			nvgStroke(vg);
 		}
 	}
+	*/
 
 	glUseProgram(scene->bg_shader);
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_2D, scene->bg_texture);
-	glBindBuffer(GL_ARRAY_BUFFER, scene->bg_vbo);
-	glEnableVertexAttribArray(glGetAttribLocation(scene->bg_shader, "a_position"));
-	glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, 0);
-	glDrawArrays(GL_TRIANGLES, 0, 6);
+	vbuffer_draw(scene->bg_vbuf, 6);
 	glBindTexture(GL_TEXTURE_2D, 0);
 	glUseProgram(0);
+
+	isoterrain_draw(scene->terrain, engine->u_projection, engine->u_view);
 
 }
 

@@ -3,6 +3,7 @@
 
 #include <SDL.h>
 #include <SDL_opengles2.h>
+#include <cglm/cglm.h>
 #include "scenes/scene.h"
 #include <nanovg.h>
 
@@ -16,6 +17,9 @@ struct engine_s {
 
 	struct scene_s *scene;
 	struct NVGcontext *vg;
+
+	mat4 u_projection;
+	mat4 u_view;
 };
 
 // init & cleanup

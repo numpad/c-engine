@@ -9,6 +9,14 @@
 
 static Uint32 USR_EVENT_RELOAD = ((Uint32)-1);
 
+static void window_resize(struct engine_s *engine, int w, int h) {
+	engine->window_width = w;
+	engine->window_height = h;
+	glViewport(0, 0, w, h);
+	const float aspect = h / (float)w;
+	glm_ortho(-1.0f, 1.0f, -1.0f * aspect, 1.0f * aspect, -1.0f, 1.0f, engine->u_projection);
+}
+
 #ifdef __unix__
 #include <signal.h>
 void on_sigusr1(int signum) {
@@ -32,7 +40,9 @@ struct engine_s *engine_new(void) {
 	}
 
 	struct engine_s *engine = malloc(sizeof(struct engine_s));
-	engine->window = SDL_CreateWindow("Soil Soldiers", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, 450, 800, SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_SHOWN);
+	engine->window_width = 550;
+	engine->window_height = 800;
+	engine->window = SDL_CreateWindow("Soil Soldiers", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, engine->window_width, engine->window_height, SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_SHOWN);
 	engine->window_id = SDL_GetWindowID(engine->window);
 
 	if (engine->window == NULL) {
@@ -68,10 +78,11 @@ struct engine_s *engine_new(void) {
 	engine->scene = NULL;
 	engine_setscene(engine, (struct scene_s *)intro);
 
+	window_resize(engine, engine->window_width, engine->window_height);
 	glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
-	glViewport(0, 0, 450, 800);
-	engine->window_width = 450;
-	engine->window_height = 800;
+
+	// camera
+	glm_mat4_identity(engine->u_view);
 
 	return engine;
 }
@@ -149,9 +160,7 @@ void engine_update(struct engine_s *engine) {
 				break;
 			case SDL_WINDOWEVENT:
 				if (/* event.window.windowID == engine->window_id && */ event.window.event == SDL_WINDOWEVENT_SIZE_CHANGED) {
-					engine->window_width = event.window.data1;
-					engine->window_height = event.window.data2;
-					glViewport(0, 0, event.window.data1, event.window.data2);
+					window_resize(engine, event.window.data1, event.window.data2);
 				}
 				break;
 			case SDL_KEYDOWN: {

@@ -28,9 +28,9 @@ endif
 
 SCENES = src/scenes/game.c src/scenes/intro.c src/scenes/menu.c src/scenes/battlebadgers.c
 SRC = main.c src/engine.c \
-	  src/game/terrain.c \
+	  src/game/terrain.c src/game/isoterrain.c \
 	  src/util/easing.c src/util/fs.c \
-	  src/gl/shader.c src/gl/texture.c \
+	  src/gl/shader.c src/gl/texture.c src/gl/vbuffer.c \
 	  src/scenes/scene.c \
 	  lib/nanovg/src/nanovg.c \
 	  lib/stb/stb_ds.c lib/stb/stb_perlin.c lib/stb/stb_image.c \
@@ -59,7 +59,7 @@ $(BIN)%.o: %.c
 	$(CC) $(CFLAGS) $(INCLUDES) -c $< -o $@
 
 scenes:
-	$(CC) $(CFLAGS) -shared -o scene_game.so $(INCLUDES) $(LIBS) src/scenes/*.c
+	$(CC) $(CFLAGS) -shared -o scene_game.so $(INCLUDES) $(LIBS) $(SRC)
 
 clean:
 	rm -rf $(BIN) $(TARGET) "$(TARGET).data" "$(TARGET).html" "$(TARGET).js"
