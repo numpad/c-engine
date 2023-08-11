@@ -40,12 +40,10 @@ void isoterrain_init(struct isoterrain_s *terrain, int w, int h) {
 
 	// TODO: set some blocks for testing
 	for (int i = 0; i < terrain->width * terrain->height; ++i) {
-		terrain->blocks[i] = -1;
+		terrain->blocks[i] = 0;
 	}
-	isoterrain_set_block(terrain, 1, 1, 89); // 89
-	isoterrain_set_block(terrain, 1, 2, 89);
-	isoterrain_set_block(terrain, 2, 2, 89);
-	isoterrain_set_block(terrain, 1, 3, 89);
+	isoterrain_set_block(terrain, 0, 0, 89);
+	isoterrain_set_block(terrain, 1, 0, 90);
 }
 
 void isoterrain_destroy(struct isoterrain_s *terrain) {
@@ -62,18 +60,28 @@ void isoterrain_draw(struct isoterrain_s *terrain, const mat4 proj, const mat4 v
 
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_2D, terrain->texture);
-	for (int i = (terrain->width * terrain->height) - 1; i >= 0; i--) {
-		iso_block *block = &terrain->blocks[i];
-		if (*block == -1) continue;
+	//for (int i = (terrain->width * terrain->height) - 1; i >= 0; i--) {
+	for (int x = 0; x < terrain->width; ++x) {
+	//	for (int y = 0; y < terrain->height; ++y) {
+	//for (int x = terrain->width - 1; x >= 0; --x) {
+		for (int y = terrain->height - 1; y >= 0; --y) {
+			const int i = x + y * terrain->width;
 
-		const float tx = *block % 11;
-		const float ty = floor(*block / (float)11);
-		const float bx = i % terrain->width;
-		const float by = floor(i / (float)terrain->width);
+			iso_block *block = &terrain->blocks[i];
+			if (*block == -1) continue;
 
-		glUniform2f(glGetUniformLocation(terrain->shader, "u_tilepos"), tx, ty);
-		glUniform2f(glGetUniformLocation(terrain->shader, "u_pos"), bx, by);
-		vbuffer_draw(terrain->vbuf, 6);
+			const float tx = *block % 11;
+			const float ty = floor(*block / (float)11);
+			const float bx = i % terrain->width;
+			const float by = floor(i / (float)terrain->width);
+
+			// TODO: remove
+			glUniform2f(glGetUniformLocation(terrain->shader, "u_tilesize"), 1.0f / 11, 1.0f / 10);
+		
+			glUniform2f(glGetUniformLocation(terrain->shader, "u_tilepos"), tx, ty);
+			glUniform2f(glGetUniformLocation(terrain->shader, "u_pos"), bx, by);
+			vbuffer_draw(terrain->vbuf, 6);
+		}
 	}
 }
 

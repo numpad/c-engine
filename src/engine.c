@@ -4,10 +4,12 @@
 #include <nanovg_gl.h>
 #undef NANOVG_GLES2_IMPLEMENTATION
 #include <SDL_net.h>
+#include <stb_ds.h>
 #include "scenes/intro.h"
 #include "scenes/battlebadgers.h"
 
 static Uint32 USR_EVENT_RELOAD = ((Uint32)-1);
+static Uint32 USR_EVENT_NOTIFY = ((Uint32)-1);
 
 static void window_resize(struct engine_s *engine, int w, int h) {
 	engine->window_width = w;
@@ -31,6 +33,18 @@ void on_sigusr1(int signum) {
 	}
 	signal(SIGUSR1, on_sigusr1);
 }
+void on_sigusr2(int signum) {
+	if (USR_EVENT_NOTIFY != ((Uint32)-1)) {
+		SDL_Event event;
+		SDL_memset(&event, 0, sizeof(event)); /* or SDL_zero(event) */
+		event.type = USR_EVENT_NOTIFY;
+		event.user.code = 0;
+		event.user.data1 = NULL;
+		event.user.data2 = NULL;
+		SDL_PushEvent(&event);
+	}
+	signal(SIGUSR2, on_sigusr2);
+}
 #endif
 
 struct engine_s *engine_new(void) {
@@ -44,6 +58,7 @@ struct engine_s *engine_new(void) {
 	engine->window_height = 800;
 	engine->window = SDL_CreateWindow("Soil Soldiers", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, engine->window_width, engine->window_height, SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_SHOWN);
 	engine->window_id = SDL_GetWindowID(engine->window);
+	engine->on_notify_callbacks = NULL;
 
 	if (engine->window == NULL) {
 		SDL_LogError(SDL_LOG_CATEGORY_ERROR, "failed initializing SDL window.\n");
@@ -62,14 +77,17 @@ struct engine_s *engine_new(void) {
 	SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
 	SDL_GL_SetSwapInterval(1);
 	engine->gl_ctx = SDL_GL_CreateContext(engine->window);
+
 	
 	// libs
 	engine->vg = nvgCreateGLES2(NVG_ANTIALIAS | NVG_STENCIL_STROKES);
 
 	// custom events
 	USR_EVENT_RELOAD = SDL_RegisterEvents(1);
+	USR_EVENT_NOTIFY = SDL_RegisterEvents(2);
 #ifdef __unix__
 	signal(SIGUSR1, on_sigusr1);
+	signal(SIGUSR2, on_sigusr2);
 #endif
 
 	// scene
@@ -175,8 +193,13 @@ void engine_update(struct engine_s *engine) {
 			}
 		}
 
+		// TODO: only emit this in debug?
 		if (event.type == USR_EVENT_RELOAD) {
 			engine_setscene_dll(engine, "./scene_game.so");
+		} else if (event.type == USR_EVENT_NOTIFY) {
+			for (int i = 0; i < stbds_arrlen(engine->on_notify_callbacks); ++i) {
+				engine->on_notify_callbacks[i](engine);
+			}
 		}
 	}
 }

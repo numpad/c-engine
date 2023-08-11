@@ -8,6 +8,7 @@
 #include <stb_image.h>
 #include <cglm/cglm.h>
 #include <flecs.h>
+#include <cglm/cglm.h>
 #include "engine.h"
 #include "gl/texture.h"
 #include "gl/shader.h"
@@ -31,7 +32,13 @@ typedef struct {
 	float angle;
 } c_throwable;
 
+static void reload_shader(struct engine_s *engine) {
+	struct battlebadgers_s *scene = engine->scene;
+	scene->terrain->shader = shader_new("res/shader/isoterrain/vertex.glsl", "res/shader/isoterrain/fragment.glsl");
+}
+
 static void battlebadgers_load(struct battlebadgers_s *scene, struct engine_s *engine) {
+	stbds_arrput(engine->on_notify_callbacks, reload_shader);
 	// ecc
 	scene->world = ecs_init();
 
@@ -67,7 +74,7 @@ static void battlebadgers_load(struct battlebadgers_s *scene, struct engine_s *e
 
 	// isoterrain
 	scene->terrain = malloc(sizeof(struct isoterrain_s));
-	isoterrain_init(scene->terrain, 3, 4);
+	isoterrain_init(scene->terrain, 10, 10);
 
 	// background
 	scene->bg_texture = texture_from_image("res/image/space_bg.png", NULL);
@@ -99,6 +106,9 @@ static void battlebadgers_load(struct battlebadgers_s *scene, struct engine_s *e
 	GLint u_mvp = glGetUniformLocation(scene->bg_shader, "u_mvp");
 	glUniform4fv(u_mvp, 4, mvp);
 
+	glm_translate(engine->u_view, (vec3){-0.75f, -0.33f, 0.0f});
+	glm_scale(engine->u_view, (vec3){0.33f, 0.33f, 1.0f});
+
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
 	glUseProgram(0);
 
@@ -114,11 +124,10 @@ static void battlebadgers_destroy(struct battlebadgers_s *scene, struct engine_s
 }
 
 static void battlebadgers_update(struct battlebadgers_s *scene, struct engine_s *engine, float dt) {
-	const float GRAVITY = 0.2f;
-
 	int mx, my;
 	Uint32 mstate = SDL_GetMouseState(&mx, &my);
 
+	/*
 	ecs_iter_t it = ecs_query_iter(scene->world, scene->q_update_pos);
 	while (ecs_query_next(&it)) {
 		c_pos *pos = ecs_field(&it, c_pos, 1);
@@ -130,6 +139,7 @@ static void battlebadgers_update(struct battlebadgers_s *scene, struct engine_s 
 			pos[i].y += vel[i].y;
 		}
 	}
+	*/
 }
 
 static void battlebadgers_draw(struct battlebadgers_s *scene, struct engine_s *engine) {
