@@ -2,6 +2,8 @@
 
 #include <stdlib.h>
 #include <SDL_opengles2.h>
+#include "gl/shader.h"
+#include "gl/texture.h"
 #include "gl/vbuffer.h"
 
 static iso_block isoterrain_get_block(struct isoterrain_s *terrain, int x, int y) {
@@ -17,33 +19,35 @@ void isoterrain_init(struct isoterrain_s *terrain, int w, int h) {
 	terrain->blocks = calloc(w * h, sizeof(iso_block));
 
 	terrain->shader = shader_new("res/shader/isoterrain/vertex.glsl", "res/shader/isoterrain/fragment.glsl");
-	terrain->texture = texture_from_image("res/image/iso-tileset.png", NULL);
+	terrain->texture = texture_from_image("res/image/iso_tileset.png", NULL);
 
 	terrain->vbuf = malloc(sizeof(struct vbuffer_s));
 	GLfloat vertices[] = {
 		-0.25f, -0.25f,  0.0f, 0.0f,
 		 0.25f, -0.25f,  1.0f, 0.0f,
-		-0.25f,  0.25f,  0.0f, 1.0f,
-		-0.25f,  0.25f,  0.0f, 1.0f,
+		-0.25f,  0.25f,  0.0f, 15.0f/16.0f-1.0f/256.0f,
+		-0.25f,  0.25f,  0.0f, 15.0f/16.0f-1.0f/256.0f,
 		 0.25f, -0.25f,  1.0f, 0.0f,
-		 0.25f,  0.25f,  1.0f, 1.0f,
+		 0.25f,  0.25f,  1.0f, 15.0f/16.0f-1.0f/256.0f,
 	};
 	vbuffer_init(terrain->vbuf);
 	vbuffer_set_data(terrain->vbuf, sizeof(vertices), vertices);
 	vbuffer_set_attrib(terrain->vbuf, terrain->shader, "a_position", 2, GL_FLOAT, 4 * sizeof(float), 0);
-	vbuffer_set_attrib(terrain->vbuf, terrain->shader, "a_texcoord", 2, GL_FLOAT, 4 * sizeof(float), 2 * sizeof(float));
+	vbuffer_set_attrib(terrain->vbuf, terrain->shader, "a_texcoord", 2, GL_FLOAT, 4 * sizeof(float), (void*)(2 * sizeof(float)));
 	
 	glUseProgram(terrain->shader);
-	glUniform2f(glGetUniformLocation(terrain->shader, "u_pos"), 0.0f, 0.0f);
-	glUniform2f(glGetUniformLocation(terrain->shader, "u_tilepos"), 1.0f, 9.0f);
-	glUniform2f(glGetUniformLocation(terrain->shader, "u_tilesize"), 1.0f / 11, 1.0f / 10);
+	glUniform1i(glGetUniformLocation(terrain->shader, "u_texture"), 0);
 
 	// TODO: set some blocks for testing
 	for (int i = 0; i < terrain->width * terrain->height; ++i) {
 		terrain->blocks[i] = 0;
 	}
-	isoterrain_set_block(terrain, 0, 0, 89);
-	isoterrain_set_block(terrain, 1, 0, 90);
+
+	for (int x = 0; x < terrain->width; ++x) {
+		isoterrain_set_block(terrain, x, 0, 129);
+		if (x < 3) isoterrain_set_block(terrain, x, 1, 145);
+		else isoterrain_set_block(terrain, x, 1, 129);
+	}
 }
 
 void isoterrain_destroy(struct isoterrain_s *terrain) {
@@ -60,23 +64,21 @@ void isoterrain_draw(struct isoterrain_s *terrain, const mat4 proj, const mat4 v
 
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_2D, terrain->texture);
-	//for (int i = (terrain->width * terrain->height) - 1; i >= 0; i--) {
+	// draw left to right, top to bottom
 	for (int x = 0; x < terrain->width; ++x) {
-	//	for (int y = 0; y < terrain->height; ++y) {
-	//for (int x = terrain->width - 1; x >= 0; --x) {
 		for (int y = terrain->height - 1; y >= 0; --y) {
 			const int i = x + y * terrain->width;
 
 			iso_block *block = &terrain->blocks[i];
 			if (*block == -1) continue;
 
-			const float tx = *block % 11;
-			const float ty = floor(*block / (float)11);
+			const float tx = *block % 16;
+			const float ty = floor(*block / 15.0f + (1.0f / 256.0f));
 			const float bx = i % terrain->width;
 			const float by = floor(i / (float)terrain->width);
 
 			// TODO: remove
-			glUniform2f(glGetUniformLocation(terrain->shader, "u_tilesize"), 1.0f / 11, 1.0f / 10);
+			glUniform2f(glGetUniformLocation(terrain->shader, "u_tilesize"), 1.0f / 16.0f, 1.0f / 15.0f);
 		
 			glUniform2f(glGetUniformLocation(terrain->shader, "u_tilepos"), tx, ty);
 			glUniform2f(glGetUniformLocation(terrain->shader, "u_pos"), bx, by);

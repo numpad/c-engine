@@ -1,4 +1,6 @@
 
+precision mediump float;
+
 uniform sampler2D u_texture;
 uniform vec2 u_tilepos;
 uniform vec2 u_tilesize;

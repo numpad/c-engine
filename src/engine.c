@@ -71,6 +71,7 @@ struct engine_s *engine_new(void) {
 	}
 
 	// OpenGL config
+	SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 2);
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
 	SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
@@ -97,7 +98,7 @@ struct engine_s *engine_new(void) {
 	engine_setscene(engine, (struct scene_s *)intro);
 
 	window_resize(engine, engine->window_width, engine->window_height);
-	glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
+	glClearColor(0.06f, 0.0f, 0.10f, 1.0f);
 
 	// camera
 	glm_mat4_identity(engine->u_view);
@@ -111,6 +112,7 @@ int engine_destroy(struct engine_s *engine) {
 
 	// other
 	nvgDeleteGLES2(engine->vg);
+	stbds_arrfree(engine->on_notify_callbacks);
 
 	// windowing
 	SDL_DestroyWindow(engine->window);

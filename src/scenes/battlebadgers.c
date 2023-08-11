@@ -106,9 +106,6 @@ static void battlebadgers_load(struct battlebadgers_s *scene, struct engine_s *e
 	GLint u_mvp = glGetUniformLocation(scene->bg_shader, "u_mvp");
 	glUniform4fv(u_mvp, 4, mvp);
 
-	glm_translate(engine->u_view, (vec3){-0.75f, -0.33f, 0.0f});
-	glm_scale(engine->u_view, (vec3){0.33f, 0.33f, 1.0f});
-
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
 	glUseProgram(0);
 
@@ -140,6 +137,22 @@ static void battlebadgers_update(struct battlebadgers_s *scene, struct engine_s 
 		}
 	}
 	*/
+
+	glm_mat4_identity(engine->u_view);
+	if (mstate & SDL_BUTTON(1)) {
+		glm_scale(engine->u_view, (vec3){2.0f, 2.0f, 1.0f});
+	}
+
+	glm_translate(engine->u_view, (vec3){-0.85f, -0.33f, 0.0f});
+	if (mstate & SDL_BUTTON(1)) {
+		glm_translate(engine->u_view, (vec3){
+			(mx - engine->window_width / 2.0f) / -engine->window_width,
+			(my - engine->window_height / 2.0f) / engine->window_height,
+			0.0f
+		});
+	}
+	glm_scale(engine->u_view, (vec3){0.35f, 0.35f, 1.0f});
+
 }
 
 static void battlebadgers_draw(struct battlebadgers_s *scene, struct engine_s *engine) {
