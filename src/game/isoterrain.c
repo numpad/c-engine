@@ -45,8 +45,31 @@ void isoterrain_init(struct isoterrain_s *terrain, int w, int h) {
 
 	for (int x = 0; x < terrain->width; ++x) {
 		isoterrain_set_block(terrain, x, 0, 129);
+		
 		if (x < 3) isoterrain_set_block(terrain, x, 1, 145);
 		else isoterrain_set_block(terrain, x, 1, 129);
+
+		if (x < 4) isoterrain_set_block(terrain, x, 2, 145);
+		else isoterrain_set_block(terrain, x, 2, 129);
+
+		for (int y = 3; y < terrain->height; ++y) {
+			isoterrain_set_block(terrain, x, y, 145);
+		}
+
+		if (x > 2 && x != terrain->width - 2) {
+			isoterrain_set_block(terrain, x, 4, 80);
+		}
+	}
+
+	for (int y = 0; y < terrain->height; ++y) {
+		if (y < 3) isoterrain_set_block(terrain, terrain->width - 2, y, 132);
+		else isoterrain_set_block(terrain, terrain->width - 2, y, 148);
+		if (y == 4) isoterrain_set_block(terrain, terrain->width - 2, y, 24);
+
+		if (y < 3) isoterrain_set_block(terrain, terrain->width - 5, y, 65);
+		else if (y == 3) isoterrain_set_block(terrain, terrain->width - 5, y, 81);
+		else if (y == 4) isoterrain_set_block(terrain, terrain->width - 5, y, 86);
+
 	}
 }
 
