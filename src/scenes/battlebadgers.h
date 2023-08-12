@@ -14,6 +14,7 @@ struct battlebadgers_s {
 	unsigned int bg_texture;
 	struct vbuffer_s *bg_vbuf;
 
+	// game state
 	struct isoterrain_s *terrain;
 
 	ecs_world_t *world;

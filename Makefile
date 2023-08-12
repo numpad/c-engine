@@ -28,13 +28,14 @@ endif
 
 SCENES = src/scenes/game.c src/scenes/intro.c src/scenes/menu.c src/scenes/battlebadgers.c
 SRC = main.c src/engine.c \
-	  src/game/terrain.c src/game/isoterrain.c \
+	  src/ecs/components.c \
+	  src/game/terrain.c src/game/isoterrain.c src/game/cards.c \
 	  src/util/easing.c src/util/fs.c \
 	  src/gl/shader.c src/gl/texture.c src/gl/vbuffer.c \
 	  src/scenes/scene.c \
 	  lib/nanovg/src/nanovg.c \
 	  lib/stb/stb_ds.c lib/stb/stb_perlin.c lib/stb/stb_image.c \
-	  lib/cglm/src/*.c \
+	  $(wildcard lib/cglm/src/*.c) \
 	  lib/flecs/flecs.c \
 	  $(SCENES) 
 OBJ = $(addprefix $(BIN),$(SRC:.c=.o))

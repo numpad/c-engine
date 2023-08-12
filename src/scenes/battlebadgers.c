@@ -14,26 +14,10 @@
 #include "gl/shader.h"
 #include "gl/vbuffer.h"
 #include "game/isoterrain.h"
-
-typedef struct {
-	float x, y;
-} c_pos;
-
-typedef struct {
-	float x, y;
-} c_vel;
-
-typedef struct {
-	float radius;
-	float color[3];
-} c_circle;
-
-typedef struct {
-	float angle;
-} c_throwable;
+#include "ecs/components.h"
 
 static void reload_shader(struct engine_s *engine) {
-	struct battlebadgers_s *scene = engine->scene;
+	struct battlebadgers_s *scene = (struct battlebadgers_s *)engine->scene;
 	scene->terrain->shader = shader_new("res/shader/isoterrain/vertex.glsl", "res/shader/isoterrain/fragment.glsl");
 }
 
@@ -41,24 +25,12 @@ static void battlebadgers_load(struct battlebadgers_s *scene, struct engine_s *e
 	stbds_arrput(engine->on_notify_callbacks, reload_shader);
 	// ecc
 	scene->world = ecs_init();
-
-	ECS_COMPONENT(scene->world, c_pos);
-	ECS_COMPONENT(scene->world, c_vel);
-	ECS_COMPONENT(scene->world, c_circle);
-
-	for (int y = 0; y < 10; ++y) {
-		for (int x = 0; x < 10; ++x) {
-			ecs_entity_t e = ecs_new_id(scene->world);
-			ecs_set(scene->world, e, c_pos, { 50.0f + 40.0f * x, 250.0f + 35.0f * y });
-			ecs_set(scene->world, e, c_circle, { 10.0f, {0.2f, 0.3f, 0.8f }});
-		}
-	}
+	ECS_COMPONENT(scene->world, c_card);
 
 	ecs_entity_t e = ecs_new_id(scene->world);
-	ecs_set(scene->world, e, c_pos, { engine->window_width * 0.5f, 40.0f });
-	ecs_set(scene->world, e, c_vel, { -2.0f, 1.0f });
-	ecs_set(scene->world, e, c_circle, { 10.0f, {0.8f, 0.3f, 0.3f }});
+	ecs_set(scene->world, e, c_card, { "Move Forward",  40 });
 
+	/*
 	scene->q_render = ecs_query_init(scene->world, &(ecs_query_desc_t) {
 		.filter.terms = {
 			{ ecs_id(c_pos) },
@@ -71,6 +43,7 @@ static void battlebadgers_load(struct battlebadgers_s *scene, struct engine_s *e
 			{ ecs_id(c_vel) },
 		},
 	});
+	*/
 
 	// isoterrain
 	scene->terrain = malloc(sizeof(struct isoterrain_s));
@@ -143,7 +116,7 @@ static void battlebadgers_update(struct battlebadgers_s *scene, struct engine_s 
 		glm_scale(engine->u_view, (vec3){2.0f, 2.0f, 1.0f});
 	}
 
-	glm_translate(engine->u_view, (vec3){-0.85f, -0.33f, 0.0f});
+	glm_translate(engine->u_view, (vec3){-0.8f, 0.0, 0.0f});
 	if (mstate & SDL_BUTTON(1)) {
 		glm_translate(engine->u_view, (vec3){
 			(mx - engine->window_width / 2.0f) / -engine->window_width,
