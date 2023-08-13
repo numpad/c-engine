@@ -97,7 +97,7 @@ void isoterrain_draw(struct isoterrain_s *terrain, const mat4 proj, const mat4 v
 
 			const float tx = *block % 16;
 			const float ty = floor(*block / 15.0f + (1.0f / 256.0f));
-			const float bx = i % terrain->width;
+			const float bx = (i % terrain->width) - (terrain->width / 1.0f);
 			const float by = floor(i / (float)terrain->width);
 
 			// TODO: remove

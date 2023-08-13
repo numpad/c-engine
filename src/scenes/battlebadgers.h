@@ -6,6 +6,7 @@
 
 struct vbuffer_s;
 struct isoterrain_s;
+struct cardrenderer_s;
 
 struct battlebadgers_s {
 	struct scene_s base;
@@ -16,9 +17,10 @@ struct battlebadgers_s {
 
 	// game state
 	struct isoterrain_s *terrain;
+	struct cardrenderer_s *cardrenderer;
 
 	ecs_world_t *world;
-	ecs_query_t *q_render, *q_update_pos;
+	ecs_query_t *q_handcards;
 };
 
 void battlebadgers_init(struct battlebadgers_s *, struct engine_s *);

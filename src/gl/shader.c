@@ -1,6 +1,7 @@
 #include "shader.h"
 
 #include <stdlib.h>
+#include <string.h>
 #include <SDL.h>
 #include <SDL_opengles2.h>
 #include "util/fs.h"
@@ -60,6 +61,28 @@ int shader_new(const char *vert_path, const char *frag_path) {
 	
 	int program = shader_program_new(vs, fs);
 	return program;
+}
+
+int shader_from_directory(const char *directory) {
+	const char *vertex_name = "vertex.glsl";
+	const size_t vertex_name_len = strlen(vertex_name);
+	const char *fragment_name = "fragment.glsl";
+	const size_t fragment_name_len = strlen(fragment_name);
+
+	const size_t directory_len = strlen(directory);
+	char path_to_dir[directory_len + 2]; // directory path + optional slash + NULL
+	strncpy(path_to_dir, directory, directory_len);
+	if (path_to_dir[directory_len - 1] != '/' || path_to_dir[directory_len - 1] != '\\') {
+		strcat(path_to_dir, "/");
+	}
+	const size_t path_to_dir_len = strlen(path_to_dir);
+	
+	char path_to_vertex[path_to_dir_len + vertex_name_len + 1];
+	char path_to_fragment[path_to_dir_len + fragment_name_len + 1];
+	sprintf(path_to_vertex, "%s%s", path_to_dir, vertex_name);
+	sprintf(path_to_fragment, "%s%s", path_to_dir, fragment_name);
+
+	return shader_new(path_to_vertex, path_to_fragment);
 }
 
 void shader_delete(int program) {

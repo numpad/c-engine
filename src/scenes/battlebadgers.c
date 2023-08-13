@@ -14,6 +14,7 @@
 #include "gl/shader.h"
 #include "gl/vbuffer.h"
 #include "game/isoterrain.h"
+#include "game/cards.h"
 #include "ecs/components.h"
 
 static void reload_shader(struct engine_s *engine) {
@@ -22,32 +23,61 @@ static void reload_shader(struct engine_s *engine) {
 }
 
 static void battlebadgers_load(struct battlebadgers_s *scene, struct engine_s *engine) {
+	// TODO: remove, debug only
 	stbds_arrput(engine->on_notify_callbacks, reload_shader);
-	// ecc
+	
+	// ecs
 	scene->world = ecs_init();
 	ECS_COMPONENT(scene->world, c_card);
+	ECS_COMPONENT(scene->world, c_handcard);
 
-	ecs_entity_t e = ecs_new_id(scene->world);
-	ecs_set(scene->world, e, c_card, { "Move Forward",  40 });
+	// add some debug entities
+	{
+		ecs_entity_t e = ecs_new_id(scene->world);
+		ecs_set(scene->world, e, c_card, { "Move Forward", 40 });
+		ecs_set(scene->world, e, c_handcard, { 0 });
+	}
+	{
+		ecs_entity_t e = ecs_new_id(scene->world);
+		ecs_set(scene->world, e, c_card, { "Move Forward", 40 });
+		ecs_set(scene->world, e, c_handcard, { 0 });
+	}
+	{
+		ecs_entity_t e = ecs_new_id(scene->world);
+		ecs_set(scene->world, e, c_card, { "Meal", 41 });
+		ecs_set(scene->world, e, c_handcard, { 0 });
+	}
+	{
+		ecs_entity_t e = ecs_new_id(scene->world);
+		ecs_set(scene->world, e, c_card, { "Move Forward", 40 });
+		ecs_set(scene->world, e, c_handcard, { 0 });
+	}
+	{
+		ecs_entity_t e = ecs_new_id(scene->world);
+		ecs_set(scene->world, e, c_card, { "Meal", 41 });
+		ecs_set(scene->world, e, c_handcard, { 0 });
+	}
+	{
+		ecs_entity_t e = ecs_new_id(scene->world);
+		ecs_set(scene->world, e, c_card, { "Meal", 41 });
+		ecs_set(scene->world, e, c_handcard, { 0 });
+	}
 
-	/*
-	scene->q_render = ecs_query_init(scene->world, &(ecs_query_desc_t) {
+	// component queries
+	scene->q_handcards = ecs_query_init(scene->world, &(ecs_query_desc_t) {
 		.filter.terms = {
-			{ ecs_id(c_pos) },
-			{ ecs_id(c_circle) },
+			{ ecs_id(c_card) },
+			{ ecs_id(c_handcard) },
 		},
 	});
-	scene->q_update_pos = ecs_query_init(scene->world, &(ecs_query_desc_t) {
-		.filter.terms = {
-			{ ecs_id(c_pos) },
-			{ ecs_id(c_vel) },
-		},
-	});
-	*/
 
 	// isoterrain
 	scene->terrain = malloc(sizeof(struct isoterrain_s));
 	isoterrain_init(scene->terrain, 10, 10);
+
+	// card renderer
+	scene->cardrenderer = malloc(sizeof(struct cardrenderer_s));
+	cardrenderer_init(scene->cardrenderer, "res/image/cards.png");
 
 	// background
 	scene->bg_texture = texture_from_image("res/image/space_bg.png", NULL);
@@ -90,6 +120,9 @@ static void battlebadgers_destroy(struct battlebadgers_s *scene, struct engine_s
 	free(scene->bg_vbuf);
 	isoterrain_destroy(scene->terrain);
 	free(scene->terrain);
+	cardrenderer_destroy(scene->cardrenderer);
+	free(scene->cardrenderer);
+
 	ecs_fini(scene->world);
 }
 
@@ -116,7 +149,7 @@ static void battlebadgers_update(struct battlebadgers_s *scene, struct engine_s 
 		glm_scale(engine->u_view, (vec3){2.0f, 2.0f, 1.0f});
 	}
 
-	glm_translate(engine->u_view, (vec3){-0.8f, 0.0, 0.0f});
+	glm_translate(engine->u_view, (vec3){-0.0f, 0.0, 0.0f});
 	if (mstate & SDL_BUTTON(1)) {
 		glm_translate(engine->u_view, (vec3){
 			(mx - engine->window_width / 2.0f) / -engine->window_width,
@@ -131,27 +164,7 @@ static void battlebadgers_update(struct battlebadgers_s *scene, struct engine_s 
 static void battlebadgers_draw(struct battlebadgers_s *scene, struct engine_s *engine) {
 	NVGcontext *vg = engine->vg;
 
-	/*
-	ecs_iter_t it = ecs_query_iter(scene->world, scene->q_render);
-	while (ecs_query_next(&it)) {
-		c_pos *pos = ecs_field(&it, c_pos, 1);
-		c_circle *circle = ecs_field(&it, c_circle, 2);
-
-		for (int i = 0; i < it.count; ++i) {
-			nvgBeginPath(vg);
-			nvgCircle(vg, pos[i].x, pos[i].y, circle[i].radius);
-			nvgFillPaint(vg, nvgRadialGradient(vg, pos[i].x - 5.0f, pos[i].y - 5.0f, 2.0f, 15.0f, nvgRGBf(1.0f, 1.0f, 1.0f), nvgRGBf(circle[i].color[0], circle[i].color[1], circle[i].color[2])));
-			nvgFill(vg);
-
-			nvgBeginPath(vg);
-			nvgCircle(vg, pos[i].x, pos[i].y, circle[i].radius);
-			nvgStrokeColor(vg, nvgRGBf(0.2f, 0.2f, 0.2f));
-			nvgStrokeWidth(vg, 3.0f);
-			nvgStroke(vg);
-		}
-	}
-	*/
-
+	// draw bg
 	glUseProgram(scene->bg_shader);
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_2D, scene->bg_texture);
@@ -159,7 +172,36 @@ static void battlebadgers_draw(struct battlebadgers_s *scene, struct engine_s *e
 	glBindTexture(GL_TEXTURE_2D, 0);
 	glUseProgram(0);
 
+	// draw terrain
 	isoterrain_draw(scene->terrain, engine->u_projection, engine->u_view);
+
+	// draw cards
+	glUseProgram(scene->cardrenderer->shader);
+	glUniformMatrix4fv(glGetUniformLocation(scene->cardrenderer->shader, "u_projection"), 1, GL_FALSE, engine->u_projection[0]);
+	glUniformMatrix4fv(glGetUniformLocation(scene->cardrenderer->shader, "u_view"), 1, GL_FALSE, engine->u_view[0]);
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, scene->cardrenderer->tileset);
+
+	ecs_iter_t it = ecs_query_iter(scene->world, scene->q_handcards);
+	while (ecs_query_next(&it)) {
+		c_card *cards = ecs_field(&it, c_card, 1);
+		c_handcard *handcards = ecs_field(&it, c_handcard, 2);
+
+		for (int i = 0; i < it.count; ++i) {
+			float angle = ((float)i / (it.count - 1)) * glm_rad(120.0f) - glm_rad(60.0f);
+			float x = sinf(angle) * 2.5f * glm_ease_circ_out(0.45f + fabsf((float)i / (it.count - 1.0f) - 0.5f) * 2.0f);
+			float y = cosf(angle) * 1.2f;
+
+			mat4 u_model;
+			glm_mat4_identity(u_model);
+			glm_scale(u_model, (vec3){ 1.0f, 1.0f, 1.0f });
+			glm_translate(u_model, (vec3){ x, y - 3.0f, 0.0f });
+			glm_rotate(u_model, angle * 0.2f, (vec3){0.0f, 0.0f, -1.0f});
+			glUniformMatrix4fv(glGetUniformLocation(scene->cardrenderer->shader, "u_model"), 1, GL_FALSE, u_model[0]);
+
+			vbuffer_draw(&scene->cardrenderer->vbo, 6);
+		}
+	}
 
 }
 
