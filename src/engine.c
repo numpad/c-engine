@@ -15,8 +15,8 @@ static void window_resize(struct engine_s *engine, int w, int h) {
 	engine->window_width = w;
 	engine->window_height = h;
 	glViewport(0, 0, w, h);
-	const float aspect = h / (float)w;
-	glm_ortho(-1.0f, 1.0f, -1.0f * aspect, 1.0f * aspect, -1.0f, 1.0f, engine->u_projection);
+	engine->window_aspect = h / (float)w;
+	glm_ortho(-1.0f, 1.0f, -1.0f * engine->window_aspect, 1.0f * engine->window_aspect, -1.0f, 1.0f, engine->u_projection);
 }
 
 #ifdef __unix__

@@ -14,7 +14,7 @@ TARGET = soil_soldiers
 # when compiling with emscripten, add some specific flags
 ifeq ($(CC), emcc)
 	# TODO: dont add everything to cflags, some flags should be used only during linking
-	CFLAGS += -sWASM=0 \
+	CFLAGS += -Os -sWASM=0 \
 			  -sUSE_SDL=2 -sUSE_SDL_NET=2 -sUSE_SDL_MIXER=2 -sFULL_ES2=1 \
 			  -s ALLOW_MEMORY_GROWTH=1 \
 			  -s EXPORTED_RUNTIME_METHODS=cwrap \

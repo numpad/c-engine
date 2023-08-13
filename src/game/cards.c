@@ -5,7 +5,14 @@
 #include "gl/vbuffer.h"
 
 void cardrenderer_init(struct cardrenderer_s *renderer, const char *tileset) {
-	renderer->tileset = texture_from_image(tileset, NULL);
+	struct texture_settings_s tconf;
+	tconf.filter_min = GL_LINEAR_MIPMAP_LINEAR;
+	tconf.filter_mag = GL_NEAREST;
+	tconf.wrap_s = GL_CLAMP_TO_EDGE;
+	tconf.wrap_t = GL_CLAMP_TO_EDGE;
+	tconf.gen_mipmap = 1;
+
+	renderer->tileset = texture_from_image(tileset, &tconf);
 	renderer->shader = shader_from_directory("res/shader/card");
 	vbuffer_init(&renderer->vbo);
 

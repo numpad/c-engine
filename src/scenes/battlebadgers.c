@@ -45,7 +45,7 @@ static void battlebadgers_load(struct battlebadgers_s *scene, struct engine_s *e
 	{
 		ecs_entity_t e = ecs_new_id(scene->world);
 		ecs_set(scene->world, e, c_card, { "Meal", 41 });
-		ecs_set(scene->world, e, c_handcard, { 0 });
+		ecs_set(scene->world, e, c_handcard, { 1 });
 	}
 	{
 		ecs_entity_t e = ecs_new_id(scene->world);
@@ -130,27 +130,26 @@ static void battlebadgers_update(struct battlebadgers_s *scene, struct engine_s 
 	int mx, my;
 	Uint32 mstate = SDL_GetMouseState(&mx, &my);
 
-	/*
-	ecs_iter_t it = ecs_query_iter(scene->world, scene->q_update_pos);
+	const float mxp = mx / (float)engine->window_width;
+
+	ecs_iter_t it = ecs_query_iter(scene->world, scene->q_handcards);
 	while (ecs_query_next(&it)) {
-		c_pos *pos = ecs_field(&it, c_pos, 1);
-		c_vel *vel = ecs_field(&it, c_vel, 2);
+		c_card *cards = ecs_field(&it, c_card, 1);
+		c_handcard *handcards = ecs_field(&it, c_handcard, 2);
 
 		for (int i = 0; i < it.count; ++i) {
-			vel[i].y += GRAVITY;
-			pos[i].x += vel[i].x;
-			pos[i].y += vel[i].y;
+			handcards[i].selected = 0;
+			if (mstate & SDL_BUTTON(1)) {
+				if (i == (int)roundf(mxp * (it.count - 1.0f))) {
+					handcards[i].selected = 1;
+				}
+			}
 		}
 	}
-	*/
 
 	glm_mat4_identity(engine->u_view);
-	if (mstate & SDL_BUTTON(1)) {
+	if (mstate & SDL_BUTTON(1) && my < engine->window_height * (float)0.6) {
 		glm_scale(engine->u_view, (vec3){2.0f, 2.0f, 1.0f});
-	}
-
-	glm_translate(engine->u_view, (vec3){-0.0f, 0.0, 0.0f});
-	if (mstate & SDL_BUTTON(1)) {
 		glm_translate(engine->u_view, (vec3){
 			(mx - engine->window_width / 2.0f) / -engine->window_width,
 			(my - engine->window_height / 2.0f) / engine->window_height,
@@ -188,16 +187,34 @@ static void battlebadgers_draw(struct battlebadgers_s *scene, struct engine_s *e
 		c_handcard *handcards = ecs_field(&it, c_handcard, 2);
 
 		for (int i = 0; i < it.count; ++i) {
-			float angle = ((float)i / (it.count - 1)) * glm_rad(120.0f) - glm_rad(60.0f);
-			float x = sinf(angle) * 2.5f * glm_ease_circ_out(0.45f + fabsf((float)i / (it.count - 1.0f) - 0.5f) * 2.0f);
-			float y = cosf(angle) * 1.2f;
+			const float angle = ((float)i / (it.count - 1)) * glm_rad(120.0f) - glm_rad(60.0f);
+			const float x = sinf(angle) * 2.0f * glm_ease_circ_out(0.45f + fabsf((float)i / (it.count - 1.0f) - 0.5f) * 2.0f);
+			const float y = cosf(angle) * 1.0f;
+			float y_offset = 0.0f;
+			float z_offset = 0.0f;
+			if (handcards[i].selected) {
+				y_offset += 0.8f;
+				z_offset += 0.1f;
+			}
+
+			float card_scale = 0.375f;
+			if (handcards[i].selected) {
+				card_scale = 0.5f;
+			}
 
 			mat4 u_model;
 			glm_mat4_identity(u_model);
-			glm_scale(u_model, (vec3){ 1.0f, 1.0f, 1.0f });
-			glm_translate(u_model, (vec3){ x, y - 3.0f, 0.0f });
+			glm_scale(u_model, (vec3){ card_scale, card_scale, 1.0f });
+			glm_translate(u_model, (vec3){ x, y * 0.6f + 0.4f + -(1.0f / card_scale) * engine->window_aspect + y_offset, 0.0f + z_offset });
 			glm_rotate(u_model, angle * 0.2f, (vec3){0.0f, 0.0f, -1.0f});
 			glUniformMatrix4fv(glGetUniformLocation(scene->cardrenderer->shader, "u_model"), 1, GL_FALSE, u_model[0]);
+			const float step = 1.0f / 8.0f;
+			const float tx = cards[i].image_id % 8;
+			const float ty = floorf((float)cards[i].image_id / 8.0f);
+
+			glUniform4fv(
+				glGetUniformLocation(scene->cardrenderer->shader, "u_cardwindow_offset"),
+				1, (vec4){tx * step, (ty + 1.0f) * step, step, -step});
 
 			vbuffer_draw(&scene->cardrenderer->vbo, 6);
 		}

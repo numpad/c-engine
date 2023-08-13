@@ -17,6 +17,7 @@ struct engine_s {
 	SDL_GLContext gl_ctx;
 	
 	int window_width, window_height;
+	float window_aspect;
 
 	struct scene_s *scene;
 	struct NVGcontext *vg;

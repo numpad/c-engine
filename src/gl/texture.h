@@ -8,6 +8,7 @@ struct texture_settings_s {
 	GLint filter_mag;
 	GLint wrap_s;
 	GLint wrap_t;
+	int gen_mipmap;
 };
 
 GLuint texture_from_image(const char *source_path, struct texture_settings_s *settings);

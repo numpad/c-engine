@@ -36,7 +36,13 @@ GLuint texture_from_image(const char *source_path, struct texture_settings_s *se
 			SDL_Log("could not determine channels in image \"%s\"...", source_path);
 			return 0;
 		};
+		
 		glTexImage2D(GL_TEXTURE_2D, 0, format, tw, th, 0, format, GL_UNSIGNED_BYTE, tpixels);
+
+		if (settings != NULL && settings->gen_mipmap) {
+			glGenerateMipmap(GL_TEXTURE_2D);
+		}
+
 		glBindTexture(GL_TEXTURE_2D, 0);
 		stbi_image_free(tpixels);
 	}
