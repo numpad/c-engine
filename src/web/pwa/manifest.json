@@ -1,15 +1,36 @@
 {
 	"name": "Soil Soldiers - A deckbuilding rogue-like.",
 	"short_name": "Soil Soldiers",
-	"description": "A deckbuilding rogue-like game.",
-	"start_url": "soil_soldiers.html",
+	"description": "A deckbuilding rogue-like game to play alone or with friends.",
+	"start_url": "/soil_soldiers.html",
 	"display": "standalone",
-	"background_color": "#ffffff",
-	"theme_color": "#000000",
+	"background_color": "#aabbff",
+	"theme_color": "#ffff00",
+	"orientation": "portrait",
+	"categories": [ "games", "entertainment" ],
+	"screenshots": [
+		{
+			"src": "screenshot1.png",
+			"sizes": "470x735",
+			"form_factor": "narrow",
+			"label": "Game Menu"
+		},
+		{
+			"src": "screenshot2.png",
+			"sizes": "470x735",
+			"form_factor": "narrow",
+			"label": "Card Game"
+		}
+	],
 	"icons": [
 		{
-			"src": "res/image/icon.png",
+			"src": "icon-192.png",
 			"sizes": "192x192",
+			"type": "image/png"
+		},
+		{
+			"src": "icon-512.png",
+			"sizes": "512x512",
 			"type": "image/png"
 		}
 	]

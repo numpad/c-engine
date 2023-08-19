@@ -19,6 +19,8 @@ $ make CC=emcc
 
 Afterwards, run the game using `$ ./soil_soldiers` or `$ emrun soil_soldiers.html`, depending on your platform.
 
+To serve the game as a Progressive Webapp, build using `CC=emcc` and copy `src/web/pwa/service-worker.js` in the same directory as `soil_soldiers.html`. The directory `src/web/pwa/` needs to be accessible.
+
 
 ## Ideas
 

@@ -4,6 +4,7 @@
         <meta charset="utf-8">
 		<meta name="viewport" content="width=device-width, initial-scale=1.0">
         <meta http-equiv="X-UA-Compatible" content="chrome=1, IE=edge">
+		<link rel="manifest" href="/src/web/pwa/manifest.json">
         <title>Soil Soldiers</title>
         <style>
             .fullwindow {
@@ -54,7 +55,7 @@
 						console.log("Service Worker registration successfull: ", registration.scope);
 					})
 					.catch(error => {
-						console.warning("Service Worker registration failed: ", error);
+						console.warn("Service Worker registration failed: ", error);
 					});
 			}
 		</script>
