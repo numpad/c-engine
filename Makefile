@@ -14,14 +14,14 @@ TARGET = soil_soldiers
 # when compiling with emscripten, add some specific flags
 ifeq ($(CC), emcc)
 	# TODO: dont add everything to cflags, some flags should be used only during linking
-	CFLAGS += -Os -sWASM=0 \
+	CFLAGS += -sWASM=1 \
 			  -sUSE_SDL=2 -sUSE_SDL_NET=2 -sUSE_SDL_MIXER=2 -sFULL_ES2=1 \
-			  -s ALLOW_MEMORY_GROWTH=1 \
-			  -s EXPORTED_RUNTIME_METHODS=cwrap \
+			  -sALLOW_MEMORY_GROWTH=1 \
+			  -sEXPORTED_RUNTIME_METHODS=cwrap \
 			  -sMODULARIZE=1 \
 			  -sEXPORT_NAME="MyApp" \
 			  --preload-file res \
-			  --shell-file src/web/shell.html # -sUSE_SDL_TTF=2
+			  --shell-file src/web/shell_start_on_click.html
 	TARGET = soil_soldiers.html
 	BIN = bin/emcc/
 endif

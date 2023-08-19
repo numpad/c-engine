@@ -13,7 +13,7 @@ void cardrenderer_init(struct cardrenderer_s *renderer, const char *tileset) {
 	tconf.gen_mipmap = 1;
 
 	renderer->tileset = texture_from_image(tileset, &tconf);
-	renderer->shader = shader_from_directory("res/shader/card");
+	renderer->shader = shader_new("res/shader/card/vertex.glsl", "res/shader/card/fragment.glsl");
 	vbuffer_init(&renderer->vbo);
 
 	GLfloat vertices[] = {

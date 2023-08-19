@@ -4,6 +4,8 @@
 soil_soldiers.html
 soil_soldiers.js
 soil_soldiers.data
+soil_soldiers.wasm
+soil_soldiers.html.mem
 soil_soldiers
 
 .cache
