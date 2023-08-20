@@ -5,6 +5,9 @@
 #include "scene.h"
 #include "engine.h"
 #include "menu.h"
+#include "gl/shader.h"
+#include "gl/vbuffer.h"
+#include "gl/texture.h"
 
 static void switch_to_menu_scene(struct engine_s *engine) {
 	struct menu_s *menu = malloc(sizeof(struct menu_s));
@@ -17,9 +20,13 @@ static void intro_load(struct intro_s *scene, struct engine_s *engine) {
 
 	scene->timer = 0.0f;
 	scene->time_passed = 0.0f;
+
+	scene->logo_texture = texture_from_image("res/image/numpad.png", NULL);
+	//scene->logo_shader = shader_new("res/shader/", "res/shader/");
 }
 
 static void intro_destroy(struct intro_s *scene, struct engine_s *engine) {
+	glDeleteTextures(1, &scene->logo_texture);
 }
 
 static void intro_update(struct intro_s *scene, struct engine_s *engine, float dt) {

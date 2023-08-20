@@ -5,7 +5,7 @@ CFLAGS = -std=gnu99 -fPIC -Wall -Wextra -pedantic \
 		 -Wswitch-enum -Wcast-qual -Wnull-dereference -Wunused-result \
 		 -DFLECS_CUSTOM_BUILD -DFLECS_SYSTEM -DFLECS_MODULE -DFLECS_PIPELINE -DFLECS_TIMER -DFLECS_HTTP -DFLECS_SNAPSHOT -DFLECS_PARSER -DFLECS_APP -DFLECS_OS_API_IMPL \
 		 # flecs needs gnu99
-INCLUDES = -Isrc/ -I/usr/include/SDL2 -Ilib/nanovg/src -Ilib/stb -Ilib/cglm/include -Ilib/flecs
+INCLUDES = -Isrc/ -I/usr/include/SDL2 -Ilib/nanovg/src -Ilib/stb -Ilib/cglm/include -Ilib/flecs -Ilib/cJSON
 LIBS = -lm -lGL -lSDL2 -lSDL2_mixer -lSDL2_net # -lSDL2_ttf
 
 BIN = bin/native/
@@ -37,6 +37,7 @@ SRC = main.c src/engine.c \
 	  lib/nanovg/src/nanovg.c \
 	  lib/stb/stb_ds.c lib/stb/stb_perlin.c lib/stb/stb_image.c \
 	  $(wildcard lib/cglm/src/*.c) \
+	  lib/cJSON/cJSON.c \
 	  lib/flecs/flecs.c \
 	  $(SCENES) 
 OBJ = $(addprefix $(BIN),$(SRC:.c=.o))

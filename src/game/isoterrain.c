@@ -2,6 +2,8 @@
 
 #include <stdlib.h>
 #include <SDL_opengles2.h>
+#include <cJSON.h>
+#include "util/fs.h"
 #include "gl/shader.h"
 #include "gl/texture.h"
 #include "gl/vbuffer.h"
@@ -49,111 +51,42 @@ void isoterrain_init(struct isoterrain_s *terrain, int w, int h, int depth) {
 	
 	glUseProgram(terrain->shader);
 	glUniform1i(glGetUniformLocation(terrain->shader, "u_texture"), 0);
-
-	// TODO: set some blocks for testing
-	for (int i = 0; i < terrain->width * terrain->height * terrain->depth; ++i) {
-		terrain->blocks[i] = -1;
-	}
-	for (int x = 0; x < terrain->width; ++x) {
-		for (int y = 0; y < terrain->height; ++y) {
-			isoterrain_set_block(terrain, x, y, 0, 9 * 16);
-		}
-	}
-
-	for (int x = 0; x < terrain->width; ++x) {
-		isoterrain_set_block(terrain, x, 0, 1, 129);
-		
-		if (x < 3) isoterrain_set_block(terrain, x, 1, 1, 145);
-		else isoterrain_set_block(terrain, x, 1, 1, 129);
-
-		if (x < 4) isoterrain_set_block(terrain, x, 2, 1, 145);
-		else isoterrain_set_block(terrain, x, 2, 1, 129);
-
-		for (int y = 3; y < terrain->height; ++y) {
-			isoterrain_set_block(terrain, x, y, 1, 145);
-		}
-
-		if (x > 2 && x != terrain->width - 2) {
-			isoterrain_set_block(terrain, x, 4, 1, 80);
-		}
-	}
-
-	for (int y = 0; y < terrain->height; ++y) {
-		if (y < 3) isoterrain_set_block(terrain, terrain->width - 2, y, 1, 132);
-		else isoterrain_set_block(terrain, terrain->width - 2, y, 1, 148);
-		if (y == 4) isoterrain_set_block(terrain, terrain->width - 2, y, 1, 24);
-
-		if (y < 3) isoterrain_set_block(terrain, terrain->width - 5, y, 1, 65);
-		else if (y == 3) isoterrain_set_block(terrain, terrain->width - 5, y, 1, 81);
-		else if (y == 4) isoterrain_set_block(terrain, terrain->width - 5, y, 1, 86);
-	}
-
-
-	isoterrain_set_block(terrain, terrain->width - 1, 0, 2, 8 + 7 * 16);
-	isoterrain_set_block(terrain, terrain->width - 4, 0, 2, 8 + 8 * 16);
-	isoterrain_set_block(terrain, terrain->width - 4, terrain->height - 1, 2, 8 + 7 * 16);
-	isoterrain_set_block(terrain, terrain->width - 6, terrain->height - 1, 2, 0 + 1 * 16);
-	isoterrain_set_block(terrain, terrain->width - 5, terrain->height - 1, 2, 0 + 1 * 16);
-	isoterrain_set_block(terrain, terrain->width - 7, terrain->height - 1, 2, 10 + 1 * 16);
-	isoterrain_set_block(terrain, terrain->width - 8, terrain->height - 1, 2, 10 + 1 * 16);
-	isoterrain_set_block(terrain, 1, terrain->height - 1, 2, 0 + 1 * 16);
-	isoterrain_set_block(terrain, 0, terrain->height - 1, 2, 0 + 0 * 16);
-	isoterrain_set_block(terrain, terrain->width - 1, terrain->height - 1, 2, 8 + 6 * 16);
-	isoterrain_set_block(terrain, 0, terrain->height - 3, 2, 8 + 6 * 16);
-	isoterrain_set_block(terrain, 3, 2, 2, 8 + 6 * 16);
-	isoterrain_set_block(terrain, 0, 0, 2, 8 + 6 * 16);
-	isoterrain_set_block(terrain, 0, 3, 2, 8 + 8 * 16);
-
-	isoterrain_set_block(terrain, 2, terrain->height - 1, 1, 0 + 1 * 16);
-	isoterrain_set_block(terrain, 3, terrain->height - 1, 1, 0 + 1 * 16);
 }
 
 void isoterrain_init_from_file(struct isoterrain_s *terrain, const char *path_to_script) {
-	/*
-	lua_State *L = luaL_newstate();
-	if (L == NULL) {
-		fprintf(stderr, "could not create lua context!\n");
+	char *file;
+	long file_len;
+	if (fs_readfile(path_to_script, &file, &file_len) != FS_OK) {
+		fprintf(stderr, "could not read '%s'!\n", path_to_script);
 		return;
 	}
 
-	if (luaL_dofile(L, path_to_script) != 0) {
-		fprintf(stderr, "failed executing script '%s': %s\n", path_to_script, lua_tostring(L, -1));
-		lua_close(L);
+	cJSON *json = cJSON_Parse(file);
+	free(file);
+
+	const cJSON *width = cJSON_GetObjectItem(json, "width");
+	const cJSON *height = cJSON_GetObjectItem(json, "height");
+	const cJSON *layers = cJSON_GetObjectItem(json, "layers");
+	const cJSON *blocks = cJSON_GetObjectItem(json, "blocks");
+
+	if (!cJSON_IsNumber(width) || !cJSON_IsNumber(height) || !cJSON_IsNumber(layers) || !cJSON_IsArray(blocks)) {
+		fprintf(stderr, "could not parse map dimensions.\n");
 		return;
 	}
-	
-	// get width, height and depth
-	lua_getglobal(L, "width");
-	const int width = lua_tointeger(L, -1);
-	lua_pop(L, -1);
-	lua_getglobal(L, "height");
-	const int height = lua_tointeger(L, -1);
-	lua_pop(L, -1);
-	lua_getglobal(L, "depth");
-	const int depth = lua_tointeger(L, -1);
-	lua_pop(L, -1);
 
-	// initialize terrain
-	isoterrain_init(terrain, width, height, depth);
+	isoterrain_init(terrain, width->valueint, height->valueint, layers->valueint);
 
-	// load blocks
-	lua_getglobal(L, "blocks");
-	lua_pushnil(L);
-	while (lua_next(L, -2) != 0) {
-		// key is at -2, value at -1.
-		if (lua_isnumber(L, -2)) {
-			const int key = lua_tointeger(L, -2);
-
-			if (key > 0) {
-				terrain->blocks[key - 1] = lua_tointeger(L, -1);
-			}
+	size_t index = 0;
+	const cJSON *block;
+	cJSON_ArrayForEach(block, blocks) {
+		if (cJSON_IsNumber(block)) {
+			terrain->blocks[index] = block->valueint;
 		}
 
-		lua_pop(L, 1); // remove value, keep key for next iteration.
+		++index;
 	}
 
-	lua_close(L);
-	*/
+	cJSON_Delete(json);
 }
 
 void isoterrain_destroy(struct isoterrain_s *terrain) {

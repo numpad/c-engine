@@ -73,8 +73,8 @@ static void battlebadgers_load(struct battlebadgers_s *scene, struct engine_s *e
 
 	// isoterrain
 	scene->terrain = malloc(sizeof(struct isoterrain_s));
-	isoterrain_init(scene->terrain, 10, 10, 3);
-	//isoterrain_init_from_file(scene->terrain, "res/data/levels/test.map");
+	//isoterrain_init(scene->terrain, 10, 10, 3);
+	isoterrain_init_from_file(scene->terrain, "res/data/levels/map2.json");
 
 	// card renderer
 	scene->cardrenderer = malloc(sizeof(struct cardrenderer_s));
