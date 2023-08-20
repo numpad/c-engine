@@ -29,6 +29,7 @@ endif
 SCENES = src/scenes/game.c src/scenes/intro.c src/scenes/menu.c src/scenes/battlebadgers.c
 SRC = main.c src/engine.c \
 	  src/ecs/components.c \
+	  src/gui/console.c \
 	  src/game/terrain.c src/game/isoterrain.c src/game/cards.c \
 	  src/util/easing.c src/util/fs.c \
 	  src/gl/shader.c src/gl/texture.c src/gl/vbuffer.c \
@@ -60,8 +61,8 @@ $(BIN)%.o: %.c
 	$(CC) $(CFLAGS) $(INCLUDES) -c $< -o $@
 
 scenes:
-	$(CC) $(CFLAGS) -shared -o scene_game.so $(INCLUDES) $(LIBS) src/scenes/battlebadgers.c src/game/isoterrain.c
+	$(CC) $(CFLAGS) -shared -o scene_game.so $(INCLUDES) $(LIBS) src/scenes/battlebadgers.c src/game/isoterrain.c src/game/cards.c
 
 clean:
-	rm -rf $(BIN) $(TARGET) "$(TARGET).data" "$(TARGET).html" "$(TARGET).js"
+	rm -rf $(BIN) $(TARGET) "$(TARGET).data" "$(TARGET).html" "$(TARGET).js" "$(TARGET).wasm"
 

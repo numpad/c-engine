@@ -8,6 +8,7 @@
 #include <nanovg.h>
 
 struct engine_s;
+struct console_s;
 typedef void(*engine_callback_fn)(struct engine_s*);
 
 struct engine_s {
@@ -15,15 +16,19 @@ struct engine_s {
 	SDL_Window *window;
 	Uint32 window_id;
 	SDL_GLContext gl_ctx;
+	struct NVGcontext *vg;
 	
 	int window_width, window_height;
 	float window_aspect;
 
+	// scene management
 	struct scene_s *scene;
-	struct NVGcontext *vg;
 
 	// hooks
 	engine_callback_fn *on_notify_callbacks;
+
+	// others
+	struct console_s *console;
 
 	// rendering globals
 	mat4 u_projection;

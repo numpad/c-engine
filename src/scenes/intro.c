@@ -50,9 +50,6 @@ static void intro_draw(struct intro_s *scene, struct engine_s *engine) {
 	if (fill > 1.0) fill = 1.0f;
 	fill = ease_out_expo(fill);
 
-	// boxColor(engine->renderer, mx - 50 * fill, my - 50 * fill, mx + 50 * fill, my + 50 * fill, 0xFF0000FF);
-	// rectangleColor(engine->renderer, mx - 50, my - 50, mx + 50, my + 50, 0xFFFF0000);
-	// stringColor(engine->renderer, mx, my + 50, "intro scene", 0xffffffff);
 	nvgBeginPath(engine->vg);
 	nvgCircle(engine->vg, mx, my, 30.0f * fill);
 	nvgFillColor(engine->vg, nvgRGBA(200, 170, 190, 128));

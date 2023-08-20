@@ -7,6 +7,7 @@
 #include <stb_ds.h>
 #include "scenes/intro.h"
 #include "scenes/battlebadgers.h"
+#include "gui/console.h"
 
 static Uint32 USR_EVENT_RELOAD = ((Uint32)-1);
 static Uint32 USR_EVENT_NOTIFY = ((Uint32)-1);
@@ -59,6 +60,9 @@ struct engine_s *engine_new(void) {
 	engine->window = SDL_CreateWindow("Soil Soldiers", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, engine->window_width, engine->window_height, SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_SHOWN);
 	engine->window_id = SDL_GetWindowID(engine->window);
 	engine->on_notify_callbacks = NULL;
+	engine->scene = NULL;
+	engine->console = malloc(sizeof(struct console_s));
+	console_init(engine->console);
 
 	if (engine->window == NULL) {
 		SDL_LogError(SDL_LOG_CATEGORY_ERROR, "failed initializing SDL window.\n");
@@ -94,7 +98,6 @@ struct engine_s *engine_new(void) {
 	// scene
 	struct intro_s *intro = malloc(sizeof(struct intro_s));
 	intro_init(intro, engine);
-	engine->scene = NULL;
 	engine_setscene(engine, (struct scene_s *)intro);
 
 	window_resize(engine, engine->window_width, engine->window_height);
@@ -110,9 +113,12 @@ int engine_destroy(struct engine_s *engine) {
 	// scene
 	engine_setscene(engine, NULL);
 
+
 	// other
 	nvgDeleteGLES2(engine->vg);
 	stbds_arrfree(engine->on_notify_callbacks);
+	console_destroy(engine->console);
+	free(engine->console);
 
 	// windowing
 	SDL_DestroyWindow(engine->window);
@@ -183,6 +189,12 @@ void engine_update(struct engine_s *engine) {
 					window_resize(engine, event.window.data1, event.window.data2);
 				}
 				break;
+			case SDL_TEXTINPUT:
+				console_add_input_text(engine->console, event.text.text);
+				break;
+			case SDL_TEXTEDITING:
+
+				break;
 			case SDL_KEYDOWN: {
 				// SDL_KeyboardEvent *key_event = (SDL_KeyboardEvent *)&event;
 				break;
@@ -214,6 +226,8 @@ void engine_draw(struct engine_s *engine) {
 	// run scene
 	scene_update(engine->scene, engine, 1.0f / 60.0f);
 	scene_draw(engine->scene, engine);
+
+	console_draw(engine->console, engine);
 
 	nvgEndFrame(engine->vg);
 

@@ -73,7 +73,8 @@ static void battlebadgers_load(struct battlebadgers_s *scene, struct engine_s *e
 
 	// isoterrain
 	scene->terrain = malloc(sizeof(struct isoterrain_s));
-	isoterrain_init(scene->terrain, 10, 10);
+	isoterrain_init(scene->terrain, 10, 10, 3);
+	//isoterrain_init_from_file(scene->terrain, "res/data/levels/test.map");
 
 	// card renderer
 	scene->cardrenderer = malloc(sizeof(struct cardrenderer_s));
@@ -161,8 +162,6 @@ static void battlebadgers_update(struct battlebadgers_s *scene, struct engine_s 
 }
 
 static void battlebadgers_draw(struct battlebadgers_s *scene, struct engine_s *engine) {
-	NVGcontext *vg = engine->vg;
-
 	// draw bg
 	glUseProgram(scene->bg_shader);
 	glActiveTexture(GL_TEXTURE0);
