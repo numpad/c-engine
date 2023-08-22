@@ -1,20 +1,29 @@
 #include "console.h"
 
+#include <string.h>
 #include <stb_ds.h>
 #include <nanovg.h>
 #include "engine.h"
+
+static void console_msg_copy(struct console_msg_s *from, struct console_msg_s *to) {
+	const size_t msg_len = strlen(from->message);
+	char *newmsg = malloc(msg_len * sizeof(char) + 1);
+	strcpy(newmsg, from->message);
+	to->message = newmsg;
+}
 
 void console_init(struct console_s *console) {
 	console->messages = NULL;
 	console->input_text_maxlen = 1024;
 	console->input_text = malloc(console->input_text_maxlen * sizeof(char));
-
-	// TODO: remove. only for testing
-	console_add_message(console, (struct console_msg_s){ "Round starting." });
-	console_add_message(console, (struct console_msg_s){ "You sight 3 enemies, but hear more in the distance." });
 }
 
 void console_destroy(struct console_s *console) {
+	const size_t messages_len = stbds_arrlen(console->messages);
+	for (size_t i = 0; i < messages_len; ++i) {
+		free(console->messages[i].message);
+	}
+
 	stbds_arrfree(console->messages);
 	free(console->input_text);
 	console->input_text_maxlen = 0;
@@ -46,7 +55,6 @@ void console_draw(struct console_s *console, struct engine_s *engine) {
 	nvgFontSize(vg, 12.0f);
 	const int msgs_len = stbds_arrlen(console->messages);
 	for (int i = 0; i < msgs_len; ++i) {
-
 		float bounds[4];
 		nvgTextBounds(vg, 0.0f, 0.0f, console->messages[i].message, NULL, bounds);
 
@@ -65,6 +73,7 @@ void console_add_input_text(struct console_s *console, char *text) {
 }
 
 void console_add_message(struct console_s *console, struct console_msg_s msg) {
+	console_msg_copy(&msg, &msg);
 	stbds_arrput(console->messages, msg);
 }
 

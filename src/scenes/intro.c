@@ -8,6 +8,7 @@
 #include "gl/shader.h"
 #include "gl/vbuffer.h"
 #include "gl/texture.h"
+#include "gui/console.h"
 
 static void switch_to_menu_scene(struct engine_s *engine) {
 	struct menu_s *menu = malloc(sizeof(struct menu_s));
@@ -16,13 +17,17 @@ static void switch_to_menu_scene(struct engine_s *engine) {
 }
 
 static void intro_load(struct intro_s *scene, struct engine_s *engine) {
-	nvgCreateFont(engine->vg, "PermanentMarker Regular", "res/font/PermanentMarker-Regular.ttf");
+	nvgCreateFont(engine->vg, "Inter Regular", "res/font/Inter-Regular.ttf");
 
 	scene->timer = 0.0f;
 	scene->time_passed = 0.0f;
 	scene->time_passed_max = 2.0f;
 
 	scene->logo_image_nvg = nvgCreateImage(engine->vg, "res/image/numpad.png", NVG_IMAGE_NEAREST);
+
+#ifdef DEBUG
+	console_add_message(engine->console, (struct console_msg_s){ "Debug-Build is enabled!" });
+#endif
 }
 
 static void intro_destroy(struct intro_s *scene, struct engine_s *engine) {
@@ -32,7 +37,7 @@ static void intro_destroy(struct intro_s *scene, struct engine_s *engine) {
 static void intro_update(struct intro_s *scene, struct engine_s *engine, float dt) {
 	scene->time_passed += dt;
 
-	if (scene->time_passed >= 3.5f) {
+	if (scene->time_passed >= scene->time_passed_max) {
 		switch_to_menu_scene(engine);
 	}
 }
@@ -58,6 +63,19 @@ static void intro_draw(struct intro_s *scene, struct engine_s *engine) {
 	if (fill > 1.0) fill = 1.0f;
 	fill = ease_out_expo(fill);
 
+	// draw logo
+	const float xcenter = engine->window_width * 0.5f;
+	const float ycenter = engine->window_height * 0.5f;
+	const float halfsize = fminf(engine->window_width, engine->window_height) * 0.2f;
+	const float img_alpha = glm_clamp(glm_ease_cubic_in(scene->time_passed / scene->time_passed_max) * 4.0f - 0.2f, 0.0f, 1.0f);
+	NVGcontext *vg = engine->vg;
+	nvgBeginPath(vg);
+	nvgRect(vg, xcenter - halfsize, ycenter - halfsize, halfsize * 2.0f, halfsize * 2.0f);
+	NVGpaint paint = nvgImagePattern(vg, xcenter - halfsize, ycenter - halfsize, halfsize * 2.0f, halfsize * 2.0f, 0.0f, scene->logo_image_nvg, img_alpha);
+	nvgFillPaint(vg, paint);
+	nvgFill(vg);
+
+	// draw mouse
 	nvgBeginPath(engine->vg);
 	nvgCircle(engine->vg, mx, my, 30.0f * fill);
 	nvgFillColor(engine->vg, nvgRGBA(200, 170, 190, 128));
@@ -68,30 +86,6 @@ static void intro_draw(struct intro_s *scene, struct engine_s *engine) {
 	nvgStrokeWidth(engine->vg, 1.0f + 1.0f * fill);
 	nvgStrokeColor(engine->vg, nvgRGBA(150, 110, 130, 200));
 	nvgStroke(engine->vg);
-
-#ifdef DEBUG
-	nvgBeginPath(engine->vg);
-	nvgFillColor(engine->vg, nvgRGB(100, 220, 100));
-	nvgFontSize(engine->vg, 28.0f);
-	nvgText(engine->vg, 100.0f, 200.0f, "DEBUG = true", NULL);
-#else
-	nvgBeginPath(engine->vg);
-	nvgFillColor(engine->vg, nvgRGB(220, 100, 100));
-	nvgFontSize(engine->vg, 28.0f);
-	nvgText(engine->vg, 100.0f, 200.0f, "DEBUG = false", NULL);
-#endif
-
-	const float xcenter = engine->window_width * 0.5f;
-	const float ycenter = engine->window_height * 0.5f;
-	const float halfsize = fminf(engine->window_width, engine->window_height) * 0.2f;
-	const float img_alpha = glm_clamp(glm_ease_cubic_in(scene->time_passed / scene->time_passed_max) * 4.0f - 0.2f, 0.0f, 1.0f);
-
-	NVGcontext *vg = engine->vg;
-	nvgBeginPath(vg);
-	nvgRect(vg, xcenter - halfsize, ycenter - halfsize, halfsize * 2.0f, halfsize * 2.0f);
-	NVGpaint paint = nvgImagePattern(vg, xcenter - halfsize, ycenter - halfsize, halfsize * 2.0f, halfsize * 2.0f, 0.0f, scene->logo_image_nvg, img_alpha);
-	nvgFillPaint(vg, paint);
-	nvgFill(vg);
 
 }
 

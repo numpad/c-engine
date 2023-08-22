@@ -136,6 +136,13 @@ int engine_destroy(struct engine_s *engine) {
 //
 
 void engine_setscene(struct engine_s *engine, struct scene_s *new_scene) {
+#ifdef DEBUG
+	static char text[256];
+	text[0] = '\0';
+	sprintf(text, "Switching to scene %p", new_scene);
+	console_add_message(engine->console, (struct console_msg_s){ text });
+#endif
+
 	struct scene_s *old_scene = engine->scene;
 	engine->scene = NULL;
 
