@@ -10,12 +10,9 @@ struct intro_s {
 	struct scene_s base;
 
 	float timer;
-	float time_passed;
+	float time_passed, time_passed_max;
 
-	// logo
-	unsigned int logo_texture;
-	unsigned int logo_shader;
-	struct vbuffer_s logo_vbuffer;
+	int logo_image_nvg;
 };
 
 void intro_init(struct intro_s *intro, struct engine_s *engine);

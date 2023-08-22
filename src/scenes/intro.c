@@ -20,19 +20,19 @@ static void intro_load(struct intro_s *scene, struct engine_s *engine) {
 
 	scene->timer = 0.0f;
 	scene->time_passed = 0.0f;
+	scene->time_passed_max = 2.0f;
 
-	scene->logo_texture = texture_from_image("res/image/numpad.png", NULL);
-	//scene->logo_shader = shader_new("res/shader/", "res/shader/");
+	scene->logo_image_nvg = nvgCreateImage(engine->vg, "res/image/numpad.png", NVG_IMAGE_NEAREST);
 }
 
 static void intro_destroy(struct intro_s *scene, struct engine_s *engine) {
-	glDeleteTextures(1, &scene->logo_texture);
+	nvgDeleteImage(engine->vg, scene->logo_image_nvg);
 }
 
 static void intro_update(struct intro_s *scene, struct engine_s *engine, float dt) {
 	scene->time_passed += dt;
 
-	if (scene->time_passed >= 1.5f) {
+	if (scene->time_passed >= 3.5f) {
 		switch_to_menu_scene(engine);
 	}
 }
@@ -42,6 +42,7 @@ static inline float ease_out_expo(float n) {
 }
 
 static void intro_draw(struct intro_s *scene, struct engine_s *engine) {
+	glClearColor(0.24f, 0.58f, 1.0f, 1.0f);
 	int mx, my;
 	const Uint32 buttons = SDL_GetMouseState(&mx, &my);
 	if (buttons & SDL_BUTTON(1)) {
@@ -79,6 +80,18 @@ static void intro_draw(struct intro_s *scene, struct engine_s *engine) {
 	nvgFontSize(engine->vg, 28.0f);
 	nvgText(engine->vg, 100.0f, 200.0f, "DEBUG = false", NULL);
 #endif
+
+	const float xcenter = engine->window_width * 0.5f;
+	const float ycenter = engine->window_height * 0.5f;
+	const float halfsize = fminf(engine->window_width, engine->window_height) * 0.2f;
+	const float img_alpha = glm_clamp(glm_ease_cubic_in(scene->time_passed / scene->time_passed_max) * 4.0f - 0.2f, 0.0f, 1.0f);
+
+	NVGcontext *vg = engine->vg;
+	nvgBeginPath(vg);
+	nvgRect(vg, xcenter - halfsize, ycenter - halfsize, halfsize * 2.0f, halfsize * 2.0f);
+	NVGpaint paint = nvgImagePattern(vg, xcenter - halfsize, ycenter - halfsize, halfsize * 2.0f, halfsize * 2.0f, 0.0f, scene->logo_image_nvg, img_alpha);
+	nvgFillPaint(vg, paint);
+	nvgFill(vg);
 
 }
 
