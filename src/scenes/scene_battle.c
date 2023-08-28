@@ -1,4 +1,4 @@
-#include "battlebadgers.h"
+#include "scene_battle.h"
 
 #include <math.h>
 #include <SDL_opengles2.h>
@@ -18,11 +18,11 @@
 #include "ecs/components.h"
 
 static void reload_shader(struct engine_s *engine) {
-	struct battlebadgers_s *scene = (struct battlebadgers_s *)engine->scene;
+	struct scene_battle_s *scene = (struct scene_battle_s *)engine->scene;
 	scene->terrain->shader = shader_new("res/shader/isoterrain/vertex.glsl", "res/shader/isoterrain/fragment.glsl");
 }
 
-static void battlebadgers_load(struct battlebadgers_s *scene, struct engine_s *engine) {
+static void scene_battle_load(struct scene_battle_s *scene, struct engine_s *engine) {
 	// TODO: remove, debug only
 	stbds_arrput(engine->on_notify_callbacks, reload_shader);
 	
@@ -115,7 +115,7 @@ static void battlebadgers_load(struct battlebadgers_s *scene, struct engine_s *e
 
 }
 
-static void battlebadgers_destroy(struct battlebadgers_s *scene, struct engine_s *engine) {
+static void scene_battle_destroy(struct scene_battle_s *scene, struct engine_s *engine) {
 	shader_delete(scene->bg_shader);
 	vbuffer_destroy(scene->bg_vbuf);
 	free(scene->bg_vbuf);
@@ -127,7 +127,7 @@ static void battlebadgers_destroy(struct battlebadgers_s *scene, struct engine_s
 	ecs_fini(scene->world);
 }
 
-static void battlebadgers_update(struct battlebadgers_s *scene, struct engine_s *engine, float dt) {
+static void scene_battle_update(struct scene_battle_s *scene, struct engine_s *engine, float dt) {
 	int mx, my;
 	Uint32 mstate = SDL_GetMouseState(&mx, &my);
 
@@ -161,7 +161,7 @@ static void battlebadgers_update(struct battlebadgers_s *scene, struct engine_s 
 
 }
 
-static void battlebadgers_draw(struct battlebadgers_s *scene, struct engine_s *engine) {
+static void scene_battle_draw(struct scene_battle_s *scene, struct engine_s *engine) {
 	// draw bg
 	glUseProgram(scene->bg_shader);
 	glActiveTexture(GL_TEXTURE0);
@@ -221,15 +221,15 @@ static void battlebadgers_draw(struct battlebadgers_s *scene, struct engine_s *e
 
 }
 
-void battlebadgers_init(struct battlebadgers_s *battlebadgers, struct engine_s *engine) {
+void scene_battle_init(struct scene_battle_s *scene_battle, struct engine_s *engine) {
 	// init scene base
-	scene_init((struct scene_s *)battlebadgers, engine);
+	scene_init((struct scene_s *)scene_battle, engine);
 
 	// init function pointers
-	battlebadgers->base.load = (scene_load_fn)battlebadgers_load;
-	battlebadgers->base.destroy = (scene_destroy_fn)battlebadgers_destroy;
-	battlebadgers->base.update = (scene_update_fn)battlebadgers_update;
-	battlebadgers->base.draw = (scene_draw_fn)battlebadgers_draw;
+	scene_battle->base.load = (scene_load_fn)scene_battle_load;
+	scene_battle->base.destroy = (scene_destroy_fn)scene_battle_destroy;
+	scene_battle->base.update = (scene_update_fn)scene_battle_update;
+	scene_battle->base.draw = (scene_draw_fn)scene_battle_draw;
 
 }
 

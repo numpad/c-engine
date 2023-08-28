@@ -6,7 +6,7 @@
 #include <SDL_net.h>
 #include <stb_ds.h>
 #include "scenes/intro.h"
-#include "scenes/battlebadgers.h"
+#include "scenes/menu.h"
 #include "gui/console.h"
 
 static Uint32 USR_EVENT_RELOAD = ((Uint32)-1);
@@ -57,6 +57,7 @@ struct engine_s *engine_new(void) {
 	struct engine_s *engine = malloc(sizeof(struct engine_s));
 	engine->window_width = 550;
 	engine->window_height = 800;
+	engine->time_elapsed = 0.0f;
 	engine->window = SDL_CreateWindow("Soil Soldiers", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, engine->window_width, engine->window_height, SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_SHOWN);
 	engine->window_id = SDL_GetWindowID(engine->window);
 	engine->on_notify_callbacks = NULL;
@@ -139,7 +140,7 @@ void engine_setscene(struct engine_s *engine, struct scene_s *new_scene) {
 #ifdef DEBUG
 	static char text[256];
 	text[0] = '\0';
-	sprintf(text, "Switching to scene %p", new_scene);
+	sprintf(text, "Switching to scene %p", (void*)new_scene);
 	console_add_message(engine->console, (struct console_msg_s){ text });
 #endif
 
@@ -170,8 +171,8 @@ void engine_setscene_dll(struct engine_s *engine, const char *filename) {
 
 	handle = dlopen(filename, RTLD_NOW | RTLD_GLOBAL | RTLD_DEEPBIND);
 
-	struct battlebadgers_s *modscene = malloc(sizeof(struct battlebadgers_s));
-	void(*test_init)(struct battlebadgers_s *scene, struct engine_s *) = dlsym(handle, "battlebadgers_init");
+	struct menu_s *modscene = malloc(sizeof(struct menu_s));
+	void(*test_init)(struct menu_s *scene, struct engine_s *) = dlsym(handle, "menu_init");
 	test_init(modscene, engine);
 
 	engine_setscene(engine, (struct scene_s *)modscene);
@@ -185,6 +186,18 @@ void engine_setscene_dll(struct engine_s *engine, const char *filename) {
 
 // main loop
 void engine_update(struct engine_s *engine) {
+	static int ticks = 0;
+	++ticks;
+
+	struct input_drag_s prev_input_drag = engine->input_drag;
+
+	if (prev_input_drag.state == INPUT_DRAG_END) {
+		engine->input_drag.state = INPUT_DRAG_NONE;
+	} else if (prev_input_drag.state == INPUT_DRAG_BEGIN) {
+		engine->input_drag.state = INPUT_DRAG_IN_PROGRESS;
+	}
+
+	// poll events
 	SDL_Event event;
 	while (SDL_PollEvent(&event)) {
 		switch (event.type) {
@@ -209,7 +222,31 @@ void engine_update(struct engine_s *engine) {
 			case SDL_MOUSEBUTTONDOWN:
 			case SDL_MOUSEBUTTONUP:
 			{
-				//SDL_MouseButtonEvent *mouse_event = (SDL_MouseButtonEvent *)&event;
+				SDL_MouseButtonEvent *mouse_event = (SDL_MouseButtonEvent *)&event;
+				if (mouse_event->state == SDL_PRESSED) {
+					engine->input_drag.state = INPUT_DRAG_BEGIN;
+					engine->input_drag.begin_x = mouse_event->x;
+					engine->input_drag.begin_y = mouse_event->y;
+				} else if (mouse_event->state == SDL_RELEASED) {
+					engine->input_drag.state = INPUT_DRAG_END;
+					engine->input_drag.end_x = mouse_event->x;
+					engine->input_drag.end_y = mouse_event->y;
+				}
+
+				engine->input_drag.x = mouse_event->x;
+				engine->input_drag.y = mouse_event->y;
+				break;
+			}
+			case SDL_MOUSEMOTION: {
+				SDL_MouseMotionEvent *motion = (SDL_MouseMotionEvent *)&event;
+				if (prev_input_drag.state == INPUT_DRAG_BEGIN) {
+					engine->input_drag.state = INPUT_DRAG_IN_PROGRESS;
+				}
+
+				if (prev_input_drag.state == INPUT_DRAG_IN_PROGRESS) {
+					engine->input_drag.x = motion->x;
+					engine->input_drag.y = motion->y;
+				}
 				break;
 			}
 		}
@@ -223,6 +260,24 @@ void engine_update(struct engine_s *engine) {
 			}
 		}
 	}
+
+	// update
+	const float dt = 1.0f / 60.0f;
+	engine->time_elapsed += dt;
+	scene_update(engine->scene, engine, dt);
+
+	switch (engine->input_drag.state) {
+		case INPUT_DRAG_BEGIN:
+			printf("%5d: Begin\n", ticks);
+			break;
+		case INPUT_DRAG_IN_PROGRESS:
+			printf("%5d: Move\n", ticks);
+			break;
+		case INPUT_DRAG_END:
+			printf("%5d: End\n", ticks);
+			break;
+		case INPUT_DRAG_NONE: printf("~\n"); break;
+	}
 }
 
 void engine_draw(struct engine_s *engine) {
@@ -231,10 +286,29 @@ void engine_draw(struct engine_s *engine) {
 	nvgBeginFrame(engine->vg, engine->window_width, engine->window_height, 1.0f);
 
 	// run scene
-	scene_update(engine->scene, engine, 1.0f / 60.0f);
 	scene_draw(engine->scene, engine);
 
 	console_draw(engine->console, engine);
+
+#ifdef DEBUG
+	// display seconds
+	char seconds[32];
+	sprintf(seconds, "%.2fs", engine->time_elapsed);
+
+	nvgBeginPath(engine->vg);
+	nvgTextAlign(engine->vg, NVG_ALIGN_TOP | NVG_ALIGN_LEFT);
+	nvgFillColor(engine->vg, nvgRGBf(0.0f, 0.0f, 0.0f));
+	nvgFontBlur(engine->vg, 2.0f);
+	nvgFontSize(engine->vg, 14.0f);
+	nvgText(engine->vg, 4.0f, 4.0f, seconds, NULL);
+
+	nvgBeginPath(engine->vg);
+	nvgTextAlign(engine->vg, NVG_ALIGN_TOP | NVG_ALIGN_LEFT);
+	nvgFillColor(engine->vg, nvgRGBf(1.0f, 1.0f, 0.6f));
+	nvgFontBlur(engine->vg, 0.0f);
+	nvgFontSize(engine->vg, 14.0f);
+	nvgText(engine->vg, 3.0f, 3.0f, seconds, NULL);
+#endif
 
 	nvgEndFrame(engine->vg);
 

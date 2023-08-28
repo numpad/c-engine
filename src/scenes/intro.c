@@ -21,7 +21,7 @@ static void intro_load(struct intro_s *scene, struct engine_s *engine) {
 
 	scene->timer = 0.0f;
 	scene->time_passed = 0.0f;
-	scene->time_passed_max = 2.0f;
+	scene->time_passed_max = 4.0f;
 
 	scene->logo_image_nvg = nvgCreateImage(engine->vg, "res/image/numpad.png", NVG_IMAGE_NEAREST);
 
@@ -67,7 +67,8 @@ static void intro_draw(struct intro_s *scene, struct engine_s *engine) {
 	const float xcenter = engine->window_width * 0.5f;
 	const float ycenter = engine->window_height * 0.5f;
 	const float halfsize = fminf(engine->window_width, engine->window_height) * 0.2f;
-	const float img_alpha = glm_clamp(glm_ease_cubic_in(scene->time_passed / scene->time_passed_max) * 4.0f - 0.2f, 0.0f, 1.0f);
+	const float x = glm_ease_quad_in(scene->time_passed / scene->time_passed_max);
+	const float img_alpha = glm_clamp(-fabsf((x - 0.5f) * 2.9f)+1.4f, 0.0f, 1.0f);
 	NVGcontext *vg = engine->vg;
 	nvgBeginPath(vg);
 	nvgRect(vg, xcenter - halfsize, ycenter - halfsize, halfsize * 2.0f, halfsize * 2.0f);

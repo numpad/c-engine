@@ -26,7 +26,7 @@ ifeq ($(CC), emcc)
 	BIN = bin/emcc/
 endif
 
-SCENES = src/scenes/game.c src/scenes/intro.c src/scenes/menu.c src/scenes/battlebadgers.c
+SCENES = src/scenes/game.c src/scenes/intro.c src/scenes/menu.c src/scenes/scene_battle.c
 SRC = main.c src/engine.c \
 	  src/ecs/components.c \
 	  src/gui/console.c \
@@ -62,7 +62,7 @@ $(BIN)%.o: %.c
 	$(CC) $(CFLAGS) $(INCLUDES) -c $< -o $@
 
 scenes:
-	$(CC) $(CFLAGS) -shared -o scene_game.so $(INCLUDES) $(LIBS) src/scenes/battlebadgers.c src/game/isoterrain.c src/game/cards.c
+	$(CC) $(CFLAGS) -shared -o scene_game.so $(INCLUDES) $(LIBS) src/scenes/menu.c
 
 clean:
 	rm -rf $(BIN) $(TARGET) "$(TARGET).data" "$(TARGET).html" "$(TARGET).js" "$(TARGET).wasm"

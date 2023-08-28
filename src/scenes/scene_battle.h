@@ -8,7 +8,7 @@ struct vbuffer_s;
 struct isoterrain_s;
 struct cardrenderer_s;
 
-struct battlebadgers_s {
+struct scene_battle_s {
 	struct scene_s base;
 
 	int bg_shader;
@@ -23,7 +23,7 @@ struct battlebadgers_s {
 	ecs_query_t *q_handcards;
 };
 
-void battlebadgers_init(struct battlebadgers_s *, struct engine_s *);
+void scene_battle_init(struct scene_battle_s *, struct engine_s *);
 
 #endif
 

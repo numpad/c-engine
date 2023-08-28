@@ -4,8 +4,9 @@
 #include <SDL.h>
 #include <SDL_opengles2.h>
 #include <cglm/cglm.h>
-#include "scenes/scene.h"
 #include <nanovg.h>
+#include "scenes/scene.h"
+#include "input.h"
 
 struct engine_s;
 struct console_s;
@@ -20,6 +21,7 @@ struct engine_s {
 	
 	int window_width, window_height;
 	float window_aspect;
+	double time_elapsed;
 
 	// scene management
 	struct scene_s *scene;
@@ -29,6 +31,7 @@ struct engine_s {
 
 	// others
 	struct console_s *console;
+	struct input_drag_s input_drag;
 
 	// rendering globals
 	mat4 u_projection;
