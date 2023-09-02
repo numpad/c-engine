@@ -39,7 +39,7 @@ struct engine_s {
 };
 
 // init & cleanup
-struct engine_s *engine_new();
+struct engine_s *engine_new(void);
 int engine_destroy(struct engine_s *engine);
 
 // scene handling

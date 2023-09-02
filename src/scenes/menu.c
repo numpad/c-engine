@@ -12,30 +12,10 @@ float easeOutExpo(float x) {
 	return x == 1.0f ? 1.0f : 1.0f - powf(2.0f, -10.0f * x);
 }
 
-static void menu_load(struct menu_s *menu, struct engine_s *engine) {
-	menu->vg_font = nvgCreateFont(engine->vg, "PermanentMarker Regular", "res/font/PermanentMarker-Regular.ttf");
-	menu->vg_gamelogo = nvgCreateImage(engine->vg, "res/image/logo_placeholder.png", 0);
-
-	menu->terrain = malloc(sizeof(struct isoterrain_s));
-	isoterrain_init_from_file(menu->terrain, "res/data/levels/map2.json");
-}
-
-static void menu_destroy(struct menu_s *menu, struct engine_s *engine) {
-	isoterrain_destroy(menu->terrain);
-	nvgDeleteImage(engine->vg, menu->vg_gamelogo);
-	free(menu->terrain);
-}
-
-static struct input_drag_s prev_drag;
-static int has_prev_drag = 0;
-static void menu_update(struct menu_s *menu, struct engine_s *engine, float dt) {
-	if (engine->input_drag.state == INPUT_DRAG_BEGIN) {
-		has_prev_drag = 0;
-	}
-	if (engine->input_drag.state == INPUT_DRAG_END) {
-		has_prev_drag = 1;
-		prev_drag = engine->input_drag;
-	}
+static void switch_to_game_scene(struct engine_s *engine) {
+	struct scene_battle_s *game_scene_battle = malloc(sizeof(struct scene_battle_s));
+	scene_battle_init(game_scene_battle, engine);
+	engine_setscene(engine, (struct scene_s *)game_scene_battle);
 }
 
 static void gui_titlebutton(NVGcontext *vg, struct engine_s *engine, float x, float y, const char *text, int enabled) {
@@ -72,6 +52,36 @@ static void gui_titlebutton(NVGcontext *vg, struct engine_s *engine, float x, fl
 	nvgFontSize(vg, 32.0f);
 	nvgText(vg, x - width + 15.0f, y + height * 0.67f, text, NULL);
 
+}
+
+static void menu_load(struct menu_s *menu, struct engine_s *engine) {
+	menu->vg_font = nvgCreateFont(engine->vg, "PermanentMarker Regular", "res/font/PermanentMarker-Regular.ttf");
+	menu->vg_gamelogo = nvgCreateImage(engine->vg, "res/image/logo_placeholder.png", 0);
+
+	menu->terrain = malloc(sizeof(struct isoterrain_s));
+	isoterrain_init_from_file(menu->terrain, "res/data/levels/map2.json");
+}
+
+static void menu_destroy(struct menu_s *menu, struct engine_s *engine) {
+	isoterrain_destroy(menu->terrain);
+	nvgDeleteImage(engine->vg, menu->vg_gamelogo);
+	free(menu->terrain);
+}
+
+static struct input_drag_s prev_drag;
+static int has_prev_drag = 0;
+static void menu_update(struct menu_s *menu, struct engine_s *engine, float dt) {
+	if (engine->input_drag.state == INPUT_DRAG_BEGIN) {
+		has_prev_drag = 0;
+	}
+	if (engine->input_drag.state == INPUT_DRAG_END) {
+		has_prev_drag = 1;
+		prev_drag = engine->input_drag;
+	}
+
+	if (engine->input_drag.state == INPUT_DRAG_END) {
+		
+	}
 }
 
 static void menu_draw(struct menu_s *menu, struct engine_s *engine) {
@@ -146,11 +156,7 @@ static void menu_draw(struct menu_s *menu, struct engine_s *engine) {
 			if (playpress_lin > 1.0f) {
 				playpress_lin = 1.0f;
 
-				// struct game_s *game = malloc(sizeof(struct game_s));
-				// game_init(game, engine, 12, 12);
-				struct scene_battle_s *game_scene_battle = malloc(sizeof(struct scene_battle_s));
-				scene_battle_init(game_scene_battle, engine);
-				engine_setscene(engine, (struct scene_s *)game_scene_battle);
+				switch_to_game_scene(engine);
 			}
 		}
 	} else {

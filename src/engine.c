@@ -207,7 +207,7 @@ void engine_update(struct engine_s *engine) {
 				engine_setscene(engine, NULL);
 				break;
 			case SDL_WINDOWEVENT:
-				if (/* event.window.windowID == engine->window_id && */ event.window.event == SDL_WINDOWEVENT_SIZE_CHANGED) {
+				if (event.window.event == SDL_WINDOWEVENT_SIZE_CHANGED /* && event.window.windowID == engine->window_id */) {
 					window_resize(engine, event.window.data1, event.window.data2);
 				}
 				break;
@@ -217,8 +217,14 @@ void engine_update(struct engine_s *engine) {
 			case SDL_TEXTEDITING:
 
 				break;
-			case SDL_KEYDOWN: {
-				// SDL_KeyboardEvent *key_event = (SDL_KeyboardEvent *)&event;
+			case SDL_KEYDOWN:
+			case SDL_KEYUP:
+			{
+				SDL_KeyboardEvent *key_event = (SDL_KeyboardEvent *)&event;
+				// pop scene stack
+				if (key_event->type == SDL_KEYUP && key_event->keysym.sym == SDLK_ESCAPE) {
+					// TODO
+				}
 				break;
 			}
 			case SDL_MOUSEBUTTONDOWN:
