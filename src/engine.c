@@ -227,6 +227,8 @@ void engine_update(struct engine_s *engine) {
 					engine->input_drag.state = INPUT_DRAG_BEGIN;
 					engine->input_drag.begin_x = mouse_event->x;
 					engine->input_drag.begin_y = mouse_event->y;
+					engine->input_drag.x = mouse_event->x;
+					engine->input_drag.y = mouse_event->y;
 				} else if (mouse_event->state == SDL_RELEASED) {
 					engine->input_drag.state = INPUT_DRAG_END;
 					engine->input_drag.end_x = mouse_event->x;
@@ -265,19 +267,6 @@ void engine_update(struct engine_s *engine) {
 	const float dt = 1.0f / 60.0f;
 	engine->time_elapsed += dt;
 	scene_update(engine->scene, engine, dt);
-
-	switch (engine->input_drag.state) {
-		case INPUT_DRAG_BEGIN:
-			printf("%5d: Begin\n", ticks);
-			break;
-		case INPUT_DRAG_IN_PROGRESS:
-			printf("%5d: Move\n", ticks);
-			break;
-		case INPUT_DRAG_END:
-			printf("%5d: End\n", ticks);
-			break;
-		case INPUT_DRAG_NONE: printf("~\n"); break;
-	}
 }
 
 void engine_draw(struct engine_s *engine) {

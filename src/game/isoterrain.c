@@ -20,17 +20,21 @@ static void pos_to_index(struct isoterrain_s *terrain, int x, int y, int z, int 
 }
 
 static iso_block isoterrain_get_block(struct isoterrain_s *terrain, int x, int y, int z) {
-	if (x < 0 || y < 0 || z < 0 || x >= terrain->width || y >= terrain->height || z >= terrain->depth) return -1;
+	if (x < 0 || y < 0 || z < 0 || x >= terrain->width || y >= terrain->height || z >= terrain->layers) return -1;
 
 	const int pos = x + y * terrain->width;
 	return terrain->blocks[pos];
 }
 
-void isoterrain_init(struct isoterrain_s *terrain, int w, int h, int depth) {
+//
+// create & destroy
+//
+
+void isoterrain_init(struct isoterrain_s *terrain, int w, int h, int layers) {
 	terrain->width = w;
 	terrain->height = h;
-	terrain->depth = depth;
-	terrain->blocks = malloc(w * h * depth * sizeof(iso_block));
+	terrain->layers = layers;
+	terrain->blocks = malloc(w * h * layers * sizeof(iso_block));
 
 	terrain->shader = shader_new("res/shader/isoterrain/vertex.glsl", "res/shader/isoterrain/fragment.glsl");
 	terrain->texture = texture_from_image("res/image/iso_tileset.png", NULL);
@@ -54,6 +58,7 @@ void isoterrain_init(struct isoterrain_s *terrain, int w, int h, int depth) {
 }
 
 void isoterrain_init_from_file(struct isoterrain_s *terrain, const char *path_to_script) {
+	// read map metadata
 	char *file;
 	long file_len;
 	if (fs_readfile(path_to_script, &file, &file_len) != FS_OK) {
@@ -74,8 +79,10 @@ void isoterrain_init_from_file(struct isoterrain_s *terrain, const char *path_to
 		return;
 	}
 
+	// actual initialization
 	isoterrain_init(terrain, width->valueint, height->valueint, layers->valueint);
 
+	// fill map
 	size_t index = 0;
 	const cJSON *block;
 	cJSON_ArrayForEach(block, blocks) {
@@ -95,6 +102,10 @@ void isoterrain_destroy(struct isoterrain_s *terrain) {
 	free(terrain->vbuf);
 }
 
+//
+// logic
+//
+
 void isoterrain_draw(struct isoterrain_s *terrain, const mat4 proj, const mat4 view) {
 	glUseProgram(terrain->shader);
 
@@ -104,7 +115,7 @@ void isoterrain_draw(struct isoterrain_s *terrain, const mat4 proj, const mat4 v
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_2D, terrain->texture);
 	// draw left to right, top to bottom
-	for (int z = 0; z < terrain->depth; ++z) {
+	for (int z = 0; z < terrain->layers; ++z) {
 		for (int x = 0; x < terrain->width; ++x) {
 			for (int y = terrain->height - 1; y >= 0; --y) {
 				int index;
@@ -130,11 +141,21 @@ void isoterrain_draw(struct isoterrain_s *terrain, const mat4 proj, const mat4 v
 	}
 }
 
+//
+// api
+//
+
 void isoterrain_set_block(struct isoterrain_s *terrain, int x, int y, int z, iso_block block) {
-	if (x < 0 || y < 0 || x >= terrain->width || y >= terrain->height || z < 0 || z >= terrain->depth) return;
+	if (x < 0 || y < 0 || x >= terrain->width || y >= terrain->height || z < 0 || z >= terrain->layers) return;
 
 	int index;
 	pos_to_index(terrain, x, y, z, &index);
 	terrain->blocks[index] = block;
+}
+
+void isoterrain_pos_block_to_screen(struct isoterrain_s *, int x, int y, int z, vec2 *OUT_pos) {
+}
+
+void isoterrain_pos_screen_to_block(struct isoterrain_s *, vec2 pos, int *OUT_x, int *OUT_y, int *OUT_z) {
 }
 

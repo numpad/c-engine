@@ -8,6 +8,7 @@ typedef struct {
 
 typedef struct {
 	int selected;
+	float drag_x, drag_y;
 } c_handcard;
 
 #endif

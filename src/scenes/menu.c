@@ -160,18 +160,11 @@ static void menu_draw(struct menu_s *menu, struct engine_s *engine) {
 	// play game
 	float bounds[4];
 	nvgBeginPath(vg);
-	nvgFillColor(vg, nvgRGBA(0, 0, 0, 255));
-	nvgFontSize(vg, 32.0f - 4.0f * playpress);
-	nvgFontBlur(vg, 4.0f);
-	nvgTextBounds(vg, 0.0f, 0.0f, "Worms", NULL, &bounds);
-	nvgText(vg, engine->window_width * 0.5f - bounds[2] * 0.5f, engine->window_height - 450.0f, "Worms", NULL);
-	// shadow
-	nvgBeginPath(vg);
 	nvgFillColor(vg, nvgRGBA(255, 255, 255, 255));
 	nvgFontSize(vg, 32.0f - 4.0f * playpress);
 	nvgFontBlur(vg, 0.0f);
-	nvgTextBounds(vg, 0.0f, 0.0f, "Worms", NULL, &bounds);
-	nvgText(vg, engine->window_width * 0.5f - bounds[2] * 0.5f, engine->window_height - 450.0f, "Worms", NULL);
+	nvgTextBounds(vg, 0.0f, 0.0f, "Play", NULL, &bounds);
+	nvgText(vg, engine->window_width * 0.5f - bounds[2] * 0.5f, engine->window_height - 450.0f, "Play", NULL);
 
 }
 

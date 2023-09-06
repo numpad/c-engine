@@ -74,6 +74,10 @@ static void scene_battle_load(struct scene_battle_s *scene, struct engine_s *eng
 	// isoterrain
 	scene->terrain = malloc(sizeof(struct isoterrain_s));
 	//isoterrain_init(scene->terrain, 10, 10, 3);
+	//for (int i = 0; i < scene->terrain->width * scene->terrain->height * scene->terrain->layers; ++i) {
+	////	scene->terrain->blocks[i] = 3 + 16 * 9;
+	////}
+
 	isoterrain_init_from_file(scene->terrain, "res/data/levels/map2.json");
 
 	// card renderer
@@ -131,24 +135,46 @@ static void scene_battle_update(struct scene_battle_s *scene, struct engine_s *e
 	int mx, my;
 	Uint32 mstate = SDL_GetMouseState(&mx, &my);
 
-	const float mxp = mx / (float)engine->window_width;
+	const struct input_drag_s *drag = &(engine->input_drag);
 
-	ecs_iter_t it = ecs_query_iter(scene->world, scene->q_handcards);
-	while (ecs_query_next(&it)) {
-		c_card *cards = ecs_field(&it, c_card, 1);
-		c_handcard *handcards = ecs_field(&it, c_handcard, 2);
+	if (drag->state == INPUT_DRAG_BEGIN || drag->state == INPUT_DRAG_END) {
+		ecs_iter_t it = ecs_query_iter(scene->world, scene->q_handcards);
+		while (ecs_query_next(&it)) {
+			c_card *cards = ecs_field(&it, c_card, 1);
+			c_handcard *handcards = ecs_field(&it, c_handcard, 2);
 
-		for (int i = 0; i < it.count; ++i) {
-			handcards[i].selected = 0;
-			if (mstate & SDL_BUTTON(1)) {
-				if (i == (int)roundf(mxp * (it.count - 1.0f))) {
-					handcards[i].selected = 1;
+			for (int i = 0; i < it.count; ++i) {
+				handcards[i].selected = 0;
+				handcards[i].drag_x = 0.0f;
+				handcards[i].drag_y = 0.0f;
+				
+				if (drag->state == INPUT_DRAG_BEGIN) {
+					const int id = ((drag->begin_x / (float)engine->window_width)) * it.count;
+					if (i == id) {
+						handcards[i].selected = 1;
+					}
 				}
 			}
 		}
 	}
+	if (drag->state == INPUT_DRAG_BEGIN || drag->state == INPUT_DRAG_IN_PROGRESS) {
+		ecs_iter_t it = ecs_query_iter(scene->world, scene->q_handcards);
+		while (ecs_query_next(&it)) {
+			c_card *cards = ecs_field(&it, c_card, 1);
+			c_handcard *handcards = ecs_field(&it, c_handcard, 2);
 
+			for (int i = 0; i < it.count; ++i) {
+				handcards[i].drag_x = (drag->x / engine->window_width) * 2.0f - 1.0f;
+				handcards[i].drag_y = -(drag->y / engine->window_height) * 2.0f + 1.0f;
+
+			}
+		}
+	}
+
+
+	// map transform
 	glm_mat4_identity(engine->u_view);
+	/* zoom map
 	if (mstate & SDL_BUTTON(1) && my < engine->window_height * (float)0.6) {
 		glm_scale(engine->u_view, (vec3){2.0f, 2.0f, 1.0f});
 		glm_translate(engine->u_view, (vec3){
@@ -157,6 +183,7 @@ static void scene_battle_update(struct scene_battle_s *scene, struct engine_s *e
 			0.0f
 		});
 	}
+	*/
 	glm_scale(engine->u_view, (vec3){0.35f, 0.35f, 1.0f});
 
 }
@@ -203,9 +230,14 @@ static void scene_battle_draw(struct scene_battle_s *scene, struct engine_s *eng
 
 			mat4 u_model;
 			glm_mat4_identity(u_model);
-			glm_scale(u_model, (vec3){ card_scale, card_scale, 1.0f });
-			glm_translate(u_model, (vec3){ x, y * 0.6f + 0.4f + -(1.0f / card_scale) * engine->window_aspect + y_offset, 0.0f + z_offset });
-			glm_rotate(u_model, angle * 0.2f, (vec3){0.0f, 0.0f, -1.0f});
+			if (handcards[i].selected) {
+				glm_translate(u_model, (vec3){ handcards[i].drag_x, handcards[i].drag_y * engine->window_aspect, 0.0f });
+				glm_scale(u_model, (vec3){ card_scale, card_scale, 1.0f });
+			} else {
+				glm_scale(u_model, (vec3){ card_scale, card_scale, 1.0f });
+				glm_translate(u_model, (vec3){ x, y * 0.6f + 0.4f + -(1.0f / card_scale) * engine->window_aspect + y_offset, 0.0f + z_offset });
+				glm_rotate(u_model, angle * 0.2f, (vec3){0.0f, 0.0f, -1.0f});
+			}
 			glUniformMatrix4fv(glGetUniformLocation(scene->cardrenderer->shader, "u_model"), 1, GL_FALSE, u_model[0]);
 			const float step = 1.0f / 8.0f;
 			const float tx = cards[i].image_id % 8;
