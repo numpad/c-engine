@@ -15,6 +15,7 @@
 #include "gl/vbuffer.h"
 #include "game/isoterrain.h"
 #include "game/cards.h"
+#include "gui/console.h"
 #include "ecs/components.h"
 
 static void reload_shader(struct engine_s *engine) {
@@ -45,7 +46,7 @@ static void scene_battle_load(struct scene_battle_s *scene, struct engine_s *eng
 	{
 		ecs_entity_t e = ecs_new_id(scene->world);
 		ecs_set(scene->world, e, c_card, { "Meal", 41 });
-		ecs_set(scene->world, e, c_handcard, { 1 });
+		ecs_set(scene->world, e, c_handcard, { 0 });
 	}
 	{
 		ecs_entity_t e = ecs_new_id(scene->world);
@@ -137,16 +138,27 @@ static void scene_battle_update(struct scene_battle_s *scene, struct engine_s *e
 
 	const struct input_drag_s *drag = &(engine->input_drag);
 
-	if (drag->state == INPUT_DRAG_BEGIN || drag->state == INPUT_DRAG_END) {
+	if ((drag->state == INPUT_DRAG_BEGIN && drag->begin_y > engine->window_height * 0.7f) || drag->state == INPUT_DRAG_END) {
 		ecs_iter_t it = ecs_query_iter(scene->world, scene->q_handcards);
 		while (ecs_query_next(&it)) {
 			c_card *cards = ecs_field(&it, c_card, 1);
 			c_handcard *handcards = ecs_field(&it, c_handcard, 2);
 
 			for (int i = 0; i < it.count; ++i) {
+				if (drag->state == INPUT_DRAG_END && handcards[i].selected == 1) {
+					// dropped card anywhere
+
+					if (drag->y > engine->window_height * 0.5f) {
+						console_add_message(engine->console, (struct console_msg_s) { "Card put pack into hand..." });
+					} else {
+						char msg[64]; // console_add_message makes a copy, so we can use a temporary buffer
+						sprintf(msg, "Played '%s'", cards[i].name);
+						console_add_message(engine->console, (struct console_msg_s) { msg });
+						ecs_delete(scene->world, it.entities[i]);
+					}
+				}
+
 				handcards[i].selected = 0;
-				handcards[i].drag_x = 0.0f;
-				handcards[i].drag_y = 0.0f;
 				
 				if (drag->state == INPUT_DRAG_BEGIN) {
 					const int id = ((drag->begin_x / (float)engine->window_width)) * it.count;
@@ -164,9 +176,10 @@ static void scene_battle_update(struct scene_battle_s *scene, struct engine_s *e
 			c_handcard *handcards = ecs_field(&it, c_handcard, 2);
 
 			for (int i = 0; i < it.count; ++i) {
-				handcards[i].drag_x = (drag->x / engine->window_width) * 2.0f - 1.0f;
-				handcards[i].drag_y = -(drag->y / engine->window_height) * 2.0f + 1.0f;
-
+				if (handcards[i].selected) {
+					handcards[i].drag_x = (drag->x / engine->window_width) * 2.0f - 1.0f;
+					handcards[i].drag_y = -(drag->y / engine->window_height) * 2.0f + 1.0f;
+				}
 			}
 		}
 	}
@@ -174,7 +187,6 @@ static void scene_battle_update(struct scene_battle_s *scene, struct engine_s *e
 
 	// map transform
 	glm_mat4_identity(engine->u_view);
-	/* zoom map
 	if (mstate & SDL_BUTTON(1) && my < engine->window_height * (float)0.6) {
 		glm_scale(engine->u_view, (vec3){2.0f, 2.0f, 1.0f});
 		glm_translate(engine->u_view, (vec3){
@@ -183,7 +195,6 @@ static void scene_battle_update(struct scene_battle_s *scene, struct engine_s *e
 			0.0f
 		});
 	}
-	*/
 	glm_scale(engine->u_view, (vec3){0.35f, 0.35f, 1.0f});
 
 }
@@ -207,20 +218,27 @@ static void scene_battle_draw(struct scene_battle_s *scene, struct engine_s *eng
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_2D, scene->cardrenderer->tileset);
 
+	glEnable(GL_DEPTH_TEST);
+	glDepthFunc(GL_LEQUAL);
+	// TODO: z-sorting
 	ecs_iter_t it = ecs_query_iter(scene->world, scene->q_handcards);
 	while (ecs_query_next(&it)) {
 		c_card *cards = ecs_field(&it, c_card, 1);
 		c_handcard *handcards = ecs_field(&it, c_handcard, 2);
 
+		float card_z = 0.0f;
 		for (int i = 0; i < it.count; ++i) {
 			const float angle = ((float)i / (it.count - 1)) * glm_rad(120.0f) - glm_rad(60.0f);
 			const float x = sinf(angle) * 2.0f * glm_ease_circ_out(0.45f + fabsf((float)i / (it.count - 1.0f) - 0.5f) * 2.0f);
 			const float y = cosf(angle) * 1.0f;
 			float y_offset = 0.0f;
 			float z_offset = 0.0f;
+			
+			card_z += 0.01f;
+
 			if (handcards[i].selected) {
 				y_offset += 0.8f;
-				z_offset += 0.1f;
+				z_offset = 0.8f;
 			}
 
 			float card_scale = 0.375f;
@@ -231,11 +249,11 @@ static void scene_battle_draw(struct scene_battle_s *scene, struct engine_s *eng
 			mat4 u_model;
 			glm_mat4_identity(u_model);
 			if (handcards[i].selected) {
-				glm_translate(u_model, (vec3){ handcards[i].drag_x, handcards[i].drag_y * engine->window_aspect, 0.0f });
+				glm_translate(u_model, (vec3){ handcards[i].drag_x, handcards[i].drag_y * engine->window_aspect, card_z + z_offset});
 				glm_scale(u_model, (vec3){ card_scale, card_scale, 1.0f });
 			} else {
 				glm_scale(u_model, (vec3){ card_scale, card_scale, 1.0f });
-				glm_translate(u_model, (vec3){ x, y * 0.6f + 0.4f + -(1.0f / card_scale) * engine->window_aspect + y_offset, 0.0f + z_offset });
+				glm_translate(u_model, (vec3){ x, y * 0.6f + 0.4f + -(1.0f / card_scale) * engine->window_aspect + y_offset, card_z});
 				glm_rotate(u_model, angle * 0.2f, (vec3){0.0f, 0.0f, -1.0f});
 			}
 			glUniformMatrix4fv(glGetUniformLocation(scene->cardrenderer->shader, "u_model"), 1, GL_FALSE, u_model[0]);
@@ -250,6 +268,7 @@ static void scene_battle_draw(struct scene_battle_s *scene, struct engine_s *eng
 			vbuffer_draw(&scene->cardrenderer->vbo, 6);
 		}
 	}
+	glDisable(GL_DEPTH_TEST);
 
 }
 

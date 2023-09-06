@@ -81,6 +81,8 @@ struct engine_s *engine_new(void) {
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
 	SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
 	SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
+	SDL_GL_SetAttribute(SDL_GL_MULTISAMPLEBUFFERS, 1);
+	SDL_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES, 4);
 	SDL_GL_SetSwapInterval(1);
 	engine->gl_ctx = SDL_GL_CreateContext(engine->window);
 
@@ -227,8 +229,6 @@ void engine_update(struct engine_s *engine) {
 					engine->input_drag.state = INPUT_DRAG_BEGIN;
 					engine->input_drag.begin_x = mouse_event->x;
 					engine->input_drag.begin_y = mouse_event->y;
-					engine->input_drag.x = mouse_event->x;
-					engine->input_drag.y = mouse_event->y;
 				} else if (mouse_event->state == SDL_RELEASED) {
 					engine->input_drag.state = INPUT_DRAG_END;
 					engine->input_drag.end_x = mouse_event->x;
