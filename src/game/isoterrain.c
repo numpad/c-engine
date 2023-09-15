@@ -19,11 +19,14 @@ static void pos_to_index(struct isoterrain_s *terrain, int x, int y, int z, int 
 	*index = x + (y * terrain->width) + (z * terrain->width * terrain->height);
 }
 
-static iso_block isoterrain_get_block(struct isoterrain_s *terrain, int x, int y, int z) {
-	if (x < 0 || y < 0 || z < 0 || x >= terrain->width || y >= terrain->height || z >= terrain->layers) return -1;
+iso_block *isoterrain_get_block(struct isoterrain_s *terrain, int x, int y, int z) {
+	if (x < 0 || y < 0 || z < 0 || x >= terrain->width || y >= terrain->height || z >= terrain->layers) {
+		return NULL;
+	}
 
-	const int pos = x + y * terrain->width;
-	return terrain->blocks[pos];
+	int index;
+	pos_to_index(terrain, x, y, z, &index);
+	return &terrain->blocks[index];
 }
 
 //
@@ -55,6 +58,7 @@ void isoterrain_init(struct isoterrain_s *terrain, int w, int h, int layers) {
 	
 	glUseProgram(terrain->shader);
 	glUniform1i(glGetUniformLocation(terrain->shader, "u_texture"), 0);
+	glUniform2f(glGetUniformLocation(terrain->shader, "u_tilesize"), (1.0f / 256.0f) * 16.0f, (1.0f / 256.0f) * 17.0f);
 }
 
 void isoterrain_init_from_file(struct isoterrain_s *terrain, const char *path_to_script) {
@@ -118,24 +122,30 @@ void isoterrain_draw(struct isoterrain_s *terrain, const mat4 proj, const mat4 v
 	for (int z = 0; z < terrain->layers; ++z) {
 		for (int x = 0; x < terrain->width; ++x) {
 			for (int y = terrain->height - 1; y >= 0; --y) {
-				int index;
-				pos_to_index(terrain, x, y, z, &index);
-
-				iso_block *block = &terrain->blocks[index];
+				iso_block *block = isoterrain_get_block(terrain, x, y, z);
 				if (*block == -1) continue;
 
+				// blockid to texcoord
 				const float tx = *block % 16;
 				const float ty = floor(*block / 15.0f + (1.0f / 256.0f));
-				const float bx = (float)(x - z) - terrain->width * 0.9f;
-				const float by = (float)y + z;
+				
+				const float bx = (float)(x - z);
+				const float by = (float)(y + z);
 				const float bz = 0.0f;
 
-				// TODO: remove
-				glUniform2f(glGetUniformLocation(terrain->shader, "u_tilesize"), (1.0f / 256.0f) * 16.0f, (1.0f / 256.0f) * 17.0f);
-			
 				glUniform2f(glGetUniformLocation(terrain->shader, "u_tilepos"), tx, ty);
 				glUniform3f(glGetUniformLocation(terrain->shader, "u_pos"), bx, by, bz);
 				vbuffer_draw(terrain->vbuf, 6);
+
+				/*
+				struct draw_cmd_s cmd = draw_cmd_new();
+				cmd.vertices = terrain->vbuf;
+				cmd.vertices_count = 6;
+				cmd.shader = terrain->shader;
+				cmd.texture[0] = terrain->texture;
+
+				draw_cmd_queue(engine, cmd);
+				*/
 			}
 		}
 	}

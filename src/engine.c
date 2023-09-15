@@ -6,7 +6,7 @@
 #include <SDL_net.h>
 #include <stb_ds.h>
 #include "scenes/intro.h"
-#include "scenes/menu.h"
+#include "scenes/scene_battle.h"
 #include "gui/console.h"
 
 static Uint32 USR_EVENT_RELOAD = ((Uint32)-1);
@@ -81,8 +81,8 @@ struct engine_s *engine_new(void) {
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
 	SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
 	SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
-	SDL_GL_SetAttribute(SDL_GL_MULTISAMPLEBUFFERS, 1);
-	SDL_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES, 4);
+	//SDL_GL_SetAttribute(SDL_GL_MULTISAMPLEBUFFERS, 1);
+	//SDL_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES, 4);
 	SDL_GL_SetSwapInterval(1);
 	engine->gl_ctx = SDL_GL_CreateContext(engine->window);
 
@@ -173,8 +173,8 @@ void engine_setscene_dll(struct engine_s *engine, const char *filename) {
 
 	handle = dlopen(filename, RTLD_NOW | RTLD_GLOBAL | RTLD_DEEPBIND);
 
-	struct menu_s *modscene = malloc(sizeof(struct menu_s));
-	void(*test_init)(struct menu_s *scene, struct engine_s *) = dlsym(handle, "menu_init");
+	struct menu_s *modscene = malloc(sizeof(struct scene_battle_s));
+	void(*test_init)(struct scene_battle_s *scene, struct engine_s *) = dlsym(handle, "scene_battle_init");
 	test_init(modscene, engine);
 
 	engine_setscene(engine, (struct scene_s *)modscene);

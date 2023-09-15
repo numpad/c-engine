@@ -31,37 +31,44 @@ static void scene_battle_load(struct scene_battle_s *scene, struct engine_s *eng
 	scene->world = ecs_init();
 	ECS_COMPONENT(scene->world, c_card);
 	ECS_COMPONENT(scene->world, c_handcard);
+	ECS_COMPONENT(scene->world, c_blockpos);
 
+	// add some debug cards
+	{
+		ecs_entity_t e = ecs_new_id(scene->world);
+		ecs_set(scene->world, e, c_card, { "Move Forward", 40 });
+		ecs_set(scene->world, e, c_handcard, { 0 });
+	}
+	{
+		ecs_entity_t e = ecs_new_id(scene->world);
+		ecs_set(scene->world, e, c_card, { "Move Forward", 40 });
+		ecs_set(scene->world, e, c_handcard, { 0 });
+	}
+	{
+		ecs_entity_t e = ecs_new_id(scene->world);
+		ecs_set(scene->world, e, c_card, { "Meal", 41 });
+		ecs_set(scene->world, e, c_handcard, { 0 });
+	}
+	{
+		ecs_entity_t e = ecs_new_id(scene->world);
+		ecs_set(scene->world, e, c_card, { "Move Forward", 40 });
+		ecs_set(scene->world, e, c_handcard, { 0 });
+	}
+	{
+		ecs_entity_t e = ecs_new_id(scene->world);
+		ecs_set(scene->world, e, c_card, { "Meal", 41 });
+		ecs_set(scene->world, e, c_handcard, { 0 });
+	}
+	{
+		ecs_entity_t e = ecs_new_id(scene->world);
+		ecs_set(scene->world, e, c_card, { "Meal", 41 });
+		ecs_set(scene->world, e, c_handcard, { 0 });
+	}
+	
 	// add some debug entities
 	{
 		ecs_entity_t e = ecs_new_id(scene->world);
-		ecs_set(scene->world, e, c_card, { "Move Forward", 40 });
-		ecs_set(scene->world, e, c_handcard, { 0 });
-	}
-	{
-		ecs_entity_t e = ecs_new_id(scene->world);
-		ecs_set(scene->world, e, c_card, { "Move Forward", 40 });
-		ecs_set(scene->world, e, c_handcard, { 0 });
-	}
-	{
-		ecs_entity_t e = ecs_new_id(scene->world);
-		ecs_set(scene->world, e, c_card, { "Meal", 41 });
-		ecs_set(scene->world, e, c_handcard, { 0 });
-	}
-	{
-		ecs_entity_t e = ecs_new_id(scene->world);
-		ecs_set(scene->world, e, c_card, { "Move Forward", 40 });
-		ecs_set(scene->world, e, c_handcard, { 0 });
-	}
-	{
-		ecs_entity_t e = ecs_new_id(scene->world);
-		ecs_set(scene->world, e, c_card, { "Meal", 41 });
-		ecs_set(scene->world, e, c_handcard, { 0 });
-	}
-	{
-		ecs_entity_t e = ecs_new_id(scene->world);
-		ecs_set(scene->world, e, c_card, { "Meal", 41 });
-		ecs_set(scene->world, e, c_handcard, { 0 });
+		ecs_set(scene->world, e, c_blockpos, { 8, 4, 2 });
 	}
 
 	// component queries
@@ -79,7 +86,7 @@ static void scene_battle_load(struct scene_battle_s *scene, struct engine_s *eng
 	////	scene->terrain->blocks[i] = 3 + 16 * 9;
 	////}
 
-	isoterrain_init_from_file(scene->terrain, "res/data/levels/map2.json");
+	isoterrain_init_from_file(scene->terrain, "res/data/levels/chess.json");
 
 	// card renderer
 	scene->cardrenderer = malloc(sizeof(struct cardrenderer_s));
@@ -229,20 +236,17 @@ static void scene_battle_draw(struct scene_battle_s *scene, struct engine_s *eng
 		float card_z = 0.0f;
 		for (int i = 0; i < it.count; ++i) {
 			const float angle = ((float)i / (it.count - 1)) * glm_rad(120.0f) - glm_rad(60.0f);
-			const float x = sinf(angle) * 2.0f * glm_ease_circ_out(0.45f + fabsf((float)i / (it.count - 1.0f) - 0.5f) * 2.0f);
+			const float x = sinf(angle) * 2.0f * glm_ease_circ_out(0.45f + fabsf((float)i / (it.count - 1) - 0.5f) * 2.0f);
 			const float y = cosf(angle) * 1.0f;
 			float y_offset = 0.0f;
 			float z_offset = 0.0f;
 			
 			card_z += 0.01f;
 
+			float card_scale = 0.375f;
 			if (handcards[i].selected) {
 				y_offset += 0.8f;
 				z_offset = 0.8f;
-			}
-
-			float card_scale = 0.375f;
-			if (handcards[i].selected) {
 				card_scale = 0.5f;
 			}
 
