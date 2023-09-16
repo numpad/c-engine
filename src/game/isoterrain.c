@@ -119,18 +119,22 @@ void isoterrain_draw(struct isoterrain_s *terrain, const mat4 proj, const mat4 v
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_2D, terrain->texture);
 	// draw left to right, top to bottom
-	for (int z = 0; z < terrain->layers; ++z) {
-		for (int x = 0; x < terrain->width; ++x) {
-			for (int y = terrain->height - 1; y >= 0; --y) {
-				iso_block *block = isoterrain_get_block(terrain, x, y, z);
+	for (int iz = 0; iz < terrain->layers; ++iz) {
+		for (int ix = 0; ix < terrain->width; ++ix) {
+			for (int iy = terrain->height - 1; iy >= 0; --iy) {
+				iso_block *block = isoterrain_get_block(terrain, ix, iy, iz);
 				if (*block == -1) continue;
+
+				const float x = ix;
+				const float y = iy;
+				const float z = iz;
 
 				// blockid to texcoord
 				const float tx = *block % 16;
 				const float ty = floor(*block / 15.0f + (1.0f / 256.0f));
-				
-				const float bx = (float)(x - z);
-				const float by = (float)(y + z);
+
+				const float bx = x * 0.25f + y * 0.25f;
+				const float by = (y + 2.0f * z) * 0.125f - x * 0.125f;
 				const float bz = 0.0f;
 
 				glUniform2f(glGetUniformLocation(terrain->shader, "u_tilepos"), tx, ty);
