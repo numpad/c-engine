@@ -11,14 +11,7 @@
 
 static Uint32 USR_EVENT_RELOAD = ((Uint32)-1);
 static Uint32 USR_EVENT_NOTIFY = ((Uint32)-1);
-
-static void window_resize(struct engine_s *engine, int w, int h) {
-	engine->window_width = w;
-	engine->window_height = h;
-	glViewport(0, 0, w, h);
-	engine->window_aspect = h / (float)w;
-	glm_ortho(-1.0f, 1.0f, -1.0f * engine->window_aspect, 1.0f * engine->window_aspect, -1.0f, 1.0f, engine->u_projection);
-}
+static Uint32 USR_EVENT_GOBACK = ((Uint32)-1);
 
 #ifdef __unix__
 #include <signal.h>
@@ -47,6 +40,19 @@ void on_sigusr2(int signum) {
 	signal(SIGUSR2, on_sigusr2);
 }
 #endif
+void on_siggoback(void) {
+	if (USR_EVENT_GOBACK != ((Uint32)-1)) {
+		SDL_Event event;
+		SDL_memset(&event, 0, sizeof(event)); /* or SDL_zero(event) */
+		event.type = USR_EVENT_GOBACK;
+		event.user.code = 0;
+		event.user.data1 = NULL;
+		event.user.data2 = NULL;
+		SDL_PushEvent(&event);
+	}
+	// dont need to re-register this signal
+}
+
 
 struct engine_s *engine_new(void) {
 	if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_TIMER | SDL_INIT_GAMECONTROLLER | SDL_INIT_EVENTS)) {
@@ -93,6 +99,7 @@ struct engine_s *engine_new(void) {
 	// custom events
 	USR_EVENT_RELOAD = SDL_RegisterEvents(1);
 	USR_EVENT_NOTIFY = SDL_RegisterEvents(2);
+	USR_EVENT_GOBACK = SDL_RegisterEvents(3);
 #ifdef __unix__
 	signal(SIGUSR1, on_sigusr1);
 	signal(SIGUSR2, on_sigusr2);
@@ -103,7 +110,7 @@ struct engine_s *engine_new(void) {
 	intro_init(intro, engine);
 	engine_setscene(engine, (struct scene_s *)intro);
 
-	window_resize(engine, engine->window_width, engine->window_height);
+	engine_on_window_resized(engine, engine->window_width, engine->window_height);
 	glClearColor(0.06f, 0.0f, 0.10f, 1.0f);
 
 	// camera
@@ -133,6 +140,25 @@ int engine_destroy(struct engine_s *engine) {
 	free(engine);
 	return 0;
 }
+
+//
+// system stuff
+//
+
+void engine_on_window_resized(struct engine_s *engine, int w, int h) {
+	engine->window_width = w;
+	engine->window_height = h;
+	glViewport(0, 0, w, h);
+	engine->window_aspect = h / (float)w;
+	glm_ortho(-1.0f, 1.0f, -1.0f * engine->window_aspect, 1.0f * engine->window_aspect, -1.0f, 1.0f, engine->u_projection);
+
+#ifdef DEBUG
+	char msg[64];
+	sprintf(msg, "Resized to %dx%d", w, h);
+	console_add_message(engine->console, (struct console_msg_s) { .message = msg });
+#endif
+}
+
 
 //
 // scene handling
@@ -208,7 +234,7 @@ void engine_update(struct engine_s *engine) {
 				break;
 			case SDL_WINDOWEVENT:
 				if (event.window.event == SDL_WINDOWEVENT_SIZE_CHANGED /* && event.window.windowID == engine->window_id */) {
-					window_resize(engine, event.window.data1, event.window.data2);
+					engine_on_window_resized(engine, event.window.data1, event.window.data2);
 				}
 				break;
 			case SDL_TEXTINPUT:
@@ -259,19 +285,25 @@ void engine_update(struct engine_s *engine) {
 			}
 		}
 
-		// TODO: only emit this in debug?
+		// handle custom events
+
 		if (event.type == USR_EVENT_RELOAD) {
+			// only emit this in debug?
 			engine_setscene_dll(engine, "./scene_game.so");
 		} else if (event.type == USR_EVENT_NOTIFY) {
 			for (int i = 0; i < stbds_arrlen(engine->on_notify_callbacks); ++i) {
 				engine->on_notify_callbacks[i](engine);
 			}
+		} else if (event.type == USR_EVENT_GOBACK) {
+			console_add_message(engine->console, (struct console_msg_s) { .message = "Back" });
 		}
 	}
 
 	// update
 	const float dt = 1.0f / 60.0f;
 	engine->time_elapsed += dt;
+
+	console_update(engine->console, engine, dt);
 	scene_update(engine->scene, engine, dt);
 }
 

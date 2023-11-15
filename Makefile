@@ -18,6 +18,7 @@ ifeq ($(CC), emcc)
 			  -sUSE_SDL=2 -sUSE_SDL_NET=2 -sUSE_SDL_MIXER=2 -sFULL_ES2=1 \
 			  -sALLOW_MEMORY_GROWTH=1 \
 			  -sEXPORTED_RUNTIME_METHODS=cwrap \
+			  -sEXPORTED_FUNCTIONS=_main,_on_siggoback \
 			  -sMODULARIZE=1 \
 			  -sEXPORT_NAME="MyApp" \
 			  --preload-file res \

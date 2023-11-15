@@ -2,8 +2,10 @@
 #define ISOTERRAIN_H
 
 #include <cglm/cglm.h>
+#include "gl/texture.h"
 
 typedef int iso_block;
+typedef struct cJSON cJSON;
 
 struct vbuffer_s;
 
@@ -12,7 +14,7 @@ struct isoterrain_s {
 	iso_block *blocks;
 
 	unsigned int shader;
-	unsigned int texture;
+	struct texture_s tileset_texture;
 	struct vbuffer_s *vbuf;
 	
 };
@@ -21,6 +23,9 @@ struct isoterrain_s {
 void isoterrain_init(struct isoterrain_s *, int w, int h, int d);
 void isoterrain_init_from_file(struct isoterrain_s *, const char *path_to_script);
 void isoterrain_destroy(struct isoterrain_s *);
+
+// de-/serialization
+void isoterrain_to_json(struct isoterrain_s *, cJSON *output);
 
 // logic
 void isoterrain_draw(struct isoterrain_s *, const mat4 proj, const mat4 view);

@@ -42,6 +42,9 @@ struct engine_s {
 struct engine_s *engine_new(void);
 int engine_destroy(struct engine_s *engine);
 
+// system stuff
+void engine_on_window_resized(struct engine_s *engine, int new_width, int new_height);
+
 // scene handling
 void engine_setscene(struct engine_s *engine, struct scene_s *scene);
 void engine_setscene_dll(struct engine_s *engine, const char *filename);

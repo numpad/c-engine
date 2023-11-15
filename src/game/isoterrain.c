@@ -8,6 +8,9 @@
 #include "gl/texture.h"
 #include "gl/vbuffer.h"
 
+static void view_to_block(struct isoterrain_s *terrain, int *ox, int *oy, int *oz) {
+}
+
 static void index_to_pos(struct isoterrain_s *terrain, size_t index, int *x, int *y, int *z) {
 	*z = index / (terrain->width * terrain->height);
 	index -= ((*z) * terrain->width * terrain->height);
@@ -40,16 +43,16 @@ void isoterrain_init(struct isoterrain_s *terrain, int w, int h, int layers) {
 	terrain->blocks = malloc(w * h * layers * sizeof(iso_block));
 
 	terrain->shader = shader_new("res/shader/isoterrain/vertex.glsl", "res/shader/isoterrain/fragment.glsl");
-	terrain->texture = texture_from_image("res/image/iso_tileset.png", NULL);
+	texture_init_from_image(&terrain->tileset_texture, "res/environment/tiles.png", NULL);
 
 	terrain->vbuf = malloc(sizeof(struct vbuffer_s));
 	GLfloat vertices[] = {
-		-0.25f, -0.25f,  0.0f, 0.0f,
-		 0.25f, -0.25f,  1.0f, 0.0f,
-		-0.25f,  0.25f,  0.0f, 16.0f/17.0f,
-		-0.25f,  0.25f,  0.0f, 16.0f/17.0f,
-		 0.25f, -0.25f,  1.0f, 0.0f,
-		 0.25f,  0.25f,  1.0f, 16.0f/17.0f,
+		-0.25f, -0.25f * (17.0f/16.0f),  0.0f, 0.0f,
+		 0.25f, -0.25f * (17.0f/16.0f),  1.0f, 0.0f,
+		-0.25f,  0.25f * (17.0f/16.0f),  0.0f, 1.0f,
+		-0.25f,  0.25f * (17.0f/16.0f),  0.0f, 1.0f,
+		 0.25f, -0.25f * (17.0f/16.0f),  1.0f, 0.0f,
+		 0.25f,  0.25f * (17.0f/16.0f),  1.0f, 1.0f,
 	};
 	vbuffer_init(terrain->vbuf);
 	vbuffer_set_data(terrain->vbuf, sizeof(vertices), vertices);
@@ -58,7 +61,7 @@ void isoterrain_init(struct isoterrain_s *terrain, int w, int h, int layers) {
 	
 	glUseProgram(terrain->shader);
 	glUniform1i(glGetUniformLocation(terrain->shader, "u_texture"), 0);
-	glUniform2f(glGetUniformLocation(terrain->shader, "u_tilesize"), (1.0f / 256.0f) * 16.0f, (1.0f / 256.0f) * 17.0f);
+	glUniform2f(glGetUniformLocation(terrain->shader, "u_tilesize"), (1.0f / terrain->tileset_texture.width) * 16.0f, (1.0f / terrain->tileset_texture.height) * 17.0f);
 }
 
 void isoterrain_init_from_file(struct isoterrain_s *terrain, const char *path_to_script) {
@@ -107,6 +110,27 @@ void isoterrain_destroy(struct isoterrain_s *terrain) {
 }
 
 //
+// de-/serialization
+//
+
+void isoterrain_to_json(struct isoterrain_s *terrain, cJSON *output) {
+	cJSON *width = cJSON_CreateNumber(terrain->width);
+	cJSON *height = cJSON_CreateNumber(terrain->height);
+	cJSON *layers = cJSON_CreateNumber(terrain->layers);
+	cJSON *blocks = cJSON_CreateArray();
+	
+	cJSON_AddItemToObject(output, "width", width);
+	cJSON_AddItemToObject(output, "height", height);
+	cJSON_AddItemToObject(output, "layers", layers);
+	cJSON_AddItemToObject(output, "blocks", blocks);
+
+	for (size_t i = 0; i < terrain->width * terrain->height * terrain->layers; ++i) {
+		cJSON *block_id = cJSON_CreateNumber(terrain->blocks[i]);
+		cJSON_AddItemToArray(blocks, block_id);
+	}
+}
+
+//
 // logic
 //
 
@@ -117,7 +141,7 @@ void isoterrain_draw(struct isoterrain_s *terrain, const mat4 proj, const mat4 v
 	glUniformMatrix4fv(glGetUniformLocation(terrain->shader, "u_view"), 1, GL_FALSE, view[0]);
 
 	glActiveTexture(GL_TEXTURE0);
-	glBindTexture(GL_TEXTURE_2D, terrain->texture);
+	glBindTexture(GL_TEXTURE_2D, terrain->tileset_texture.texture);
 	// draw left to right, top to bottom
 	for (int iz = 0; iz < terrain->layers; ++iz) {
 		for (int ix = 0; ix < terrain->width; ++ix) {
@@ -131,10 +155,10 @@ void isoterrain_draw(struct isoterrain_s *terrain, const mat4 proj, const mat4 v
 
 				// blockid to texcoord
 				const float tx = *block % 16;
-				const float ty = floor(*block / 15.0f + (1.0f / 256.0f));
+				const float ty = floor(*block / 15.0f);
 
-				const float bx = x * 0.25f + y * 0.25f;
-				const float by = (y + 2.0f * z) * 0.125f - x * 0.125f;
+				const float bx = (x + y) * 0.25f;
+				const float by = ((y + 2.0f * z) - x) * 0.125f;
 				const float bz = 0.0f;
 
 				glUniform2f(glGetUniformLocation(terrain->shader, "u_tilepos"), tx, ty);

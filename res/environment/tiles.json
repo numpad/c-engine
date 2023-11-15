@@ -1,0 +1,31 @@
+{
+	"atlas": {
+		"tiles": [16, 15],
+	},
+	"sprites": {
+		"sandstone-slab":         {"x":  0, "y": 0, "width": 16, "height": 17},
+		"cobblestone-slab":       {"x":  1, "y": 0, "width": 16, "height": 17},
+		"brickstone-slab":        {"x":  2, "y": 0, "width": 16, "height": 17},
+		"woodblock-slab":         {"x":  3, "y": 0, "width": 16, "height": 17},
+		"clean-sandstone-slab":   {"x":  4, "y": 0, "width": 16, "height": 17},
+		"clean-cobblestone-slab": {"x":  5, "y": 0, "width": 16, "height": 17},
+		"darkwood-floor-slab":    {"x":  6, "y": 0, "width": 16, "height": 17},
+		"lightwood-floor-slab":   {"x":  7, "y": 0, "width": 16, "height": 17},
+		"bridge-left-slab":       {"x":  8, "y": 0, "width": 16, "height": 17},
+		"bridge-right-slab":      {"x":  9, "y": 0, "width": 16, "height": 17},
+		"fence-left-slab":        {"x": 10, "y": 0, "width": 16, "height": 17},
+
+		"sandstone":              {"x":  0, "y": 1, "width": 16, "height": 17},
+		"cobblestone":            {"x":  1, "y": 1, "width": 16, "height": 17},
+		"brickstone":             {"x":  2, "y": 1, "width": 16, "height": 17},
+		"woodblock":              {"x":  3, "y": 1, "width": 16, "height": 17},
+		"clean-sandstone":        {"x":  4, "y": 1, "width": 16, "height": 17},
+		"clean-cobblestone":      {"x":  5, "y": 1, "width": 16, "height": 17},
+		"darkwood-floor":         {"x":  6, "y": 1, "width": 16, "height": 17},
+		"lightwood-floor":        {"x":  7, "y": 1, "width": 16, "height": 17},
+		"bridge-left":            {"x":  8, "y": 1, "width": 16, "height": 17},
+		"bridge-right":           {"x":  9, "y": 1, "width": 16, "height": 17},
+		"fence-left":             {"x": 10, "y": 1, "width": 16, "height": 17}
+	}
+}
+

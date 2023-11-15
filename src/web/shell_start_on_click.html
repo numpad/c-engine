@@ -28,13 +28,27 @@
         <canvas class="hidden" id="canvas" oncontextmenu="event.preventDefault()"/>
 		<script type="text/javascript" src="soil_soldiers.js"></script>
 		<script>
+			/** Called when starting the game */
 			function onRunApp() {
 				const canvas = document.querySelector('#canvas');
+				let reload_sig = null;
 
+				// Hijack back button
+				history.pushState(null, document.title, location.href);
+				window.addEventListener('popstate', (event) => {
+					// TODO: notify engine that back was pressed. Let engine
+					//       decide if we should prevent the event.
+					reload_sig();
+					history.pushState(null, document.title, location.href);
+				});
+
+				// Start the game
 				MyApp({
 					canvas,
 					arguments: window.location.search.substr(1).split('&'),
 				}).then((Module) => {
+					reload_sig = Module.cwrap('on_siggoback', 'number', []);
+
 					// loaded!
 					canvas.classList.remove('hidden');
 					canvas.classList.add('fullwindow');

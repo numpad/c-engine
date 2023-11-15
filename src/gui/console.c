@@ -5,6 +5,7 @@
 #include <nanovg.h>
 #include "engine.h"
 
+// deep copy the message so that console can manage message lifetimes
 static void console_msg_copy(struct console_msg_s *from, struct console_msg_s *to) {
 	const size_t msg_len = strlen(from->message);
 	char *newmsg = malloc(msg_len * sizeof(char) + 1);
@@ -12,10 +13,18 @@ static void console_msg_copy(struct console_msg_s *from, struct console_msg_s *t
 	to->message = newmsg;
 }
 
+static size_t console_new_messages_count(struct console_s *console) {
+	const int visible = stbds_arrlen(console->messages) - console->new_messages_from_index;
+
+	return visible > 0 ? visible : 0;
+}
+
 void console_init(struct console_s *console) {
 	console->messages = NULL;
+	console->new_messages_from_index = 0;
 	console->input_text_maxlen = 1024;
 	console->input_text = malloc(console->input_text_maxlen * sizeof(char));
+	console->last_message_added_at = -1.0f;
 }
 
 void console_destroy(struct console_s *console) {
@@ -27,6 +36,22 @@ void console_destroy(struct console_s *console) {
 	stbds_arrfree(console->messages);
 	free(console->input_text);
 	console->input_text_maxlen = 0;
+}
+
+void console_update(struct console_s *console, struct engine_s *engine, float dt) {
+	const float msg_visibility_duration = 4.0f; // 4 seconds
+	
+	static float t = 0.0f;
+	t += dt;
+
+	if (console_new_messages_count(console) > 0) {
+		if (t >= msg_visibility_duration) {
+			t -= msg_visibility_duration;
+			console->new_messages_from_index++;
+		}
+	} else {
+		t = 0.0f;
+	}
 }
 
 void console_draw(struct console_s *console, struct engine_s *engine) {
@@ -54,11 +79,12 @@ void console_draw(struct console_s *console, struct engine_s *engine) {
 
 	nvgFontSize(vg, 12.0f);
 	const int msgs_len = stbds_arrlen(console->messages);
-	for (int i = 0; i < msgs_len; ++i) {
+	for (int i = console->new_messages_from_index; i < msgs_len; ++i) {
+		const int local_i = i - console->new_messages_from_index;
 		float bounds[4];
 		nvgTextBounds(vg, 0.0f, 0.0f, console->messages[i].message, NULL, bounds);
 
-		const float y_offset = (i + 1.0f) * (bounds[3] - bounds[1]);
+		const float y_offset = (local_i + 1.0f) * (bounds[3] - bounds[1]);
 		nvgBeginPath(vg);
 		nvgFillColor(vg, nvgRGBf(1.0f, 1.0f, 1.0f));
 		nvgText(vg, x, y + y_offset, console->messages[i].message, NULL);

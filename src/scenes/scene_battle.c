@@ -81,19 +81,15 @@ static void scene_battle_load(struct scene_battle_s *scene, struct engine_s *eng
 
 	// isoterrain
 	scene->terrain = malloc(sizeof(struct isoterrain_s));
-	//isoterrain_init(scene->terrain, 10, 10, 3);
-	//for (int i = 0; i < scene->terrain->width * scene->terrain->height * scene->terrain->layers; ++i) {
-	////	scene->terrain->blocks[i] = 3 + 16 * 9;
-	////}
-
-	isoterrain_init_from_file(scene->terrain, "res/data/levels/chess.json");
+	//isoterrain_init(scene->terrain, 10, 10, 1);
+	isoterrain_init_from_file(scene->terrain, "res/data/levels/test.json");
 
 	// card renderer
 	scene->cardrenderer = malloc(sizeof(struct cardrenderer_s));
 	cardrenderer_init(scene->cardrenderer, "res/image/cards.png");
 
 	// background
-	scene->bg_texture = texture_from_image("res/image/space_bg.png", NULL);
+	texture_init_from_image(&scene->bg_texture, "res/image/space_bg.png", NULL);
 
 	// prepare background vertices
 	scene->bg_shader = shader_new("res/shader/background/vertex.glsl", "res/shader/background/fragment.glsl");
@@ -210,7 +206,7 @@ static void scene_battle_draw(struct scene_battle_s *scene, struct engine_s *eng
 	// draw bg
 	glUseProgram(scene->bg_shader);
 	glActiveTexture(GL_TEXTURE0);
-	glBindTexture(GL_TEXTURE_2D, scene->bg_texture);
+	glBindTexture(GL_TEXTURE_2D, scene->bg_texture.texture);
 	vbuffer_draw(scene->bg_vbuf, 6);
 	glBindTexture(GL_TEXTURE_2D, 0);
 	glUseProgram(0);
@@ -223,7 +219,7 @@ static void scene_battle_draw(struct scene_battle_s *scene, struct engine_s *eng
 	glUniformMatrix4fv(glGetUniformLocation(scene->cardrenderer->shader, "u_projection"), 1, GL_FALSE, engine->u_projection[0]);
 	glUniformMatrix4fv(glGetUniformLocation(scene->cardrenderer->shader, "u_view"), 1, GL_FALSE, engine->u_view[0]);
 	glActiveTexture(GL_TEXTURE0);
-	glBindTexture(GL_TEXTURE_2D, scene->cardrenderer->tileset);
+	glBindTexture(GL_TEXTURE_2D, scene->cardrenderer->texture_atlas.texture);
 
 	glEnable(GL_DEPTH_TEST);
 	glDepthFunc(GL_LEQUAL);

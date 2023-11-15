@@ -3,9 +3,10 @@
 
 #include <SDL_opengles2.h>
 #include "gl/vbuffer.h"
+#include "gl/texture.h"
 
 struct cardrenderer_s {
-	GLuint tileset;
+	struct texture_s texture_atlas;
 	GLuint shader;
 	struct vbuffer_s vbo;
 };
