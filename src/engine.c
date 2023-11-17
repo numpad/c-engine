@@ -70,7 +70,7 @@ struct engine_s *engine_new(void) {
 	engine->window_width = 550;
 	engine->window_height = 800;
 	engine->time_elapsed = 0.0f;
-	engine->window = SDL_CreateWindow("Soil Soldiers", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, engine->window_width, engine->window_height, SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_SHOWN);
+	engine->window = SDL_CreateWindow("Soil Soldiers", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, engine->window_width, engine->window_height, SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_SHOWN | SDL_WINDOW_ALLOW_HIGHDPI);
 	engine->window_id = SDL_GetWindowID(engine->window);
 	engine->on_notify_callbacks = NULL;
 	engine->scene = NULL;
@@ -88,6 +88,7 @@ struct engine_s *engine_new(void) {
 	}
 
 	// OpenGL config
+    SDL_SetHint(SDL_HINT_VIDEO_HIGHDPI_DISABLED, "0");
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 2);
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
@@ -97,7 +98,6 @@ struct engine_s *engine_new(void) {
 	//SDL_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES, 4);
 	SDL_GL_SetSwapInterval(1);
 	engine->gl_ctx = SDL_GL_CreateContext(engine->window);
-
 	
 	// libs
 	engine->vg = nvgCreateGLES2(NVG_ANTIALIAS | NVG_STENCIL_STROKES);
@@ -129,7 +129,6 @@ int engine_destroy(struct engine_s *engine) {
 	// scene
 	engine_setscene(engine, NULL);
 
-
 	// other
 	nvgDeleteGLES2(engine->vg);
 	stbds_arrfree(engine->on_notify_callbacks);
@@ -155,8 +154,18 @@ int engine_destroy(struct engine_s *engine) {
 void engine_on_window_resized(struct engine_s *engine, int w, int h) {
 	engine->window_width = w;
 	engine->window_height = h;
-	glViewport(0, 0, w, h);
 	engine->window_aspect = h / (float)w;
+
+	// highdpi scaling
+	int draw_w, draw_h;
+	SDL_GL_GetDrawableSize(engine->window, &draw_w, &draw_h);
+	float window_dpi_scale_x = (float)draw_w / engine->window_width;
+	float window_dpi_scale_y = (float)draw_h / engine->window_height;
+
+	engine->window_pixel_ratio = fmaxf(window_dpi_scale_x, window_dpi_scale_y);
+
+	// apply changes
+	glViewport(0, 0, w * window_dpi_scale_x, h * window_dpi_scale_y);
 	glm_ortho(-1.0f, 1.0f, -1.0f * engine->window_aspect, 1.0f * engine->window_aspect, -1.0f, 1.0f, engine->u_projection);
 
 #ifdef DEBUG
@@ -317,7 +326,7 @@ void engine_update(struct engine_s *engine) {
 void engine_draw(struct engine_s *engine) {
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
 	
-	nvgBeginFrame(engine->vg, engine->window_width, engine->window_height, 1.0f);
+	nvgBeginFrame(engine->vg, engine->window_width, engine->window_height, engine->window_pixel_ratio);
 
 	// run scene
 	scene_draw(engine->scene, engine);

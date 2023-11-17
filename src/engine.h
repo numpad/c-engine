@@ -20,6 +20,7 @@ struct engine_s {
 	struct NVGcontext *vg;
 	
 	int window_width, window_height;
+	float window_pixel_ratio;
 	float window_aspect;
 	double time_elapsed;
 
