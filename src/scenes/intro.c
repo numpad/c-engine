@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <math.h>
 #include <SDL.h>
+#include <stb_perlin.h>
 #include "scene.h"
 #include "engine.h"
 #include "menu.h"
@@ -64,9 +65,12 @@ static void intro_draw(struct intro_s *scene, struct engine_s *engine) {
 	fill = ease_out_expo(fill);
 
 	// draw logo
-	const float xcenter = engine->window_width * 0.5f;
-	const float ycenter = engine->window_height * 0.5f;
-	const float halfsize = fminf(engine->window_width, engine->window_height) * 0.2f;
+	const float noisex = stb_perlin_noise3(scene->timer * scene->timer * 5.0f, scene->timer, 0.0f, 20.0f, 20.0f, 20.0f) * 12.0f;
+	const float noisey = stb_perlin_noise3(scene->timer, scene->timer * scene->timer * 5.0f, 0.0f, 20.0f, 20.0f, 20.0f) * 12.0f;
+
+	const float xcenter = engine->window_width * 0.5f + noisex;
+	const float ycenter = engine->window_height * 0.5f + noisey;
+	const float halfsize = fminf(engine->window_width, engine->window_height) * 0.2f * (1.0f - glm_ease_quad_out(scene->timer) * 0.25f);
 	const float x = glm_ease_quad_in(scene->time_passed / scene->time_passed_max);
 	const float img_alpha = glm_clamp(-fabsf((x - 0.5f) * 2.9f)+1.4f, 0.0f, 1.0f);
 	NVGcontext *vg = engine->vg;

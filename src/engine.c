@@ -1,5 +1,6 @@
 #include "engine.h"
 #include <SDL.h>
+#include <SDL_mixer.h>
 #define NANOVG_GLES2_IMPLEMENTATION
 #include <nanovg_gl.h>
 #undef NANOVG_GLES2_IMPLEMENTATION
@@ -57,6 +58,11 @@ void on_siggoback(void) {
 struct engine_s *engine_new(void) {
 	if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_TIMER | SDL_INIT_GAMECONTROLLER | SDL_INIT_EVENTS)) {
 		SDL_LogError(SDL_LOG_CATEGORY_ERROR, "failed initializing SDL: %s.\n", SDL_GetError());
+		return NULL;
+	}
+
+	if (Mix_OpenAudio(44100, MIX_DEFAULT_FORMAT, 2, 2048) < 0) {
+		SDL_LogError(SDL_LOG_CATEGORY_ERROR, "failed initializing SDL_mixer: %s.\n", Mix_GetError());
 		return NULL;
 	}
 
@@ -135,6 +141,7 @@ int engine_destroy(struct engine_s *engine) {
 	SDL_GL_DeleteContext(engine->gl_ctx);
 
 	SDLNet_Quit();
+	Mix_Quit();
 	SDL_Quit();
 
 	free(engine);
