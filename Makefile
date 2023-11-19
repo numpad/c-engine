@@ -4,8 +4,9 @@ CFLAGS = -std=gnu99 -fPIC -Wall -Wextra -pedantic \
 		 -Wfloat-equal -Wshadow -Wno-unused-parameter -Wl,--export-dynamic \
 		 -Wswitch-enum -Wcast-qual -Wnull-dereference -Wunused-result \
 		 -DFLECS_CUSTOM_BUILD -DFLECS_SYSTEM -DFLECS_MODULE -DFLECS_PIPELINE -DFLECS_TIMER -DFLECS_HTTP -DFLECS_SNAPSHOT -DFLECS_PARSER -DFLECS_APP -DFLECS_OS_API_IMPL \
+		 -DNK_INCLUDE_DEFAULT_ALLOCATOR -DNK_INCLUDE_DEFAULT_FONT -DNK_INCLUDE_FONT_BAKING -DNK_INCLUDE_FIXED_TYPES -DNK_INCLUDE_STANDARD_IO -DNK_INCLUDE_STANDARD_VARARGS -DNK_INCLUDE_VERTEX_BUFFER_OUTPUT -DNK_NO_STB_TRUETYPE_IMPLEMENTATION -DNK_NO_STB_RECT_PACK_IMPLEMENTATION \
 		 # flecs needs gnu99
-INCLUDES = -Isrc/ -I/usr/include/SDL2 -Ilib/nanovg/src -Ilib/stb -Ilib/cglm/include -Ilib/flecs -Ilib/cJSON
+INCLUDES = -Isrc/ -I/usr/include/SDL2 -Ilib/nanovg/src -Ilib/stb -Ilib/cglm/include -Ilib/flecs -Ilib/cJSON -Ilib/nuklear
 LIBS = -lm -lGL -lSDL2 -lSDL2_mixer -lSDL2_net # -lSDL2_ttf
 
 BIN = bin/native/
@@ -27,7 +28,7 @@ ifeq ($(CC), emcc)
 	BIN = bin/emcc/
 endif
 
-SCENES = src/scenes/game.c src/scenes/intro.c src/scenes/menu.c src/scenes/scene_battle.c
+SCENES = src/scenes/game.c src/scenes/intro.c src/scenes/menu.c src/scenes/scene_battle.c src/scenes/experiments.c
 SRC = main.c src/engine.c \
 	  src/ecs/components.c \
 	  src/gui/console.c \
@@ -36,10 +37,11 @@ SRC = main.c src/engine.c \
 	  src/gl/shader.c src/gl/texture.c src/gl/vbuffer.c \
 	  src/scenes/scene.c \
 	  lib/nanovg/src/nanovg.c \
-	  lib/stb/stb_ds.c lib/stb/stb_perlin.c lib/stb/stb_image.c \
+	  lib/stb/stb_ds.c lib/stb/stb_perlin.c lib/stb/stb_image.c lib/stb/stb_rect_pack.c lib/stb/stb_truetype.c \
 	  $(wildcard lib/cglm/src/*.c) \
 	  lib/cJSON/cJSON.c \
 	  lib/flecs/flecs.c \
+	  lib/nuklear/nuklear.c \
 	  $(SCENES) 
 OBJ = $(addprefix $(BIN),$(SRC:.c=.o))
 

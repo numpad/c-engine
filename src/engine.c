@@ -6,13 +6,18 @@
 #undef NANOVG_GLES2_IMPLEMENTATION
 #include <SDL_net.h>
 #include <stb_ds.h>
+#include <nuklear.h>
+#include <nuklear_sdl_gles2.h>
 #include "scenes/intro.h"
+#include "scenes/menu.h"
 #include "scenes/scene_battle.h"
 #include "gui/console.h"
 
 static Uint32 USR_EVENT_RELOAD = ((Uint32)-1);
 static Uint32 USR_EVENT_NOTIFY = ((Uint32)-1);
 static Uint32 USR_EVENT_GOBACK = ((Uint32)-1);
+
+static void on_window_resized(struct engine_s *engine, int w, int h);
 
 #ifdef __unix__
 #include <signal.h>
@@ -56,7 +61,7 @@ void on_siggoback(void) {
 
 
 struct engine_s *engine_new(void) {
-	if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_TIMER | SDL_INIT_GAMECONTROLLER | SDL_INIT_EVENTS)) {
+	if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_TIMER | SDL_INIT_GAMECONTROLLER | SDL_INIT_EVENTS) < 0) {
 		SDL_LogError(SDL_LOG_CATEGORY_ERROR, "failed initializing SDL: %s.\n", SDL_GetError());
 		return NULL;
 	}
@@ -111,12 +116,19 @@ struct engine_s *engine_new(void) {
 	signal(SIGUSR2, on_sigusr2);
 #endif
 
+	// init nuklear
+	engine->nk = nk_sdl_init(engine->window);
+	// init default font
+	struct nk_font_atlas *atlas;
+	nk_sdl_font_stash_begin(&atlas);
+	nk_sdl_font_stash_end();
+
 	// scene
 	struct intro_s *intro = malloc(sizeof(struct intro_s));
 	intro_init(intro, engine);
 	engine_setscene(engine, (struct scene_s *)intro);
 
-	engine_on_window_resized(engine, engine->window_width, engine->window_height);
+	on_window_resized(engine, engine->window_width, engine->window_height);
 	glClearColor(0.06f, 0.0f, 0.10f, 1.0f);
 
 	// camera
@@ -134,6 +146,7 @@ int engine_destroy(struct engine_s *engine) {
 	stbds_arrfree(engine->on_notify_callbacks);
 	console_destroy(engine->console);
 	free(engine->console);
+	nk_sdl_shutdown();
 
 	// windowing
 	SDL_DestroyWindow(engine->window);
@@ -151,7 +164,7 @@ int engine_destroy(struct engine_s *engine) {
 // system stuff
 //
 
-void engine_on_window_resized(struct engine_s *engine, int w, int h) {
+static void on_window_resized(struct engine_s *engine, int w, int h) {
 	engine->window_width = w;
 	engine->window_height = h;
 	engine->window_aspect = h / (float)w;
@@ -230,9 +243,6 @@ void engine_setscene_dll(struct engine_s *engine, const char *filename) {
 
 // main loop
 void engine_update(struct engine_s *engine) {
-	static int ticks = 0;
-	++ticks;
-
 	struct input_drag_s prev_input_drag = engine->input_drag;
 
 	if (prev_input_drag.state == INPUT_DRAG_END) {
@@ -242,15 +252,19 @@ void engine_update(struct engine_s *engine) {
 	}
 
 	// poll events
+    nk_input_begin(engine->nk);
 	SDL_Event event;
 	while (SDL_PollEvent(&event)) {
+        // TODO: stop event propagation when interacting with gui?
+		nk_sdl_handle_event(&event);
+
 		switch (event.type) {
 			case SDL_QUIT:
 				engine_setscene(engine, NULL);
 				break;
 			case SDL_WINDOWEVENT:
 				if (event.window.event == SDL_WINDOWEVENT_SIZE_CHANGED /* && event.window.windowID == engine->window_id */) {
-					engine_on_window_resized(engine, event.window.data1, event.window.data2);
+					on_window_resized(engine, event.window.data1, event.window.data2);
 				}
 				break;
 			case SDL_TEXTINPUT:
@@ -311,9 +325,15 @@ void engine_update(struct engine_s *engine) {
 				engine->on_notify_callbacks[i](engine);
 			}
 		} else if (event.type == USR_EVENT_GOBACK) {
-			console_add_message(engine->console, (struct console_msg_s) { .message = "Back" });
+			console_add_message(engine->console, (struct console_msg_s) { .message = "← Back" });
+
+			// TODO: notify current scene about this
+			struct menu_s *menu_scene = malloc(sizeof(struct menu_s));
+			menu_init(menu_scene, engine);
+			engine_setscene(engine, (struct scene_s *)menu_scene);
 		}
 	}
+    nk_input_end(engine->nk);
 
 	// update
 	const float dt = 1.0f / 60.0f;
@@ -353,6 +373,7 @@ void engine_draw(struct engine_s *engine) {
 	nvgText(engine->vg, 3.0f, 3.0f, seconds, NULL);
 #endif
 
+	nk_sdl_render(NK_ANTI_ALIASING_ON, 512 * 1024, 128 * 1024);
 	nvgEndFrame(engine->vg);
 
 	SDL_GL_SwapWindow(engine->window);

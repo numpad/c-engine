@@ -8,6 +8,7 @@
 #include "scenes/scene.h"
 #include "input.h"
 
+struct nk_context;
 struct engine_s;
 struct console_s;
 typedef void(*engine_callback_fn)(struct engine_s*);
@@ -18,6 +19,7 @@ struct engine_s {
 	Uint32 window_id;
 	SDL_GLContext gl_ctx;
 	struct NVGcontext *vg;
+	struct nk_context *nk;
 	
 	int window_width, window_height;
 	float window_pixel_ratio;
@@ -42,9 +44,6 @@ struct engine_s {
 // init & cleanup
 struct engine_s *engine_new(void);
 int engine_destroy(struct engine_s *engine);
-
-// system stuff
-void engine_on_window_resized(struct engine_s *engine, int new_width, int new_height);
 
 // scene handling
 void engine_setscene(struct engine_s *engine, struct scene_s *scene);

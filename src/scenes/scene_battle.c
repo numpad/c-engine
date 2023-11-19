@@ -3,12 +3,14 @@
 #include <math.h>
 #include <SDL_opengles2.h>
 #include <SDL_net.h>
+#include <SDL_mixer.h>
 #include <nanovg.h>
 #include <stb_ds.h>
 #include <stb_image.h>
 #include <cglm/cglm.h>
 #include <flecs.h>
 #include <cglm/cglm.h>
+#include <nuklear.h>
 #include "engine.h"
 #include "gl/texture.h"
 #include "gl/shader.h"
@@ -17,6 +19,9 @@
 #include "game/cards.h"
 #include "gui/console.h"
 #include "ecs/components.h"
+#include "scenes/menu.h"
+
+static Mix_Chunk *sound;
 
 static void reload_shader(struct engine_s *engine) {
 	struct scene_battle_s *scene = (struct scene_battle_s *)engine->scene;
@@ -121,6 +126,8 @@ static void scene_battle_load(struct scene_battle_s *scene, struct engine_s *eng
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
 	glUseProgram(0);
 
+	sound = Mix_LoadWAV("res/sounds/test.wav");
+	Mix_PlayChannel(-1, sound, 0);
 }
 
 static void scene_battle_destroy(struct scene_battle_s *scene, struct engine_s *engine) {
@@ -158,6 +165,7 @@ static void scene_battle_update(struct scene_battle_s *scene, struct engine_s *e
 						sprintf(msg, "Played '%s'", cards[i].name);
 						console_add_message(engine->console, (struct console_msg_s) { msg });
 						ecs_delete(scene->world, it.entities[i]);
+						Mix_PlayChannel(-1, sound, 0);
 					}
 				}
 
@@ -270,6 +278,43 @@ static void scene_battle_draw(struct scene_battle_s *scene, struct engine_s *eng
 	}
 	glDisable(GL_DEPTH_TEST);
 
+	struct nk_context *nk = engine->nk;
+	if (nk_begin(nk, "Menubar", nk_rect(3, 3, engine->window_width - 6, 40), NK_WINDOW_NO_SCROLLBAR)) {
+		nk_layout_row_dynamic(nk, 32, 2);
+		if (nk_button_label(nk, "Menu")) {
+			struct menu_s *menu = malloc(sizeof(struct menu_s));
+			menu_init(menu, engine);
+			engine_setscene(engine, (struct scene_s *)menu);
+		}
+	}
+	nk_end(nk);
+
+
+	enum {EASY, HARD};
+	static int op = EASY;
+	static float value = 0.6f;
+	static int i =  20;
+	if (nk_begin(engine->nk, "Show", nk_rect(50, 50, 220, 220), NK_WINDOW_BORDER|NK_WINDOW_MOVABLE|NK_WINDOW_CLOSABLE)) {
+		// fixed widget pixel width
+		nk_layout_row_static(engine->nk, 30, 80, 1);
+		if (nk_button_label(engine->nk, "button")) {
+			// event handling
+		}
+		// fixed widget window ratio width
+		nk_layout_row_dynamic(engine->nk, 30, 2);
+		if (nk_option_label(engine->nk, "easy", op == EASY)) op = EASY;
+		if (nk_option_label(engine->nk, "hard", op == HARD)) op = HARD;
+		// custom widget pixel width
+		nk_layout_row_begin(engine->nk, NK_STATIC, 30, 2);
+		{
+			nk_layout_row_push(engine->nk, 50);
+			nk_label(engine->nk, "Volume:", NK_TEXT_LEFT);
+			nk_layout_row_push(engine->nk, 110);
+			nk_slider_float(engine->nk, 0, &value, 1.0f, 0.1f);
+		}
+		nk_layout_row_end(engine->nk);
+	}
+	nk_end(engine->nk);
 }
 
 void scene_battle_init(struct scene_battle_s *scene_battle, struct engine_s *engine) {
