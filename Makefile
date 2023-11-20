@@ -64,8 +64,10 @@ $(BIN)%.o: %.c
 	mkdir -p $(@D)
 	$(CC) $(CFLAGS) $(INCLUDES) -c $< -o $@
 
+scenes: CFLAGS += -DDEBUG -ggdb -O0
+scenes: LIBS += -ldl
 scenes:
-	$(CC) $(CFLAGS) -shared -o scene_game.so $(INCLUDES) $(LIBS) src/game/isoterrain.c src/scenes/scene_battle.c
+	$(CC) $(CFLAGS) -shared -o scene_game.so $(INCLUDES) $(LIBS) src/scenes/experiments.c
 
 clean:
 	rm -rf $(BIN) $(TARGET) "$(TARGET).data" "$(TARGET).html" "$(TARGET).js" "$(TARGET).wasm"

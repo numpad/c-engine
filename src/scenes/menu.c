@@ -3,9 +3,10 @@
 #include <SDL.h>
 #include <nanovg.h>
 #include <cglm/cglm.h>
+#include <nuklear.h>
 #include "engine.h"
 #include "scenes/scene_battle.h"
-#include "util/easing.h"
+#include "scenes/experiments.h"
 #include "game/isoterrain.h"
 
 float easeOutExpo(float x) {
@@ -16,6 +17,12 @@ static void switch_to_game_scene(struct engine_s *engine) {
 	struct scene_battle_s *game_scene_battle = malloc(sizeof(struct scene_battle_s));
 	scene_battle_init(game_scene_battle, engine);
 	engine_setscene(engine, (struct scene_s *)game_scene_battle);
+}
+
+static void switch_to_minigame_scene(struct engine_s *engine) {
+	struct scene_experiments_s *game_scene_experiments = malloc(sizeof(struct scene_experiments_s));
+	scene_experiments_init(game_scene_experiments, engine);
+	engine_setscene(engine, (struct scene_s *)game_scene_experiments);
 }
 
 static void gui_titlebutton(NVGcontext *vg, struct engine_s *engine, float x, float y, const char *text, int enabled) {
@@ -82,6 +89,68 @@ static void menu_update(struct menu_s *menu, struct engine_s *engine, float dt) 
 	if (engine->input_drag.state == INPUT_DRAG_END) {
 		
 	}
+
+	// gui
+	struct nk_context *nk = engine->nk;
+	const float padding_top = engine->window_height * 0.33f;
+	const float padding_x = 30.0f, padding_y = 50.0f;
+	const int row_height = 45;
+	if (nk_begin_titled(nk, "Main Menu", "Main Menu", nk_rect(
+		padding_x, padding_y + padding_top, engine->window_width - padding_x * 2.0f, engine->window_height - padding_y * 2.0f - padding_top),
+		NK_WINDOW_TITLE | NK_WINDOW_NO_SCROLLBAR))
+	{
+		// play game
+		nk_style_push_color(nk, &nk->style.button.text_normal, nk_rgb(60, 170, 30));
+		nk_style_push_color(nk, &nk->style.button.text_hover, nk_rgb(50, 140, 10));
+
+		nk_layout_row_dynamic(nk, row_height, 1);
+		if (nk_button_symbol_label(nk, NK_SYMBOL_PLUS, "Play Game", NK_TEXT_ALIGN_RIGHT)) {
+			switch_to_game_scene(engine);
+		}
+
+		nk_style_pop_color(nk);
+		nk_style_pop_color(nk);
+
+		// continue
+		nk_style_push_style_item(nk, &nk->style.button.normal, nk_style_item_color(nk_rgb(66, 66, 66)));
+		nk_style_push_style_item(nk, &nk->style.button.active, nk->style.button.normal);
+		nk_style_push_style_item(nk, &nk->style.button.hover, nk->style.button.normal);
+		nk_style_push_color(nk, &nk->style.button.text_normal, nk_rgb(120, 120, 120));
+		nk_style_push_color(nk, &nk->style.button.text_active, nk->style.button.text_normal);
+		nk_style_push_color(nk, &nk->style.button.text_hover, nk->style.button.text_normal);
+
+		nk_layout_row_dynamic(nk, row_height, 1);
+		if (nk_button_symbol_label(nk, NK_SYMBOL_TRIANGLE_RIGHT, "Continue", NK_TEXT_ALIGN_RIGHT)) {
+		}
+
+		nk_style_pop_style_item(nk);
+		nk_style_pop_style_item(nk);
+		nk_style_pop_style_item(nk);
+		nk_style_pop_color(nk);
+		nk_style_pop_color(nk);
+		nk_style_pop_color(nk);
+
+		// minigame
+		nk_style_push_color(nk, &nk->style.button.text_normal, nk_rgb(60, 30, 170));
+		nk_style_push_color(nk, &nk->style.button.text_hover, nk_rgb(50, 10, 140));
+
+		nk_layout_row_dynamic(nk, row_height, 1);
+		if (nk_button_symbol_label(nk, NK_SYMBOL_PLUS, "Minigame", NK_TEXT_ALIGN_RIGHT)) {
+			switch_to_minigame_scene(engine);
+		}
+
+		nk_style_pop_color(nk);
+		nk_style_pop_color(nk);
+
+		// settings, about
+		nk_layout_row_dynamic(nk, row_height, 2);
+		if (nk_button_label(nk, "Settings")) {
+		}
+		if (nk_button_label(nk, "About")) {
+		}
+
+	}
+	nk_end(nk);
 }
 
 static void menu_draw(struct menu_s *menu, struct engine_s *engine) {
@@ -138,40 +207,6 @@ static void menu_draw(struct menu_s *menu, struct engine_s *engine) {
 	gui_titlebutton(vg, engine, engine->window_width, engine->window_height * 0.5f + 180.0f, "New game", 1);
 	gui_titlebutton(vg, engine, engine->window_width, engine->window_height * 0.5f + 260.0f, "Settings", 1);
 	
-
-	// play button
-	static float playpress_lin = 0.0f;
-	const float playpress = ease_back_out(playpress_lin);
-	const float playpress2 = easeOutExpo(playpress_lin);
-	nvgBeginPath(vg);
-	nvgRoundedRect(vg, 50.0f + 8.0f * playpress2, engine->window_height - 500.0f + 12.0f * playpress, engine->window_width - 100.0f - 16.0f * playpress2, 75.0f - 24.0f * playpress, 3.0f);
-	nvgFillPaint(vg, nvgLinearGradient(vg, 0.0f, engine->window_height - 500.0f, 0.0f, engine->window_height - 425.0f, nvgRGBA(180, 165, 245, 200), nvgRGBA(110, 105, 200, 200)));
-	nvgFill(vg);
-	nvgStrokeColor(vg, nvgRGBA(115, 100, 200, 255));
-	nvgStrokeWidth(vg, 3.0f);
-	nvgStroke(vg);
-	if (mousebtn & SDL_BUTTON(1)) {
-		if (mx > 50.0f && mx < engine->window_width - 50.0f && my > engine->window_height - 500.0f && my < engine->window_height - 425.0f) {
-			playpress_lin += 0.3f;
-			if (playpress_lin > 1.0f) {
-				playpress_lin = 1.0f;
-
-				switch_to_game_scene(engine);
-			}
-		}
-	} else {
-		playpress_lin *= 0.85f;
-	}
-
-	// play game
-	float bounds[4];
-	nvgBeginPath(vg);
-	nvgFillColor(vg, nvgRGBA(255, 255, 255, 255));
-	nvgFontSize(vg, 32.0f - 4.0f * playpress);
-	nvgFontBlur(vg, 0.0f);
-	nvgTextBounds(vg, 0.0f, 0.0f, "Play", NULL, &bounds);
-	nvgText(vg, engine->window_width * 0.5f - bounds[2] * 0.5f, engine->window_height - 450.0f, "Play", NULL);
-
 }
 
 void menu_init(struct menu_s *menu, struct engine_s *engine) {

@@ -10,7 +10,7 @@
 #include <nuklear_sdl_gles2.h>
 #include "scenes/intro.h"
 #include "scenes/menu.h"
-#include "scenes/scene_battle.h"
+#include "scenes/experiments.h"
 #include "gui/console.h"
 
 static Uint32 USR_EVENT_RELOAD = ((Uint32)-1);
@@ -228,8 +228,8 @@ void engine_setscene_dll(struct engine_s *engine, const char *filename) {
 
 	handle = dlopen(filename, RTLD_NOW | RTLD_GLOBAL | RTLD_DEEPBIND);
 
-	struct menu_s *modscene = malloc(sizeof(struct scene_battle_s));
-	void(*test_init)(struct scene_battle_s *scene, struct engine_s *) = dlsym(handle, "scene_battle_init");
+	struct scene_experiments_s *modscene = malloc(sizeof(struct scene_experiments_s));
+	void(*test_init)(struct scene_experiments_s *scene, struct engine_s *) = dlsym(handle, "scene_experiments_init");
 	test_init(modscene, engine);
 
 	engine_setscene(engine, (struct scene_s *)modscene);

@@ -289,32 +289,6 @@ static void scene_battle_draw(struct scene_battle_s *scene, struct engine_s *eng
 	}
 	nk_end(nk);
 
-
-	enum {EASY, HARD};
-	static int op = EASY;
-	static float value = 0.6f;
-	static int i =  20;
-	if (nk_begin(engine->nk, "Show", nk_rect(50, 50, 220, 220), NK_WINDOW_BORDER|NK_WINDOW_MOVABLE|NK_WINDOW_CLOSABLE)) {
-		// fixed widget pixel width
-		nk_layout_row_static(engine->nk, 30, 80, 1);
-		if (nk_button_label(engine->nk, "button")) {
-			// event handling
-		}
-		// fixed widget window ratio width
-		nk_layout_row_dynamic(engine->nk, 30, 2);
-		if (nk_option_label(engine->nk, "easy", op == EASY)) op = EASY;
-		if (nk_option_label(engine->nk, "hard", op == HARD)) op = HARD;
-		// custom widget pixel width
-		nk_layout_row_begin(engine->nk, NK_STATIC, 30, 2);
-		{
-			nk_layout_row_push(engine->nk, 50);
-			nk_label(engine->nk, "Volume:", NK_TEXT_LEFT);
-			nk_layout_row_push(engine->nk, 110);
-			nk_slider_float(engine->nk, 0, &value, 1.0f, 0.1f);
-		}
-		nk_layout_row_end(engine->nk);
-	}
-	nk_end(engine->nk);
 }
 
 void scene_battle_init(struct scene_battle_s *scene_battle, struct engine_s *engine) {
