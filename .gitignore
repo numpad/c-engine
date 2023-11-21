@@ -1,4 +1,5 @@
 
+# compiler output
 *.o
 *.so
 soil_soldiers.html
@@ -8,6 +9,10 @@ soil_soldiers.wasm
 soil_soldiers.html.mem
 soil_soldiers
 
+# cache, local settings
 .cache
 compile_commands.json
+
+# deployment
+/service-worker.js
 

@@ -161,6 +161,13 @@ int engine_destroy(struct engine_s *engine) {
 }
 
 //
+// settings
+//
+void engine_set_clear_color(float r, float g, float b) {
+	glClearColor(r, g, b, 1.0f);
+}
+
+//
 // system stuff
 //
 

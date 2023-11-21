@@ -27,6 +27,7 @@ void console_draw(struct console_s *, struct engine_s *);
 
 void console_add_input_text(struct console_s *, char *text);
 void console_add_message(struct console_s *, struct console_msg_s msg);
+void console_log(struct console_s *, char *fmt, ...);
 
 #endif
 

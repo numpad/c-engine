@@ -45,6 +45,9 @@ struct engine_s {
 struct engine_s *engine_new(void);
 int engine_destroy(struct engine_s *engine);
 
+// settings
+void engine_set_clear_color(float r, float g, float b);
+
 // scene handling
 void engine_setscene(struct engine_s *engine, struct scene_s *scene);
 void engine_setscene_dll(struct engine_s *engine, const char *filename);
