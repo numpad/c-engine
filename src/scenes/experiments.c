@@ -9,6 +9,7 @@
 
 struct player_s;
 struct planet_s;
+struct deco_s;
 
 typedef struct ship_s {
 	vec2 pos;
@@ -39,6 +40,11 @@ typedef struct player_s {
 	ship_t *ship;
 } player_t;
 
+typedef struct deco_s {
+	vec2 pos;
+	float angle;
+} deco_t;
+
 // functions
 static void player_move(struct engine_s *engine, player_t *player) {
 	if (engine->input_drag.state == INPUT_DRAG_END || engine->input_drag.state == INPUT_DRAG_NONE) {
@@ -59,17 +65,23 @@ static void player_move(struct engine_s *engine, player_t *player) {
 			}
 		}
 
-		// move parallel to surface
-		vec2 to_planet_dir;
-		glm_vec2_sub(player->on_planet->pos, player->pos, to_planet_dir);
-		glm_vec2_normalize(to_planet_dir);
-		
-		vec2 right;
-		right[0] = to_planet_dir[1];
-		right[1] = -to_planet_dir[0];
-		glm_vec2_scale(right, dir * player->walk_speed, right);
+		if (dir != 0.0f) {
+			// move parallel to surface
+			vec2 to_planet_dir;
+			glm_vec2_sub(player->on_planet->pos, player->pos, to_planet_dir);
+			// TODO: this should rarely happen, just return early?
+			assert(glm_vec2_norm(to_planet_dir) > 0.01f);
+			glm_vec2_normalize(to_planet_dir);
+			
+			vec2 right;
+			right[0] = to_planet_dir[1];
+			right[1] = -to_planet_dir[0];
+			glm_vec2_scale(right, dir * player->walk_speed, right);
 
-		glm_vec2_add(player->vel, right, player->vel);
+			glm_vec2_add(right, to_planet_dir, right);
+
+			glm_vec2_add(player->vel, right, player->vel);
+		}
 	}
 
 	if (player->ship) {
@@ -91,6 +103,13 @@ static void player_move(struct engine_s *engine, player_t *player) {
 		}
 
 	}
+}
+
+static void planet_generate(planet_t *planet, vec2 pos) {
+	planet->pos[0] = pos[0];
+	planet->pos[1] = pos[1];
+	planet->radius = 200.0f;
+	planet->gravity_radius = planet->radius * 1.7f;
 }
 
 static void planet_collide(planet_t *planet, vec2 pos, vec2 vel, float radius, planet_t **on_planet, planet_t **in_atmosphere) {
@@ -125,10 +144,10 @@ static void planet_collide(planet_t *planet, vec2 pos, vec2 vel, float radius, p
 			vec2 vel_dir;
 			glm_vec2_normalize_to(vel, vel_dir);
 			const float vertical_cancel = glm_vec2_norm(vel);
-			const float dot = glm_vec2_dot(vel_dir, to_planet_dir);
+			const float dot = fmaxf(glm_vec2_dot(vel_dir, to_planet_dir), 0.0f);
 
 			vec2 surface_vel;
-			glm_vec2_scale_as(to_surface, vertical_cancel * dot, surface_vel);
+			glm_vec2_scale_as(to_surface, vertical_cancel * dot * 0.5f, surface_vel);
 			glm_vec2_add(vel, surface_vel, vel);
 		}
 	}
@@ -148,20 +167,21 @@ static void planet_attract(planet_t *planet, vec2 pos, vec2 vel) {
 }
 
 // vars
-static const int planets_max = 32;
+static const int planets_max = 12;
 static planet_t *planets = NULL;
 static const int ships_max = 4;
 static ship_t *ships;
 static player_t pl;
+static const int decos_per_planet = 6;
+static deco_t *decos;
 static float minimap_scale = 1.0f / 100.0f;
 
 static const float ship_enter_distance = 50.0f;
 
-
 // scene
 static void scene_experiments_load(struct scene_experiments_s *scene, struct engine_s *engine) {
 	// set background color
-	engine_set_clear_color(0.02f, 0.01f, 0.025f);
+	engine_set_clear_color(0.01f, 0.01f, 0.02f);
 	srandom(0);
 
 	// planets
@@ -169,11 +189,15 @@ static void scene_experiments_load(struct scene_experiments_s *scene, struct eng
 	planets = malloc(sizeof(planet_t) * planets_max);
 
 	for (int i = 0; i < planets_max; ++i) {
-		planets[i].pos[0] = random() % 14000 - 7000;
-		planets[i].pos[1] = random() % 14000 - 7000;
-		planets[i].radius = 200.0f;
-		planets[i].gravity_radius = fmaxf(planets[i].radius * 1.7f, planets[i].radius + 60.0f);
+		vec2 pos;
+		pos[0] = random() % 14000 - 7000;
+		pos[1] = random() % 14000 - 7000;
+		planet_generate(&planets[i], pos);
 	}
+	
+	// deco
+	assert(decos == NULL);
+	decos = malloc(sizeof(deco_t) * decos_per_planet * planets_max);
 
 	// ships
 	assert(ships == NULL);
@@ -187,6 +211,7 @@ static void scene_experiments_load(struct scene_experiments_s *scene, struct eng
 		ship_t *ship = &ships[i];
 		ship->pos[0] = planets[0].pos[0] + offset[0];
 		ship->pos[1] = planets[0].pos[1] + offset[1];
+		glm_vec2_zero(ship->vel);
 		ship->size[0] = 30.0f;
 		ship->size[1] = 50.0f;
 		ship->angle = glm_rad(-11.0f);
@@ -205,7 +230,6 @@ static void scene_experiments_load(struct scene_experiments_s *scene, struct eng
 	pl.nearby_ship = NULL;
 	pl.ship = NULL;
 
-
 }
 
 static void scene_experiments_destroy(struct scene_experiments_s *scene, struct engine_s *engine) {
@@ -213,6 +237,8 @@ static void scene_experiments_destroy(struct scene_experiments_s *scene, struct 
 	planets = NULL;
 	free(ships);
 	ships = NULL;
+	free(decos);
+	decos = NULL;
 }
 
 static void scene_experiments_update(struct scene_experiments_s *scene, struct engine_s *engine, float dt) {
@@ -223,12 +249,12 @@ static void scene_experiments_update(struct scene_experiments_s *scene, struct e
 		ships[j].in_atmosphere = NULL;
 	}
 	for (int i = 0; i < planets_max; ++i) {
-		planet_collide(&planets[i], pl.pos, pl.vel, pl.radius, &pl.on_planet, &pl.in_atmosphere);
 		planet_attract(&planets[i], pl.pos, pl.vel);
+		planet_collide(&planets[i], pl.pos, pl.vel, pl.radius, &pl.on_planet, &pl.in_atmosphere);
 
 		for (int j = 0; j < ships_max; ++j) {
-			planet_collide(&planets[i], ships[j].pos, ships[j].vel, ships[j].size[0], NULL, &ships[j].in_atmosphere);
 			planet_attract(&planets[i], ships[j].pos, ships[j].vel);
+			planet_collide(&planets[i], ships[j].pos, ships[j].vel, ships[j].size[0], NULL, &ships[j].in_atmosphere);
 		}
 	}
 
@@ -261,33 +287,6 @@ static void scene_experiments_update(struct scene_experiments_s *scene, struct e
 			pl.nearby_ship = ship;
 		}
 	}
-
-	/*
-	if (pl.ship) {
-		glm_vec2_add(pl.ship->pos, pl.ship->vel, pl.ship->pos);
-		glm_vec2_scale(pl.ship->vel, 0.9999f, pl.ship->vel);
-	
-		int mx = 0, my = 0;
-		if (engine->input_drag.state == INPUT_DRAG_IN_PROGRESS) {
-			mx = (engine->input_drag.x < engine->window_width * 0.5f) ? -1 : 1;
-			my = (engine->input_drag.y < engine->window_height * 0.5f) ? -1 : 1;
-		}
-
-		if (my == -1) {
-			const float thrust = 0.1f;
-			pl.ship->vel[0] += cosf(pl.ship->angle - glm_rad(90)) * thrust;
-			pl.ship->vel[1] += sinf(pl.ship->angle - glm_rad(90)) * thrust;
-		}
-		if (my == 1) {
-			if (mx == -1) {
-				pl.ship->angle -= glm_rad(4);
-			}
-			if (mx == 1) {
-				pl.ship->angle += glm_rad(4);
-			}
-		}
-	}
-	*/
 }
 
 static void scene_experiments_draw(struct scene_experiments_s *scene, struct engine_s *engine) {
