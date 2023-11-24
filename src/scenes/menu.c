@@ -1,9 +1,9 @@
 #include "menu.h"
 #include <math.h>
 #include <SDL.h>
-#include <SDL_net.h>
 #include <nanovg.h>
 #include <cglm/cglm.h>
+#include <nuklear.h>
 #include "engine.h"
 #include "scenes/scene_battle.h"
 #include "scenes/experiments.h"
@@ -61,7 +61,7 @@ static void gui_titlebutton(NVGcontext *vg, struct engine_s *engine, float x, fl
 
 }
 
-static void menu_load(struct scene_menu_s *menu, struct engine_s *engine) {
+static void menu_load(struct menu_s *menu, struct engine_s *engine) {
 	menu->vg_font = nvgCreateFont(engine->vg, "PermanentMarker Regular", "res/font/PermanentMarker-Regular.ttf");
 	menu->vg_gamelogo = nvgCreateImage(engine->vg, "res/image/logo_placeholder.png", 0);
 
@@ -69,7 +69,7 @@ static void menu_load(struct scene_menu_s *menu, struct engine_s *engine) {
 	isoterrain_init_from_file(menu->terrain, "res/data/levels/map2.json");
 }
 
-static void menu_destroy(struct scene_menu_s *menu, struct engine_s *engine) {
+static void menu_destroy(struct menu_s *menu, struct engine_s *engine) {
 	isoterrain_destroy(menu->terrain);
 	nvgDeleteImage(engine->vg, menu->vg_gamelogo);
 	free(menu->terrain);
@@ -77,7 +77,7 @@ static void menu_destroy(struct scene_menu_s *menu, struct engine_s *engine) {
 
 static struct input_drag_s prev_drag;
 static int has_prev_drag = 0;
-static void menu_update(struct scene_menu_s *menu, struct engine_s *engine, float dt) {
+static void menu_update(struct menu_s *menu, struct engine_s *engine, float dt) {
 	if (engine->input_drag.state == INPUT_DRAG_BEGIN) {
 		has_prev_drag = 0;
 	}
@@ -91,10 +91,69 @@ static void menu_update(struct scene_menu_s *menu, struct engine_s *engine, floa
 	}
 
 	// gui
-	// switch_to_game_scene(engine);
+	struct nk_context *nk = engine->nk;
+	const float padding_top = engine->window_height * 0.33f;
+	const float padding_x = 30.0f, padding_y = 50.0f;
+	const int row_height = 45;
+	if (nk_begin_titled(nk, "Main Menu", "Main Menu", nk_rect(
+		padding_x, padding_y + padding_top, engine->window_width - padding_x * 2.0f, engine->window_height - padding_y * 2.0f - padding_top),
+		NK_WINDOW_TITLE | NK_WINDOW_NO_SCROLLBAR))
+	{
+		// play game
+		nk_style_push_color(nk, &nk->style.button.text_normal, nk_rgb(60, 170, 30));
+		nk_style_push_color(nk, &nk->style.button.text_hover, nk_rgb(50, 140, 10));
+
+		nk_layout_row_dynamic(nk, row_height, 1);
+		if (nk_button_symbol_label(nk, NK_SYMBOL_PLUS, "Play Game", NK_TEXT_ALIGN_RIGHT)) {
+			switch_to_game_scene(engine);
+		}
+
+		nk_style_pop_color(nk);
+		nk_style_pop_color(nk);
+
+		// continue
+		nk_style_push_style_item(nk, &nk->style.button.normal, nk_style_item_color(nk_rgb(66, 66, 66)));
+		nk_style_push_style_item(nk, &nk->style.button.active, nk->style.button.normal);
+		nk_style_push_style_item(nk, &nk->style.button.hover, nk->style.button.normal);
+		nk_style_push_color(nk, &nk->style.button.text_normal, nk_rgb(120, 120, 120));
+		nk_style_push_color(nk, &nk->style.button.text_active, nk->style.button.text_normal);
+		nk_style_push_color(nk, &nk->style.button.text_hover, nk->style.button.text_normal);
+
+		nk_layout_row_dynamic(nk, row_height, 1);
+		if (nk_button_symbol_label(nk, NK_SYMBOL_TRIANGLE_RIGHT, "Continue", NK_TEXT_ALIGN_RIGHT)) {
+		}
+
+		nk_style_pop_style_item(nk);
+		nk_style_pop_style_item(nk);
+		nk_style_pop_style_item(nk);
+		nk_style_pop_color(nk);
+		nk_style_pop_color(nk);
+		nk_style_pop_color(nk);
+
+		// minigame
+		nk_style_push_color(nk, &nk->style.button.text_normal, nk_rgb(60, 30, 170));
+		nk_style_push_color(nk, &nk->style.button.text_hover, nk_rgb(50, 10, 140));
+
+		nk_layout_row_dynamic(nk, row_height, 1);
+		if (nk_button_symbol_label(nk, NK_SYMBOL_PLUS, "Minigame", NK_TEXT_ALIGN_RIGHT)) {
+			switch_to_minigame_scene(engine);
+		}
+
+		nk_style_pop_color(nk);
+		nk_style_pop_color(nk);
+
+		// settings, about
+		nk_layout_row_dynamic(nk, row_height, 2);
+		if (nk_button_label(nk, "Settings")) {
+		}
+		if (nk_button_label(nk, "About")) {
+		}
+
+	}
+	nk_end(nk);
 }
 
-static void menu_draw(struct scene_menu_s *menu, struct engine_s *engine) {
+static void menu_draw(struct menu_s *menu, struct engine_s *engine) {
 	struct NVGcontext *vg = engine->vg;
 
 	int mx, my;
@@ -143,16 +202,14 @@ static void menu_draw(struct scene_menu_s *menu, struct engine_s *engine) {
 	nvgFillPaint(vg, paint);
 	nvgFill(vg);
 
-	// custom buttons
-	/*
+	// continue button
 	gui_titlebutton(vg, engine, engine->window_width, engine->window_height * 0.5f + 100.0f, "Continue", 0);
 	gui_titlebutton(vg, engine, engine->window_width, engine->window_height * 0.5f + 180.0f, "New game", 1);
 	gui_titlebutton(vg, engine, engine->window_width, engine->window_height * 0.5f + 260.0f, "Settings", 1);
-	*/
 	
 }
 
-void menu_init(struct scene_menu_s *menu, struct engine_s *engine) {
+void menu_init(struct menu_s *menu, struct engine_s *engine) {
 	// init scene base
 	scene_init((struct scene_s *)menu, engine);
 

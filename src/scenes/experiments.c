@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <assert.h>
 #include <nanovg.h>
+#include <nuklear.h>
 #include <cglm/cglm.h>
 #include "engine.h"
 
@@ -289,6 +290,52 @@ static void scene_experiments_update(struct scene_experiments_s *scene, struct e
 }
 
 static void scene_experiments_draw(struct scene_experiments_s *scene, struct engine_s *engine) {
+
+	struct nk_context *nk = engine->nk;
+	if (nk_begin(nk, "Stats", nk_rect(engine->window_width - 133.0f, 3.0f, 130.0f, 150.0f), NK_WINDOW_BORDER | NK_WINDOW_NO_SCROLLBAR)) {
+		nk_layout_row_dynamic(nk, 13.0f, 1);
+		nk_label_colored(nk, "// stats", NK_TEXT_LEFT, nk_rgb(99, 99, 99));
+
+		nk_layout_row_dynamic(nk, 13.0f, 1);
+		nk_labelf(nk, NK_TEXT_LEFT, "vel: %.2fm/s", glm_vec2_norm(pl.vel));
+
+		nk_layout_row_dynamic(nk, 13.0f, 2);
+		nk_labelf(nk, NK_TEXT_LEFT, "planet:");
+		if (pl.on_planet) {
+			nk_label_colored(nk, "yes", NK_TEXT_LEFT, nk_rgb(50, 220, 50));
+		} else if (pl.in_atmosphere) {
+			nk_label_colored(nk, "close", NK_TEXT_LEFT, nk_rgb(220, 180, 50));
+		} else {
+			nk_label_colored(nk, "no", NK_TEXT_LEFT, nk_rgb(220, 50, 50));
+		}
+
+		if (pl.ship) {
+			nk_layout_row_dynamic(nk, 13.0f, 1);
+			nk_label_colored(nk, "ahoi cap'n!", NK_TEXT_LEFT, nk_rgb(50, 50, 220));
+		}
+
+		nk_layout_row_dynamic(nk, 34.0f, 1);
+		if (pl.ship) {
+			if (nk_button_label(nk, "leave")) {
+				pl.pos[0] = pl.ship->pos[0];
+				pl.pos[1] = pl.ship->pos[1];
+				pl.vel[0] = pl.ship->vel[0];
+				pl.vel[1] = pl.ship->vel[1];
+				pl.ship->captain = NULL;
+				pl.ship = NULL;
+			}
+		} else {
+			if (pl.nearby_ship) {
+				if (nk_button_label(nk, "enter ship")) {
+					pl.nearby_ship->captain = &pl;
+					pl.ship = pl.nearby_ship;
+					pl.nearby_ship = NULL;
+				}
+			}
+		}
+	}
+	nk_end(nk);
+
 
 	NVGcontext *vg = engine->vg;
 	nvgSave(vg);
