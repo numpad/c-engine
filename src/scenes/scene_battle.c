@@ -10,7 +10,6 @@
 #include <cglm/cglm.h>
 #include <flecs.h>
 #include <cglm/cglm.h>
-#include <nuklear.h>
 #include "engine.h"
 #include "gl/texture.h"
 #include "gl/shader.h"
@@ -277,18 +276,6 @@ static void scene_battle_draw(struct scene_battle_s *scene, struct engine_s *eng
 		}
 	}
 	glDisable(GL_DEPTH_TEST);
-
-	struct nk_context *nk = engine->nk;
-	if (nk_begin(nk, "Menubar", nk_rect(3, 3, engine->window_width - 6, 40), NK_WINDOW_NO_SCROLLBAR)) {
-		nk_layout_row_dynamic(nk, 32, 2);
-		if (nk_button_label(nk, "Menu")) {
-			struct menu_s *menu = malloc(sizeof(struct menu_s));
-			menu_init(menu, engine);
-			engine_setscene(engine, (struct scene_s *)menu);
-		}
-	}
-	nk_end(nk);
-
 }
 
 void scene_battle_init(struct scene_battle_s *scene_battle, struct engine_s *engine) {
