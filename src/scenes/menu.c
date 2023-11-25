@@ -95,16 +95,16 @@ static void menu_update(struct menu_s *menu, struct engine_s *engine, float dt) 
 	const float padding_top = engine->window_height * 0.33f;
 	const float padding_x = 30.0f, padding_y = 50.0f;
 	const int row_height = 45;
-	if (nk_begin_titled(nk, "Main Menu", "Main Menu", nk_rect(
-		padding_x, padding_y + padding_top, engine->window_width - padding_x * 2.0f, engine->window_height - padding_y * 2.0f - padding_top),
-		NK_WINDOW_TITLE | NK_WINDOW_NO_SCROLLBAR))
-	{
+
+	static int join_lobby_window = 0;
+
+	if (nk_begin_titled(nk, "Main Menu", "Main Menu", nk_rect( padding_x, padding_y + padding_top, engine->window_width - padding_x * 2.0f, engine->window_height - padding_y * 2.0f - padding_top), NK_WINDOW_TITLE | NK_WINDOW_NO_SCROLLBAR | NK_WINDOW_BACKGROUND)) {
 		// play game
 		nk_style_push_color(nk, &nk->style.button.text_normal, nk_rgb(60, 170, 30));
 		nk_style_push_color(nk, &nk->style.button.text_hover, nk_rgb(50, 140, 10));
 
 		nk_layout_row_dynamic(nk, row_height, 1);
-		if (nk_button_symbol_label(nk, NK_SYMBOL_PLUS, "Play Game", NK_TEXT_ALIGN_RIGHT)) {
+		if (nk_button_symbol_label(nk, NK_SYMBOL_TRIANGLE_RIGHT, "Play Game", NK_TEXT_ALIGN_RIGHT)) {
 			switch_to_game_scene(engine);
 		}
 
@@ -130,17 +130,19 @@ static void menu_update(struct menu_s *menu, struct engine_s *engine, float dt) 
 		nk_style_pop_color(nk);
 		nk_style_pop_color(nk);
 
-		// minigame
-		nk_style_push_color(nk, &nk->style.button.text_normal, nk_rgb(60, 30, 170));
-		nk_style_push_color(nk, &nk->style.button.text_hover, nk_rgb(50, 10, 140));
+		// multiplayer
+		nk_layout_row_dynamic(nk, row_height, 1);
+		if (nk_button_symbol_label(nk, NK_SYMBOL_CIRCLE_OUTLINE, "Join Lobby", NK_TEXT_ALIGN_RIGHT)) {
+			join_lobby_window = 1;
+			nk_window_show(nk, "Join Game", NK_SHOWN);
+		}
 
+		// minigame
 		nk_layout_row_dynamic(nk, row_height, 1);
 		if (nk_button_symbol_label(nk, NK_SYMBOL_PLUS, "Minigame", NK_TEXT_ALIGN_RIGHT)) {
 			switch_to_minigame_scene(engine);
 		}
 
-		nk_style_pop_color(nk);
-		nk_style_pop_color(nk);
 
 		// settings, about
 		nk_layout_row_dynamic(nk, row_height, 2);
@@ -148,9 +150,39 @@ static void menu_update(struct menu_s *menu, struct engine_s *engine, float dt) 
 		}
 		if (nk_button_label(nk, "About")) {
 		}
-
 	}
 	nk_end(nk);
+
+	if (join_lobby_window) {
+		const int cx = engine->window_width / 2;
+		const int cy = engine->window_height / 2;
+		const int w = 300, h = 200;
+		static char *error_message = NULL;
+
+		if (nk_begin_titled(nk, "Join Game", "Join Game", nk_rect(cx - w * 0.5f, cy - h * 0.5f, w, h), NK_WINDOW_TITLE | NK_WINDOW_NO_SCROLLBAR | NK_WINDOW_CLOSABLE | NK_WINDOW_BORDER | NK_WINDOW_MOVABLE)) {
+			nk_layout_row_dynamic(nk, row_height * 0.5f, 1);
+			nk_label(nk, "Host Address:", NK_TEXT_ALIGN_BOTTOM | NK_TEXT_ALIGN_LEFT);
+
+			static char input_addr[128];
+			nk_layout_row_dynamic(nk, row_height, 1);
+			nk_edit_string_zero_terminated(nk, NK_EDIT_FIELD | NK_EDIT_SELECTABLE, input_addr, sizeof(input_addr) - 1, nk_filter_default);
+
+			nk_layout_row_dynamic(nk, row_height, 1);
+			if (nk_button_label(nk, "Join")) {
+				error_message = "Failed to connect!";
+			}
+
+			if (error_message != NULL) {
+				nk_layout_row_dynamic(nk, row_height * 0.5f, 1);
+				nk_label_colored(nk, error_message, NK_TEXT_ALIGN_BOTTOM | NK_TEXT_ALIGN_LEFT, nk_rgb(240, 50, 50));
+			}
+		}
+
+		if (join_lobby_window && nk_window_is_closed(nk, "Join Game")) {
+			join_lobby_window = 0;
+		}
+		nk_end(nk);
+	}
 }
 
 static void menu_draw(struct menu_s *menu, struct engine_s *engine) {
@@ -159,31 +191,6 @@ static void menu_draw(struct menu_s *menu, struct engine_s *engine) {
 	int mx, my;
 	Uint32 mousebtn = SDL_GetMouseState(&mx, &my);
 
-	struct input_drag_s *drag = &engine->input_drag;
-	if (has_prev_drag) {
-		drag = &prev_drag;
-	}
-
-	if (drag->state != INPUT_DRAG_NONE) {
-		nvgBeginPath(vg);
-		nvgFillColor(vg, nvgRGBf(0.0f, 1.0f, 0.0f));
-		nvgCircle(vg, drag->begin_x, drag->begin_y, 20.0f);
-		nvgFill(vg);
-
-		if (drag->state == INPUT_DRAG_IN_PROGRESS) {
-			nvgBeginPath(vg);
-			nvgFillColor(vg, nvgRGBf(0.9f, 0.9f, 0.0f));
-			nvgCircle(vg, drag->x, drag->y, 10.0f);
-			nvgFill(vg);
-		}
-
-		if (drag->state == INPUT_DRAG_END) {
-			nvgBeginPath(vg);
-			nvgFillColor(vg, nvgRGBf(1.0f, 0.0f, 0.0f));
-			nvgCircle(vg, drag->end_x, drag->end_y, 15.0f);
-			nvgFill(vg);
-		}
-	}
 
 	// draw terrain
 	glm_mat4_identity(engine->u_view);

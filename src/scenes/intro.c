@@ -77,18 +77,6 @@ static void intro_draw(struct intro_s *scene, struct engine_s *engine) {
 	nvgFillPaint(vg, paint);
 	nvgFill(vg);
 
-	// draw mouse
-	nvgBeginPath(engine->vg);
-	nvgCircle(engine->vg, mx, my, 30.0f * fill);
-	nvgFillColor(engine->vg, nvgRGBA(200, 170, 190, 128));
-	nvgFill(engine->vg);
-
-	nvgBeginPath(engine->vg);
-	nvgCircle(engine->vg, mx, my, 20.0f + 10.0f * fill);
-	nvgStrokeWidth(engine->vg, 1.0f + 1.0f * fill);
-	nvgStrokeColor(engine->vg, nvgRGBA(150, 110, 130, 200));
-	nvgStroke(engine->vg);
-
 }
 
 void intro_init(struct intro_s *intro, struct engine_s *engine) {
