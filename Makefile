@@ -45,9 +45,12 @@ SRC = main.c src/engine.c \
 	  $(SCENES) 
 OBJ = $(addprefix $(BIN),$(SRC:.c=.o))
 
-.PHONY: all clean scenes
+.PHONY: all clean scenes server
 
 all: $(TARGET)
+
+server:
+	$(MAKE) -f src/server/Makefile
 
 # debug-specific
 debug: CFLAGS += -DDEBUG -ggdb -O0

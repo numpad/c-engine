@@ -1,6 +1,7 @@
 #include "menu.h"
 #include <math.h>
 #include <SDL.h>
+#include <SDL_net.h>
 #include <nanovg.h>
 #include <cglm/cglm.h>
 #include <nuklear.h>
@@ -75,20 +76,7 @@ static void menu_destroy(struct menu_s *menu, struct engine_s *engine) {
 	free(menu->terrain);
 }
 
-static struct input_drag_s prev_drag;
-static int has_prev_drag = 0;
 static void menu_update(struct menu_s *menu, struct engine_s *engine, float dt) {
-	if (engine->input_drag.state == INPUT_DRAG_BEGIN) {
-		has_prev_drag = 0;
-	}
-	if (engine->input_drag.state == INPUT_DRAG_END) {
-		has_prev_drag = 1;
-		prev_drag = engine->input_drag;
-	}
-
-	if (engine->input_drag.state == INPUT_DRAG_END) {
-		
-	}
 
 	// gui
 	struct nk_context *nk = engine->nk;
@@ -156,25 +144,65 @@ static void menu_update(struct menu_s *menu, struct engine_s *engine, float dt) 
 	if (join_lobby_window) {
 		const int cx = engine->window_width / 2;
 		const int cy = engine->window_height / 2;
-		const int w = 300, h = 200;
+		const int w = 340, h = 300;
 		static char *error_message = NULL;
+		static struct nk_color error_message_color;
+		const struct nk_color color_error = nk_rgb(255, 50, 50);
+		const struct nk_color color_success = nk_rgb(50, 255, 50);
+		const struct nk_color color_warning = nk_rgb(255, 255, 50);
 
 		if (nk_begin_titled(nk, "Join Game", "Join Game", nk_rect(cx - w * 0.5f, cy - h * 0.5f, w, h), NK_WINDOW_TITLE | NK_WINDOW_NO_SCROLLBAR | NK_WINDOW_CLOSABLE | NK_WINDOW_BORDER | NK_WINDOW_MOVABLE)) {
 			nk_layout_row_dynamic(nk, row_height * 0.5f, 1);
 			nk_label(nk, "Host Address:", NK_TEXT_ALIGN_BOTTOM | NK_TEXT_ALIGN_LEFT);
 
-			static char input_addr[128];
+			static char input_host[128] = "schäl.com";
 			nk_layout_row_dynamic(nk, row_height, 1);
-			nk_edit_string_zero_terminated(nk, NK_EDIT_FIELD | NK_EDIT_SELECTABLE, input_addr, sizeof(input_addr) - 1, nk_filter_default);
+			nk_edit_string_zero_terminated(nk, NK_EDIT_FIELD | NK_EDIT_SELECTABLE, input_host, sizeof(input_host) - 1, nk_filter_default);
 
-			nk_layout_row_dynamic(nk, row_height, 1);
-			if (nk_button_label(nk, "Join")) {
-				error_message = "Failed to connect!";
+			if (engine->gameserver_tcp == NULL) {
+				nk_layout_row_dynamic(nk, row_height, 1);
+				if (nk_button_label(nk, "Join")) {
+					error_message = "Connecting...";
+					error_message_color = color_warning;
+
+					do {
+						if (engine_gameserver_connect(engine, input_host) != 0) {
+							error_message = "Connecting failed...";
+							error_message_color = color_error;
+							break;
+						}
+						error_message = "Socket open!";
+						error_message_color = color_success;
+
+						const int result = SDLNet_TCP_Send(engine->gameserver_tcp, "hello!", 8);
+						if (result < 8) {
+							error_message = "Socket open, but failed sending immediately...";
+							error_message_color = color_warning;
+							break;
+						}
+
+					} while (0);
+
+				}
+			}
+
+			if (engine->gameserver_tcp != NULL) {
+				nk_layout_row_dynamic(nk, row_height, 1);
+				if (nk_button_label(nk, "Send data")) {
+					const int result = SDLNet_TCP_Send(engine->gameserver_tcp, "random msg", 11);
+					if (result < 11) {
+						error_message = "Failed sending...";
+						error_message_color = color_warning;
+					} else {
+						error_message = "Data sent!";
+						error_message_color = color_success;
+					}
+				}
 			}
 
 			if (error_message != NULL) {
 				nk_layout_row_dynamic(nk, row_height * 0.5f, 1);
-				nk_label_colored(nk, error_message, NK_TEXT_ALIGN_BOTTOM | NK_TEXT_ALIGN_LEFT, nk_rgb(240, 50, 50));
+				nk_label_colored(nk, error_message, NK_TEXT_ALIGN_BOTTOM | NK_TEXT_ALIGN_LEFT, error_message_color);
 			}
 		}
 
@@ -190,7 +218,6 @@ static void menu_draw(struct menu_s *menu, struct engine_s *engine) {
 
 	int mx, my;
 	Uint32 mousebtn = SDL_GetMouseState(&mx, &my);
-
 
 	// draw terrain
 	glm_mat4_identity(engine->u_view);

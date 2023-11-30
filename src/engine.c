@@ -1,10 +1,10 @@
 #include "engine.h"
 #include <SDL.h>
 #include <SDL_mixer.h>
+#include <SDL_net.h>
 #define NANOVG_GLES2_IMPLEMENTATION
 #include <nanovg_gl.h>
 #undef NANOVG_GLES2_IMPLEMENTATION
-#include <SDL_net.h>
 #include <stb_ds.h>
 #include <nuklear.h>
 #include <nuklear_sdl_gles2.h>
@@ -80,6 +80,8 @@ struct engine_s *engine_new(void) {
 	engine->on_notify_callbacks = NULL;
 	engine->scene = NULL;
 	engine->console = malloc(sizeof(struct console_s));
+	memset(&engine->gameserver_ip, 0, sizeof(IPaddress));
+	engine->gameserver_tcp = NULL;
 	console_init(engine->console);
 
 	if (engine->window == NULL) {
@@ -151,6 +153,9 @@ int engine_destroy(struct engine_s *engine) {
 	// windowing
 	SDL_DestroyWindow(engine->window);
 	SDL_GL_DeleteContext(engine->gl_ctx);
+
+	// net
+	engine_gameserver_disconnect(engine);
 
 	SDLNet_Quit();
 	Mix_Quit();
@@ -247,6 +252,45 @@ void engine_setscene_dll(struct engine_s *engine, const char *filename) {
 	fprintf(stderr, "dll loading disabled for non-debug builds!\n");
 }
 #endif
+
+//
+// networking
+//
+
+int engine_gameserver_connect(struct engine_s *engine, const char *address) {
+	assert(engine->gameserver_ip.host == 0);
+	assert(engine->gameserver_ip.port == 0);
+
+	if (engine->gameserver_tcp != NULL) {
+		SDL_LogError(SDL_LOG_CATEGORY_ERROR, "Already connected to gameserver.");
+		return 1;
+	}
+
+	const int port = 9000;
+	if (SDLNet_ResolveHost(&engine->gameserver_ip, address, port) < 0) {
+		engine->gameserver_ip.host = engine->gameserver_ip.port = 0;
+		SDL_LogError(SDL_LOG_CATEGORY_ERROR, "Could not resolve host: \"%s\"...", address);
+		return 1;
+	}
+
+	engine->gameserver_tcp = SDLNet_TCP_Open(&engine->gameserver_ip);
+	if (engine->gameserver_tcp == NULL) {
+		engine->gameserver_ip.host = engine->gameserver_ip.port = 0;
+		SDL_LogError(SDL_LOG_CATEGORY_ERROR, "Failed connecting to gameserver...");
+		return 1;
+	}
+
+	return 0;
+}
+
+void engine_gameserver_disconnect(struct engine_s *engine) {
+	engine->gameserver_ip.host = engine->gameserver_ip.port = 0;
+
+	if (engine->gameserver_tcp != NULL) {
+		SDLNet_TCP_Close(engine->gameserver_tcp);
+		engine->gameserver_tcp = NULL;
+	}
+}
 
 // main loop
 void engine_update(struct engine_s *engine) {

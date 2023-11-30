@@ -2,6 +2,7 @@
 #define ENGINE_H
 
 #include <SDL.h>
+#include <SDL_net.h>
 #include <SDL_opengles2.h>
 #include <cglm/cglm.h>
 #include <nanovg.h>
@@ -36,6 +37,10 @@ struct engine_s {
 	struct console_s *console;
 	struct input_drag_s input_drag;
 
+	// server connection
+	IPaddress gameserver_ip;
+	TCPsocket gameserver_tcp;
+
 	// rendering globals
 	mat4 u_projection;
 	mat4 u_view;
@@ -51,6 +56,10 @@ void engine_set_clear_color(float r, float g, float b);
 // scene handling
 void engine_setscene(struct engine_s *engine, struct scene_s *scene);
 void engine_setscene_dll(struct engine_s *engine, const char *filename);
+
+// networking
+int engine_gameserver_connect(struct engine_s *, const char *address);
+void engine_gameserver_disconnect(struct engine_s *);
 
 // main loop
 void engine_update(struct engine_s *engine);
