@@ -267,7 +267,7 @@ int engine_gameserver_connect(struct engine_s *engine, const char *address) {
 		return 1;
 	}
 
-	const int port = 9000;
+	const int port = 9124;
 	if (SDLNet_ResolveHost(&engine->gameserver_ip, address, port) < 0) {
 		engine->gameserver_ip.host = engine->gameserver_ip.port = 0;
 		SDL_LogError(SDL_LOG_CATEGORY_ERROR, "Could not resolve host: \"%s\"...", address);

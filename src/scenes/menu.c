@@ -155,7 +155,7 @@ static void menu_update(struct menu_s *menu, struct engine_s *engine, float dt) 
 			nk_layout_row_dynamic(nk, row_height * 0.5f, 1);
 			nk_label(nk, "Host Address:", NK_TEXT_ALIGN_BOTTOM | NK_TEXT_ALIGN_LEFT);
 
-			static char input_host[128] = "schäl.com";
+			static char input_host[128] = "localhost";
 			nk_layout_row_dynamic(nk, row_height, 1);
 			nk_edit_string_zero_terminated(nk, NK_EDIT_FIELD | NK_EDIT_SELECTABLE, input_host, sizeof(input_host) - 1, nk_filter_default);
 
@@ -170,17 +170,10 @@ static void menu_update(struct menu_s *menu, struct engine_s *engine, float dt) 
 							error_message = "Connecting failed...";
 							error_message_color = color_error;
 							break;
+						} else {
+							error_message = "Connected (?)";
+							error_message_color = color_success;
 						}
-						error_message = "Socket open!";
-						error_message_color = color_success;
-
-						const int result = SDLNet_TCP_Send(engine->gameserver_tcp, "hello!", 8);
-						if (result < 8) {
-							error_message = "Socket open, but failed sending immediately...";
-							error_message_color = color_warning;
-							break;
-						}
-
 					} while (0);
 
 				}
@@ -191,7 +184,10 @@ static void menu_update(struct menu_s *menu, struct engine_s *engine, float dt) 
 				if (nk_button_label(nk, "Send data")) {
 					const int result = SDLNet_TCP_Send(engine->gameserver_tcp, "random msg", 11);
 					if (result < 11) {
-						error_message = "Failed sending...";
+						static char error[128] = {0};
+						sprintf(error, "Sent only %d bytes...", result);
+						error_message = error;
+						//error_message = "Failed sending...";
 						error_message_color = color_warning;
 					} else {
 						error_message = "Data sent!";

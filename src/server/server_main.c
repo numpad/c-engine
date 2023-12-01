@@ -267,14 +267,13 @@ void *tcpserver_thread(void *data) {
 }
 
 static int ws_callback(struct lws *wsi, enum lws_callback_reasons reason, void *user, void *data, size_t data_len) {
-	static int id = 0;
 	switch ((int)reason) {
 	case LWS_CALLBACK_ESTABLISHED:
-		++id;
 		messagequeue_add("Client connected!");
 		break;
 	case LWS_CALLBACK_RECEIVE:
 		messagequeue_add("Client said: '%.*s'", data_len, (char *)data);
+		lws_write(wsi, data, data_len, LWS_WRITE_TEXT);
 		break;
 	case LWS_CALLBACK_CLOSED:
 		messagequeue_add("Client disconnected!");
@@ -286,8 +285,9 @@ static int ws_callback(struct lws *wsi, enum lws_callback_reasons reason, void *
 }
 
 static struct lws_protocols protocols[] = {
-	{"game-action", ws_callback, 0, 512, 0, NULL, 0},
-	{NULL         , NULL       , 0,   0, 0, NULL, 0},
+	{""      , ws_callback, 0, 512, 0, NULL, 0},
+	{"binary", ws_callback, 0, 512, 0, NULL, 0}, // needed for SDLNet-to-WebSocket translation.
+	{NULL    , NULL       , 0,   0, 0, NULL, 0},
 };
 void *wsserver_thread(void *data) {
 	lws_set_log_level(0, NULL);
