@@ -8,21 +8,35 @@
 #include <unistd.h>
 #include <pthread.h>
 #include <arpa/inet.h>
+#include <libwebsockets.h>
 
 //
 // logic
 //
 
-static void on_connect(TCPsocket *client) {
-	printf("Client [%p] connected!\n", (void *)client);
+enum CLIENT_CONNECTION_TYPE {
+	CONN_TCP,
+	CONN_WS,
+};
+
+struct client_s {
+	enum CLIENT_CONNECTION_TYPE connection_type;
+	union {
+		TCPsocket *tcp;
+		struct lws *wsi;
+	} connection;
+};
+
+static void on_connect(struct client_s *client) {
+	printf("Client [%s] connected!\n", client->connection_type == CONN_TCP ? "tcp" : "ws");
 }
 
-static void on_message(TCPsocket *client, const char *message, size_t message_len) {
-	printf("Client sent message: %.*s!\n", (int)message_len, message);
+static void on_message(struct client_s *client, const char *message, size_t message_len) {
+	printf("Client [%s] sent message: %.*s!\n", client->connection_type == CONN_TCP ? "tcp" : "ws", (int)message_len, message);
 }
 
-static void on_disconnect(TCPsocket *client) {
-	printf("Client [%p] disconnected!\n", (void *)client);
+static void on_disconnect(struct client_s *client) {
+	printf("Client [%s] disconnected!\n", client->connection_type == CONN_TCP ? "tcp" : "ws");
 }
 
 //
@@ -67,6 +81,7 @@ int main(int argc, char **argv) {
 	//wtimeout(win_messages, 100);
 	wmove(win_messages, 0, 0);
 	messagequeue_add("[%s]  Server started on %s", fmt_time(time(NULL)), fmt_date(time(NULL)));
+	messagequeue_add("[%s]  PID : %ld", fmt_time(time(NULL)), (long)getpid());
 	messagequeue_add("[%s]  ", fmt_time(time(NULL)));
 
 	// start bg services
@@ -142,24 +157,24 @@ static int init_sdlnet(IPaddress *ip, TCPsocket socket) {
 	assert(socket == NULL);
 
 	if (SDL_Init(0) < 0) {
-		fprintf(stderr, "SDL_Init() failed: %s...\n", SDL_GetError());
+		fprintf(stderr, "SDL_Init() failed: %s...", SDL_GetError());
 		return 1;
 	}
 
 	if (SDLNet_Init() < 0) {
-		fprintf(stderr, "SDLNet_Init() failed: %s...\n", SDLNet_GetError());
+		fprintf(stderr, "SDLNet_Init() failed: %s...", SDLNet_GetError());
 		return 1;
 	}
 
 	if (SDLNet_ResolveHost(ip, NULL, ip->port) < 0) {
-		fprintf(stderr, "SDLNet_ResolveHost() failed: %s...\n", SDLNet_GetError());
+		fprintf(stderr, "SDLNet_ResolveHost() failed: %s...", SDLNet_GetError());
 		SDLNet_Quit();
 		return 1;
 	}
 
 	socket = SDLNet_TCP_Open(ip);
 	if (socket == NULL) {
-		fprintf(stderr, "SDLNet_TCP_Open() failed: %s...\n", SDLNet_GetError());
+		fprintf(stderr, "SDLNet_TCP_Open() failed: %s...", SDLNet_GetError());
 		SDLNet_Quit();
 		return 1;
 	}
@@ -221,11 +236,14 @@ static void messagequeue_add(char *fmt, ...) {
 
 }
 
+//
+// server impls
+//
 
 void *mockserver_thread(void *data) {
-	int i = 10000;
+	int i = 20;
 	while (--i) {
-		messagequeue_add("<automated mock msg>");
+		messagequeue_add("<automated mock msg> %d/20", i);
 
 		sleep(1);
 	}
@@ -242,16 +260,56 @@ void *tcpserver_thread(void *data) {
 		return (void *)1;
 	}
 
-	messagequeue_add("SDLNet running on :%u\n", ntohs(ip.port));
-
+	messagequeue_add("SDLNet running on :%u", ntohs(ip.port));
 	
 	SDLNet_Quit();
 	return (void *)0;
 }
 
+static int ws_callback(struct lws *wsi, enum lws_callback_reasons reason, void *user, void *data, size_t data_len) {
+	static int id = 0;
+	switch ((int)reason) {
+	case LWS_CALLBACK_ESTABLISHED:
+		++id;
+		messagequeue_add("Client connected!");
+		break;
+	case LWS_CALLBACK_RECEIVE:
+		messagequeue_add("Client said: '%.*s'", data_len, (char *)data);
+		break;
+	case LWS_CALLBACK_CLOSED:
+		messagequeue_add("Client disconnected!");
+		break;
+	default: break;
+	}
+
+	return 0;
+}
+
+static struct lws_protocols protocols[] = {
+	{"game-action", ws_callback, 0, 512, 0, NULL, 0},
+	{NULL         , NULL       , 0,   0, 0, NULL, 0},
+};
 void *wsserver_thread(void *data) {
+	lws_set_log_level(0, NULL);
+
+	struct lws_context_creation_info info = {0};
+	info.port = 9124;
+	info.protocols = protocols;
+	info.gid = -1;
+	info.uid = -1;
+
+	struct lws_context *ctx = lws_create_context(&info);
+	if (ctx == NULL) {
+		return (void *)1;
+	}
+
+	messagequeue_add("WebSocket running on :%d", info.port);
 	
-	// loop
+	while (1) {
+		lws_service(ctx, 100);
+	}
+	
+	lws_context_destroy(ctx);
 
 	return (void *)0;
 }
