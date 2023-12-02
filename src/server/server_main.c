@@ -3,8 +3,6 @@
 #include <time.h>
 #include <assert.h>
 #include <ncurses.h>
-#include <SDL.h>
-#include <SDL_net.h>
 #include <unistd.h>
 #include <pthread.h>
 #include <arpa/inet.h>
@@ -21,10 +19,7 @@ enum CLIENT_CONNECTION_TYPE {
 
 struct client_s {
 	enum CLIENT_CONNECTION_TYPE connection_type;
-	union {
-		TCPsocket *tcp;
-		struct lws *wsi;
-	} connection;
+	struct lws *wsi;
 };
 
 static void on_connect(struct client_s *client) {
@@ -43,10 +38,6 @@ static void on_disconnect(struct client_s *client) {
 // server code
 //
 
-static int init_sdlnet(IPaddress *ip, TCPsocket socket);
-
-void *server_thread(void *data);
-void *tcpserver_thread(void *data);
 void *wsserver_thread(void *data);
 void *mockserver_thread(void *data);
 
@@ -85,10 +76,8 @@ int main(int argc, char **argv) {
 	messagequeue_add("[%s]  ", fmt_time(time(NULL)));
 
 	// start bg services
-	pthread_t tcp_thread;
 	pthread_t ws_thread;
 	pthread_t mock_thread;
-	pthread_create(&tcp_thread, NULL, tcpserver_thread, NULL);
 	pthread_create(&ws_thread, NULL, wsserver_thread, NULL);
 	pthread_create(&mock_thread, NULL, mockserver_thread, NULL);
 
@@ -140,44 +129,12 @@ int main(int argc, char **argv) {
 		}
 	}
 
-	pthread_join(tcp_thread, NULL);
 	pthread_join(ws_thread, NULL);
 	pthread_mutex_destroy(&messagequeue_mutex);
 
 	delwin(win_messages);
 	delwin(win_input);
 	endwin();
-
-	SDLNet_Quit();
-	return 0;
-}
-
-static int init_sdlnet(IPaddress *ip, TCPsocket socket) {
-	assert(ip != NULL);
-	assert(socket == NULL);
-
-	if (SDL_Init(0) < 0) {
-		fprintf(stderr, "SDL_Init() failed: %s...", SDL_GetError());
-		return 1;
-	}
-
-	if (SDLNet_Init() < 0) {
-		fprintf(stderr, "SDLNet_Init() failed: %s...", SDLNet_GetError());
-		return 1;
-	}
-
-	if (SDLNet_ResolveHost(ip, NULL, ip->port) < 0) {
-		fprintf(stderr, "SDLNet_ResolveHost() failed: %s...", SDLNet_GetError());
-		SDLNet_Quit();
-		return 1;
-	}
-
-	socket = SDLNet_TCP_Open(ip);
-	if (socket == NULL) {
-		fprintf(stderr, "SDLNet_TCP_Open() failed: %s...", SDLNet_GetError());
-		SDLNet_Quit();
-		return 1;
-	}
 
 	return 0;
 }
@@ -251,21 +208,6 @@ void *mockserver_thread(void *data) {
 	return NULL;
 }
 
-void *tcpserver_thread(void *data) {
-	IPaddress ip;
-	ip.port = 9123;
-	TCPsocket socket = NULL;
-	if (init_sdlnet(&ip, socket) != 0) {
-		messagequeue_add("Failed initializing SDLNet...");
-		return (void *)1;
-	}
-
-	messagequeue_add("SDLNet running on :%u", ntohs(ip.port));
-	
-	SDLNet_Quit();
-	return (void *)0;
-}
-
 static int ws_callback(struct lws *wsi, enum lws_callback_reasons reason, void *user, void *data, size_t data_len) {
 	switch ((int)reason) {
 	case LWS_CALLBACK_ESTABLISHED:
@@ -284,19 +226,57 @@ static int ws_callback(struct lws *wsi, enum lws_callback_reasons reason, void *
 	return 0;
 }
 
+static int rawtcp_callback(struct lws *wsi, enum lws_callback_reasons reason, void *user, void *data, size_t data_len) {
+	switch ((int)reason) {
+	case LWS_CALLBACK_RAW_ADOPT:
+		messagequeue_add("RAW_ADOPT [%zu]", data_len);
+		break;
+	case LWS_CALLBACK_RAW_RX:
+		messagequeue_add("RAW_RX %.*s", (int)data_len - 1, (char *)data);
+		break;
+	case LWS_CALLBACK_RAW_CLOSE:
+		messagequeue_add("RAW_CLOSE [%zu]", data_len);
+		break;
+	case LWS_CALLBACK_RAW_WRITEABLE:
+		// messagequeue_add("RAW_WRITEABLE");
+		break;
+	case LWS_CALLBACK_ESTABLISHED:
+		messagequeue_add("WebSocket connected!"); // TODO: unused?
+		break;
+	case LWS_CALLBACK_RECEIVE:
+		messagequeue_add("WebSocket said: '%.*s'", data_len, (char *)data); // TODO: unused?
+		lws_write(wsi, data, data_len, LWS_WRITE_TEXT);
+		break;
+	case LWS_CALLBACK_CLOSED:
+		messagequeue_add("WebSocket disconnected!"); // TODO: unused?
+		break;
+	default: break;
+	}
+
+	return 0;
+}
 static struct lws_protocols protocols[] = {
-	{""      , ws_callback, 0, 512, 0, NULL, 0},
+	{""      , rawtcp_callback, 0, 512, 0, NULL, 0},
+	{"tcp"   , rawtcp_callback, 0, 512, 0, NULL, 0},
 	{"binary", ws_callback, 0, 512, 0, NULL, 0}, // needed for SDLNet-to-WebSocket translation.
 	{NULL    , NULL       , 0,   0, 0, NULL, 0},
 };
 void *wsserver_thread(void *data) {
 	lws_set_log_level(0, NULL);
 
+	// TODO:
+	// - Create vhost to use ws & raw sockets together. [1][2]
+	// - Enable Keepalive. [1]
+	//
+	// [0]: https://libwebsockets.org/lws-api-doc-v2.3-stable/html/md_README_8coding.html#:~:text=enable%20your%20vhost%20to%20accept%20RAW%20socket%20connections
+	// [1]: https://android.googlesource.com/platform/external/libwebsockets/+/refs/tags/android-s-beta-1/minimal-examples/raw/
 	struct lws_context_creation_info info = {0};
 	info.port = 9124;
+	info.iface = NULL;
 	info.protocols = protocols;
 	info.gid = -1;
 	info.uid = -1;
+	info.options = LWS_SERVER_OPTION_FALLBACK_TO_RAW;
 
 	struct lws_context *ctx = lws_create_context(&info);
 	if (ctx == NULL) {
