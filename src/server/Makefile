@@ -9,7 +9,9 @@ LIBS = -lm -lncurses -lwebsockets -lcap
 BIN = bin/server/
 TARGET = server
 
-SRC = src/server/server_main.c lib/stb/stb_ds.c lib/cJSON/cJSON.c
+SRC = src/server/server_main.c \
+	  src/net/message.c \
+	  lib/stb/stb_ds.c lib/cJSON/cJSON.c
 OBJ = $(addprefix $(BIN),$(SRC:.c=.o))
 
 .PHONY: all clean

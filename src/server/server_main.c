@@ -7,6 +7,7 @@
 #include <pthread.h>
 #include <arpa/inet.h>
 #include <libwebsockets.h>
+#include "net/message.h"
 
 //
 // logic
@@ -59,6 +60,24 @@ static char *messagequeue[128];
 static size_t messagequeue_len = 0;
 
 int main(int argc, char **argv) {
+	
+	struct lobby_create_request req_create;
+	message_header_init(&req_create.header, LOBBY_CREATE_REQUEST);
+	req_create.lobby_id = 123;
+	req_create.lobby_name = "my AWESOME lobby!!";
+	cJSON *json = cJSON_CreateObject();
+	pack_lobby_create_request(&req_create, json);
+	const char *serialized = cJSON_PrintUnformatted(json);
+	printf("serialized to:\n%s\n", serialized);
+
+	cJSON *recv_json = cJSON_Parse(serialized);
+	struct lobby_create_request recv_req;
+	unpack_lobby_create_request(recv_json, &recv_req);
+	printf("unpacked:\nheader.type = %d\nlobby_id = %d\nlobby_name = \"%s\"\n\n", recv_req.header.type, recv_req.lobby_id, recv_req.lobby_name);
+	cJSON_Delete(json);
+	cJSON_Delete(recv_json);
+	return 0;
+
 	initscr();
 	cbreak();
 	noecho();
@@ -241,25 +260,27 @@ static int rawtcp_callback(struct lws *wsi, enum lws_callback_reasons reason, vo
 		// messagequeue_add("RAW_WRITEABLE");
 		break;
 	case LWS_CALLBACK_ESTABLISHED:
-		messagequeue_add("WebSocket connected!"); // TODO: unused?
+		messagequeue_add("WebSocket connected!");
 		break;
 	case LWS_CALLBACK_RECEIVE:
-		messagequeue_add("WebSocket said: '%.*s'", data_len, (char *)data); // TODO: unused?
+		messagequeue_add("WebSocket said: '%.*s'", data_len, (char *)data);
 		lws_write(wsi, data, data_len, LWS_WRITE_TEXT);
 		break;
 	case LWS_CALLBACK_CLOSED:
-		messagequeue_add("WebSocket disconnected!"); // TODO: unused?
+		messagequeue_add("WebSocket disconnected!");
 		break;
 	default: break;
 	}
 
 	return 0;
 }
+
+// Browser/SDLNet → binary/ws_callback()
+// Native/SDLNet → rawtcp_callback()
 static struct lws_protocols protocols[] = {
 	{""      , rawtcp_callback, 0, 512, 0, NULL, 0},
-	{"tcp"   , rawtcp_callback, 0, 512, 0, NULL, 0},
-	{"binary", ws_callback, 0, 512, 0, NULL, 0}, // needed for SDLNet-to-WebSocket translation.
-	{NULL    , NULL       , 0,   0, 0, NULL, 0},
+	{"binary", ws_callback    , 0, 512, 0, NULL, 0}, // needed for SDLNet-to-WebSocket translation.
+	{NULL    , NULL           , 0,   0, 0, NULL, 0},
 };
 void *wsserver_thread(void *data) {
 	lws_set_log_level(0, NULL);
