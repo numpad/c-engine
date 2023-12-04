@@ -40,6 +40,7 @@ struct engine_s {
 	// server connection
 	IPaddress gameserver_ip;
 	TCPsocket gameserver_tcp;
+	SDLNet_SocketSet gameserver_socketset;
 
 	// rendering globals
 	mat4 u_projection;

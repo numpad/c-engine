@@ -7,40 +7,23 @@
 #include <pthread.h>
 #include <arpa/inet.h>
 #include <libwebsockets.h>
+#include <stb_ds.h>
 #include "net/message.h"
 
 //
 // logic
 //
 
-enum CLIENT_CONNECTION_TYPE {
-	CONN_TCP,
-	CONN_WS,
-};
-
-struct client_s {
-	enum CLIENT_CONNECTION_TYPE connection_type;
+struct session {
 	struct lws *wsi;
+	int random;
 };
-
-static void on_connect(struct client_s *client) {
-	printf("Client [%s] connected!\n", client->connection_type == CONN_TCP ? "tcp" : "ws");
-}
-
-static void on_message(struct client_s *client, const char *message, size_t message_len) {
-	printf("Client [%s] sent message: %.*s!\n", client->connection_type == CONN_TCP ? "tcp" : "ws", (int)message_len, message);
-}
-
-static void on_disconnect(struct client_s *client) {
-	printf("Client [%s] disconnected!\n", client->connection_type == CONN_TCP ? "tcp" : "ws");
-}
 
 //
 // server code
 //
 
 void *wsserver_thread(void *data);
-void *mockserver_thread(void *data);
 
 static WINDOW *create_messages_window(void);
 static WINDOW *create_input_window(void);
@@ -49,6 +32,8 @@ static const char *fmt_time(time_t time);
 static const char *fmt_date(time_t rawtime);
 
 static void messagequeue_add(char *fmt, ...);
+
+struct session *add_session(struct lws *wsi);
 
 //
 // vars
@@ -59,25 +44,9 @@ const size_t messagequeue_max = 128;
 static char *messagequeue[128];
 static size_t messagequeue_len = 0;
 
+static struct session *sessions = NULL;
+
 int main(int argc, char **argv) {
-	
-	struct lobby_create_request req_create;
-	message_header_init(&req_create.header, LOBBY_CREATE_REQUEST);
-	req_create.lobby_id = 123;
-	req_create.lobby_name = "my AWESOME lobby!!";
-	cJSON *json = cJSON_CreateObject();
-	pack_lobby_create_request(&req_create, json);
-	const char *serialized = cJSON_PrintUnformatted(json);
-	printf("serialized to:\n%s\n", serialized);
-
-	cJSON *recv_json = cJSON_Parse(serialized);
-	struct lobby_create_request recv_req;
-	unpack_lobby_create_request(recv_json, &recv_req);
-	printf("unpacked:\nheader.type = %d\nlobby_id = %d\nlobby_name = \"%s\"\n\n", recv_req.header.type, recv_req.lobby_id, recv_req.lobby_name);
-	cJSON_Delete(json);
-	cJSON_Delete(recv_json);
-	return 0;
-
 	initscr();
 	cbreak();
 	noecho();
@@ -96,9 +65,7 @@ int main(int argc, char **argv) {
 
 	// start bg services
 	pthread_t ws_thread;
-	pthread_t mock_thread;
 	pthread_create(&ws_thread, NULL, wsserver_thread, NULL);
-	pthread_create(&mock_thread, NULL, mockserver_thread, NULL);
 
 	int running = 1;
 	while (running) {
@@ -106,15 +73,19 @@ int main(int argc, char **argv) {
 		static size_t in_command_i = 0;
 
 		// logic
-		size_t i = 0;
-		pthread_mutex_lock(&messagequeue_mutex);
-		while (i < messagequeue_len) {
-			wprintw(win_messages, "%s\n", messagequeue[i]);
-			free(messagequeue[i]);
-			++i;
+		{
+			pthread_mutex_lock(&messagequeue_mutex);
+
+			size_t i = 0;
+			while (i < messagequeue_len) {
+				wprintw(win_messages, "%s\n", messagequeue[i]);
+				free(messagequeue[i]);
+				++i;
+			}
+			messagequeue_len = 0;
+
+			pthread_mutex_unlock(&messagequeue_mutex);
 		}
-		messagequeue_len = 0;
-		pthread_mutex_unlock(&messagequeue_mutex);
 
 		// draw
 		wattron(win_input, A_BOLD);
@@ -140,7 +111,20 @@ int main(int argc, char **argv) {
 		} else if (in_char == 4 /* ^D */) {
 			running = 0;
 		} else if (in_char == '\n') {
-			messagequeue_add("[%s]  %.*s\n", fmt_time(time(NULL)), (int)in_command_i, in_command);
+			// build command for raw tcp...
+			int command_len = snprintf(NULL, 0, "%.*s", (int)in_command_i, in_command);
+			char command[command_len + 1];
+			snprintf(command, command_len + 1, "%.*s", (int)in_command_i, in_command);
+			// ...and for websockets
+			char ws_command[LWS_PRE + command_len + 1];
+			snprintf(&ws_command[LWS_PRE], command_len + 1, "%.*s", (int)in_command_i, in_command);
+
+			size_t session_len = stbds_arrlen(sessions);
+			for (size_t i = 0; i < session_len; ++i) {
+				lws_write(sessions[i].wsi, (unsigned char *)&ws_command[LWS_PRE], command_len + 1, LWS_WRITE_TEXT);
+			}
+
+			messagequeue_add("[%s]  %s  (seen by %zu)", fmt_time(time(NULL)), command, session_len);
 			werase(win_input);
 			in_command_i = 0;
 		} else if (in_char != ERR) {
@@ -216,28 +200,33 @@ static void messagequeue_add(char *fmt, ...) {
 // server impls
 //
 
-void *mockserver_thread(void *data) {
-	int i = 20;
-	while (--i) {
-		messagequeue_add("<automated mock msg> %d/20", i);
-
-		sleep(1);
-	}
-
-	return NULL;
-}
-
 static int ws_callback(struct lws *wsi, enum lws_callback_reasons reason, void *user, void *data, size_t data_len) {
+	struct session *session = user;
+
 	switch ((int)reason) {
 	case LWS_CALLBACK_ESTABLISHED:
-		messagequeue_add("Client connected!");
+		messagequeue_add("WebSocket connected!");
+		session->wsi = wsi;
+		session->random = rand() % 999;
+		stbds_arrput(sessions, *session);
 		break;
 	case LWS_CALLBACK_RECEIVE:
-		messagequeue_add("Client said: '%.*s'", data_len, (char *)data);
-		lws_write(wsi, data, data_len, LWS_WRITE_TEXT);
+		messagequeue_add("WebSocket Userdata: %d", session->random);
+		messagequeue_add("WebSocket said: '%.*s'", data_len, (char *)data);
+		//lws_write(wsi, data, data_len, LWS_WRITE_TEXT);
 		break;
 	case LWS_CALLBACK_CLOSED:
-		messagequeue_add("Client disconnected!");
+		messagequeue_add("WebSocket disconnected!");
+		for (int i = 0; i < stbds_arrlen(sessions); ++i) {
+			if (sessions[i].random == session->random) {
+				stbds_arrdel(sessions, i);
+				messagequeue_add("Client session destroyed!");
+				break;
+			}
+		}
+		break;
+	case LWS_CALLBACK_SERVER_WRITEABLE:
+		messagequeue_add("WebSocket writable!");
 		break;
 	default: break;
 	}
@@ -246,28 +235,55 @@ static int ws_callback(struct lws *wsi, enum lws_callback_reasons reason, void *
 }
 
 static int rawtcp_callback(struct lws *wsi, enum lws_callback_reasons reason, void *user, void *data, size_t data_len) {
+	struct session *session = user;
+
 	switch ((int)reason) {
-	case LWS_CALLBACK_RAW_ADOPT:
-		messagequeue_add("RAW_ADOPT [%zu]", data_len);
+	case LWS_CALLBACK_RAW_ADOPT: {
+		messagequeue_add("TCP-Client connected!");
+		session->wsi = wsi;
+		session->random = rand() % 999;
+		stbds_arrput(sessions, *session);
 		break;
-	case LWS_CALLBACK_RAW_RX:
-		messagequeue_add("RAW_RX %.*s", (int)data_len - 1, (char *)data);
+	}
+	case LWS_CALLBACK_RAW_RX: {
+		messagequeue_add("TCP-Client Userdata: %d", session->random);
+		messagequeue_add("TCP-Client said: '%.*s'", (int)data_len - 1, (char *)data);
 		break;
-	case LWS_CALLBACK_RAW_CLOSE:
-		messagequeue_add("RAW_CLOSE [%zu]", data_len);
+	}
+	case LWS_CALLBACK_RAW_CLOSE: {
+		messagequeue_add("TCP-Client disconnected!");
+		for (int i = 0; i < stbds_arrlen(sessions); ++i) {
+			if (sessions[i].random == session->random) {
+				stbds_arrdel(sessions, i);
+				messagequeue_add("TCP-Client session destroyed!");
+				break;
+			}
+		}
 		break;
+	}
 	case LWS_CALLBACK_RAW_WRITEABLE:
-		// messagequeue_add("RAW_WRITEABLE");
+		messagequeue_add("RAW_WRITEABLE");
 		break;
 	case LWS_CALLBACK_ESTABLISHED:
-		messagequeue_add("WebSocket connected!");
+		messagequeue_add("Client connected!");
+		session->wsi = wsi;
+		session->random = rand() % 999;
+		stbds_arrput(sessions, *session);
 		break;
 	case LWS_CALLBACK_RECEIVE:
-		messagequeue_add("WebSocket said: '%.*s'", data_len, (char *)data);
-		lws_write(wsi, data, data_len, LWS_WRITE_TEXT);
+		messagequeue_add("Client Userdata: %d", session->random);
+		messagequeue_add("Client said: '%.*s'", data_len, (char *)data);
+		//lws_write(wsi, data, data_len, LWS_WRITE_TEXT);
 		break;
 	case LWS_CALLBACK_CLOSED:
-		messagequeue_add("WebSocket disconnected!");
+		messagequeue_add("Client disconnected!");
+		for (int i = 0; i < stbds_arrlen(sessions); ++i) {
+			if (sessions[i].random == session->random) {
+				stbds_arrdel(sessions, i);
+				messagequeue_add("Client session destroyed!");
+				break;
+			}
+		}
 		break;
 	default: break;
 	}
@@ -278,8 +294,8 @@ static int rawtcp_callback(struct lws *wsi, enum lws_callback_reasons reason, vo
 // Browser/SDLNet → binary/ws_callback()
 // Native/SDLNet → rawtcp_callback()
 static struct lws_protocols protocols[] = {
-	{""      , rawtcp_callback, 0, 512, 0, NULL, 0},
-	{"binary", ws_callback    , 0, 512, 0, NULL, 0}, // needed for SDLNet-to-WebSocket translation.
+	{""      , rawtcp_callback, sizeof(struct session), 512, 0, NULL, 0},
+	{"binary", ws_callback    , sizeof(struct session), 512, 0, NULL, 0}, // needed for SDLNet-to-WebSocket translation.
 	{NULL    , NULL           , 0,   0, 0, NULL, 0},
 };
 void *wsserver_thread(void *data) {
@@ -304,7 +320,7 @@ void *wsserver_thread(void *data) {
 		return (void *)1;
 	}
 
-	messagequeue_add("WebSocket running on :%d", info.port);
+	messagequeue_add("WebSocket listening on :%d...", info.port);
 	
 	while (1) {
 		lws_service(ctx, 100);

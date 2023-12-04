@@ -81,8 +81,9 @@ struct engine_s *engine_new(void) {
 	engine->on_notify_callbacks = NULL;
 	engine->scene = NULL;
 	engine->console = malloc(sizeof(struct console_s));
-	memset(&engine->gameserver_ip, 0, sizeof(IPaddress));
+	engine->gameserver_ip.host = engine->gameserver_ip.port = 0;
 	engine->gameserver_tcp = NULL;
+	engine->gameserver_socketset = NULL;
 	console_init(engine->console);
 
 	if (engine->window == NULL) {
@@ -281,6 +282,13 @@ int engine_gameserver_connect(struct engine_s *engine, const char *address) {
 		return 1;
 	}
 
+	engine->gameserver_socketset = SDLNet_AllocSocketSet(1); // we just connect to the server
+	if (SDLNet_TCP_AddSocket(engine->gameserver_socketset, engine->gameserver_tcp) < 0) {
+		assert("SocketSet is already full...");
+		SDL_LogError(SDL_LOG_CATEGORY_ERROR, "Socketset already full?");
+		return 1;
+	}
+
 	return 0;
 }
 
@@ -288,6 +296,11 @@ void engine_gameserver_disconnect(struct engine_s *engine) {
 	engine->gameserver_ip.host = engine->gameserver_ip.port = 0;
 
 	if (engine->gameserver_tcp != NULL) {
+		// socketset
+		SDLNet_TCP_DelSocket(engine->gameserver_socketset, engine->gameserver_tcp);
+		SDLNet_FreeSocketSet(engine->gameserver_socketset);
+		engine->gameserver_socketset = NULL;
+		// actual socket
 		SDLNet_TCP_Close(engine->gameserver_tcp);
 		engine->gameserver_tcp = NULL;
 	}
@@ -303,6 +316,23 @@ void engine_update(struct engine_s *engine) {
 		engine->input_drag.state = INPUT_DRAG_IN_PROGRESS;
 	}
 
+	// poll server
+	if (engine->gameserver_tcp != NULL) {
+		const int readable_sockets = 1;
+		if (SDLNet_CheckSockets(engine->gameserver_socketset, 0) == readable_sockets) {
+			static char data[512] = {0};
+			
+			const int bytes_recv = SDLNet_TCP_Recv(engine->gameserver_tcp, &data, 511);
+			if (bytes_recv <= 0) {
+				printf("TCP_Recv failure, got 0 bytes... Disconnecting.\n");
+				engine_gameserver_disconnect(engine);
+			} else {
+				data[bytes_recv] = 0;
+				printf("Received: [%d] '%.*s'\n", bytes_recv, bytes_recv, data);
+			}
+		}
+	}
+	
 	// poll events
     nk_input_begin(engine->nk);
 	SDL_Event event;
