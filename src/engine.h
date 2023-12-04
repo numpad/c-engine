@@ -2,12 +2,14 @@
 #define ENGINE_H
 
 #include <SDL.h>
+#include <SDL_net.h>
 #include <SDL_opengles2.h>
 #include <cglm/cglm.h>
 #include <nanovg.h>
 #include "scenes/scene.h"
 #include "input.h"
 
+struct nk_context;
 struct engine_s;
 struct console_s;
 typedef void(*engine_callback_fn)(struct engine_s*);
@@ -18,6 +20,7 @@ struct engine_s {
 	Uint32 window_id;
 	SDL_GLContext gl_ctx;
 	struct NVGcontext *vg;
+	struct nk_context *nk;
 	
 	int window_width, window_height;
 	float window_pixel_ratio;
@@ -34,6 +37,11 @@ struct engine_s {
 	struct console_s *console;
 	struct input_drag_s input_drag;
 
+	// server connection
+	IPaddress gameserver_ip;
+	TCPsocket gameserver_tcp;
+	SDLNet_SocketSet gameserver_socketset;
+
 	// rendering globals
 	mat4 u_projection;
 	mat4 u_view;
@@ -43,12 +51,16 @@ struct engine_s {
 struct engine_s *engine_new(void);
 int engine_destroy(struct engine_s *engine);
 
-// system stuff
-void engine_on_window_resized(struct engine_s *engine, int new_width, int new_height);
+// settings
+void engine_set_clear_color(float r, float g, float b);
 
 // scene handling
 void engine_setscene(struct engine_s *engine, struct scene_s *scene);
 void engine_setscene_dll(struct engine_s *engine, const char *filename);
+
+// networking
+int engine_gameserver_connect(struct engine_s *, const char *address);
+void engine_gameserver_disconnect(struct engine_s *);
 
 // main loop
 void engine_update(struct engine_s *engine);

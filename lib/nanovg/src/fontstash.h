@@ -159,7 +159,7 @@ typedef struct FONSttFontImpl FONSttFontImpl;
 
 #else
 
-#define STB_TRUETYPE_IMPLEMENTATION
+// #define STB_TRUETYPE_IMPLEMENTATION
 
 static void* fons__tmpalloc(size_t size, void* up);
 static void fons__tmpfree(void* ptr, void* up);

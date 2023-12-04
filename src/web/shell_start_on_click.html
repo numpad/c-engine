@@ -25,6 +25,10 @@
     </head>
     <body>
 		<button onclick="onRunApp()">Run Game</button>
+		<label>
+			<input type="checkbox" value="" id="start-with-fullscreen" />
+			Fullscreen?
+		</label>
         <canvas class="hidden" id="canvas" oncontextmenu="event.preventDefault()"/>
 		<script type="text/javascript" src="soil_soldiers.js"></script>
 		<script>
@@ -53,8 +57,10 @@
 					canvas.classList.remove('hidden');
 					canvas.classList.add('fullwindow');
 
-					canvas.requestFullscreen({ navigationUI: 'hide' })
-					//window.dispatchEvent(new Event('resize'));
+					window.dispatchEvent(new Event('resize'));
+					if (document.querySelector('#start-with-fullscreen').checked) {
+						canvas.requestFullscreen({ navigationUI: 'hide' })
+					}
 
 				});
 			}
