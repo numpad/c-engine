@@ -81,8 +81,7 @@ int main(int argc, char **argv) {
 	//wtimeout(win_messages, 100);
 	wmove(win_messages, 0, 0);
 	messagequeue_add("[%s]  Server started on %s", fmt_time(time(NULL)), fmt_date(time(NULL)));
-	messagequeue_add("[%s]  PID : %ld", fmt_time(time(NULL)), (long)getpid());
-	messagequeue_add("[%s]  ", fmt_time(time(NULL)));
+	messagequeue_add("[%s]  PID : %ld\n", fmt_time(time(NULL)), (long)getpid());
 
 	// start bg services
 	pthread_t ws_thread;
@@ -209,12 +208,7 @@ void session_send_message(struct session *session, cJSON *message) {
 	data[LWS_PRE + json_str_len] = '\0';
 	memcpy(&data[LWS_PRE], json_str, json_str_len);
 
-	// send
-	// FIXME: this crashes, we need to request writing first.
-	// use lws_callback_on_writable(wsi); and store data in a queue
-	// only then use lws_write from the callback in ws_callback().
-	//lws_write(wsi, data, json_str_len, LWS_WRITE_TEXT);
-
+	// enqueue message and request writing
 	stbds_arrpush(session->msg_queue, data);
 	lws_callback_on_writable(session->wsi);
 }

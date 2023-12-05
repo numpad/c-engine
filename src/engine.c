@@ -262,28 +262,28 @@ int engine_gameserver_connect(struct engine_s *engine, const char *address) {
 	assert(engine->gameserver_ip.port == 0);
 
 	if (engine->gameserver_tcp != NULL) {
-		SDL_LogError(SDL_LOG_CATEGORY_ERROR, "Already connected to gameserver.");
+		fprintf(stderr, "Already connected to gameserver.");
 		return 1;
 	}
 
 	const int port = 9124;
 	if (SDLNet_ResolveHost(&engine->gameserver_ip, address, port) < 0) {
 		engine->gameserver_ip.host = engine->gameserver_ip.port = 0;
-		SDL_LogError(SDL_LOG_CATEGORY_ERROR, "Could not resolve host: \"%s\"...", address);
+		fprintf(stderr, "Could not resolve host: \"%s\"...", address);
 		return 1;
 	}
 
 	engine->gameserver_tcp = SDLNet_TCP_Open(&engine->gameserver_ip);
 	if (engine->gameserver_tcp == NULL) {
 		engine->gameserver_ip.host = engine->gameserver_ip.port = 0;
-		SDL_LogError(SDL_LOG_CATEGORY_ERROR, "Failed connecting to gameserver...");
+		fprintf(stderr, "Failed connecting to gameserver...");
 		return 1;
 	}
 
 	engine->gameserver_socketset = SDLNet_AllocSocketSet(1); // we just connect to the server
 	if (SDLNet_TCP_AddSocket(engine->gameserver_socketset, engine->gameserver_tcp) < 0) {
 		assert("SocketSet is already full...");
-		SDL_LogError(SDL_LOG_CATEGORY_ERROR, "Socketset already full?");
+		fprintf(stderr, "Socketset already full?");
 		return 1;
 	}
 
@@ -301,6 +301,28 @@ void engine_gameserver_disconnect(struct engine_s *engine) {
 		// actual socket
 		SDLNet_TCP_Close(engine->gameserver_tcp);
 		engine->gameserver_tcp = NULL;
+	}
+}
+
+void engine_gameserver_send(struct engine_s *engine, cJSON *json) {
+	assert(engine != NULL);
+	assert(json != NULL);
+	if (engine->gameserver_tcp == NULL) {
+		return;
+	}
+
+	// serialize 
+	const char *data = cJSON_PrintUnformatted(json);
+	const size_t data_len = strlen(data);
+
+	// send data
+	const int result = SDLNet_TCP_Send(engine->gameserver_tcp, data, data_len);
+	assert(result >= 0); // result shouldnt be negative.
+	if (result < (int)data_len) {
+		fprintf(stderr, "Failed sending tcp data, that means we disconnect...\n");
+
+		// TODO: is just disconnecting the right choice here?
+		engine_gameserver_disconnect(engine);
 	}
 }
 

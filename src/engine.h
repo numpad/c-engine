@@ -12,6 +12,7 @@
 struct nk_context;
 struct engine_s;
 struct console_s;
+typedef struct cJSON cJSON;
 typedef void(*engine_callback_fn)(struct engine_s*);
 
 struct engine_s {
@@ -22,9 +23,12 @@ struct engine_s {
 	struct NVGcontext *vg;
 	struct nk_context *nk;
 	
+	// window
 	int window_width, window_height;
 	float window_pixel_ratio;
 	float window_aspect;
+
+	// timing
 	double time_elapsed;
 
 	// scene management
@@ -61,6 +65,7 @@ void engine_setscene_dll(struct engine_s *engine, const char *filename);
 // networking
 int engine_gameserver_connect(struct engine_s *, const char *address);
 void engine_gameserver_disconnect(struct engine_s *);
+void engine_gameserver_send(struct engine_s *, cJSON *json);
 
 // main loop
 void engine_update(struct engine_s *engine);

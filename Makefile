@@ -29,7 +29,7 @@ ifeq ($(CC), emcc)
 endif
 
 SCENES = src/scenes/game.c src/scenes/intro.c src/scenes/menu.c src/scenes/scene_battle.c src/scenes/experiments.c
-SRC = main.c src/engine.c \
+SRC = main.c src/engine.c src/platform.c \
 	  src/ecs/components.c \
 	  src/gui/console.c \
 	  src/game/terrain.c src/game/isoterrain.c src/game/cards.c \
