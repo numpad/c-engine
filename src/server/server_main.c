@@ -15,19 +15,27 @@
 //
 
 struct session {
+	// connection
 	struct lws *wsi;
 	int id; // unique until disconnected
-	
+
+	// message queue
+	char **msg_queue;
+
+	// game logic
 	int is_in_lobby_with_id;
+
 };
 
 void session_init(struct session *, struct lws *wsi);
+void session_destroy(struct session *s);
+void session_send_message(struct session *, cJSON *message);
+void session_on_writable(struct session *);
 
 //
 // functions
 //
 
-void send_json_message(struct lws *wsi, cJSON *message);
 
 void server_on_message(struct session *session, void *data, size_t data_len);
 static void serverui_on_input(const char *cmd, size_t cmd_len);
@@ -149,6 +157,7 @@ int main(int argc, char **argv) {
 void session_init(struct session *session, struct lws *wsi) {
 	session->wsi = wsi;
 	session->id = (int)((rand() / (float)RAND_MAX) * 999999.0f + 100000.0f);
+	session->msg_queue = NULL;
 	session->is_in_lobby_with_id = -1;
 	
 	// id needs to be unique
@@ -156,10 +165,39 @@ void session_init(struct session *session, struct lws *wsi) {
 	for (size_t i = 0; i < sessions_count; ++i) {
 		assert(session->id != sessions[i].id);
 	}
+
+	// store in sessions
+	stbds_arrput(sessions, *session);
+
 }
 
-void send_json_message(struct lws *wsi, cJSON *message) {
-	assert(wsi != NULL);
+void session_destroy(struct session *session) {
+	stbds_arrfree(session->msg_queue);
+
+	// remove from session
+	for (int i = 0; i < stbds_arrlen(sessions); ++i) {
+		if (sessions[i].id == session->id) {
+			stbds_arrdel(sessions, i);
+			messagequeue_add("[DEV] Client session destroyed!");
+			break;
+		}
+	}
+}
+
+void session_on_writable(struct session *session) {
+	size_t msg_queue_len = stbds_arrlen(session->msg_queue);
+	for (size_t i = 0; i < msg_queue_len; ++i) {
+		char *msg = session->msg_queue[i];
+		lws_write(session->wsi, (unsigned char *)&msg[LWS_PRE], strlen(&msg[LWS_PRE]), LWS_WRITE_TEXT);
+		free(msg);
+	}
+	stbds_arrfree(session->msg_queue);
+	session->msg_queue = NULL;
+}
+
+void session_send_message(struct session *session, cJSON *message) {
+	assert(session != NULL);
+	assert(session->wsi != NULL);
 	assert(message != NULL);
 
 	// serialize json to string
@@ -167,12 +205,18 @@ void send_json_message(struct lws *wsi, cJSON *message) {
 	size_t json_str_len = strlen(json_str);
 
 	// prepare lws message
-	unsigned char data[LWS_PRE + json_str_len + 1];
-	data[json_str_len] = '\0';
+	char *data = malloc(LWS_PRE + json_str_len + 1);
+	data[LWS_PRE + json_str_len] = '\0';
 	memcpy(&data[LWS_PRE], json_str, json_str_len);
 
 	// send
+	// FIXME: this crashes, we need to request writing first.
+	// use lws_callback_on_writable(wsi); and store data in a queue
+	// only then use lws_write from the callback in ws_callback().
 	//lws_write(wsi, data, json_str_len, LWS_WRITE_TEXT);
+
+	stbds_arrpush(session->msg_queue, data);
+	lws_callback_on_writable(session->wsi);
 }
 
 void server_on_message(struct session *session, void *data, size_t data_len) {
@@ -309,26 +353,22 @@ static int ws_callback(struct lws *wsi, enum lws_callback_reasons reason, void *
 
 	switch ((int)reason) {
 	case LWS_CALLBACK_ESTABLISHED:
-		messagequeue_add("WebSocket connected!");
 		session_init(session, wsi);
-		stbds_arrput(sessions, *session);
+		messagequeue_add("WebSocket #%06d connected!", session->id);
 		break;
 	case LWS_CALLBACK_RECEIVE: {
 		server_on_message(session, data, data_len);
 		break;
 	}
 	case LWS_CALLBACK_CLOSED:
-		messagequeue_add("WebSocket disconnected!");
-		for (int i = 0; i < stbds_arrlen(sessions); ++i) {
-			if (sessions[i].id == session->id) {
-				stbds_arrdel(sessions, i);
-				messagequeue_add("Client session destroyed!");
-				break;
-			}
-		}
+		messagequeue_add("WebSocket #%06d disconnected!", session->id);
+		session_destroy(session);
 		break;
 	case LWS_CALLBACK_SERVER_WRITEABLE:
-		messagequeue_add("WebSocket writable!");
+		server_on_message(session, data, data_len);
+		break;
+	case LWS_CALLBACK_CLIENT_WRITEABLE:
+		messagequeue_add("WebSocket Client? writable!");
 		break;
 	default: break;
 	}
@@ -341,9 +381,8 @@ static int rawtcp_callback(struct lws *wsi, enum lws_callback_reasons reason, vo
 
 	switch ((int)reason) {
 	case LWS_CALLBACK_RAW_ADOPT: {
-		messagequeue_add("TCP-Client connected!");
 		session_init(session, wsi);
-		stbds_arrput(sessions, *session);
+		messagequeue_add("TCP-Client #%06d connected!", session->id);
 		break;
 	}
 	case LWS_CALLBACK_RAW_RX: {
@@ -351,38 +390,31 @@ static int rawtcp_callback(struct lws *wsi, enum lws_callback_reasons reason, vo
 		break;
 	}
 	case LWS_CALLBACK_RAW_CLOSE: {
-		messagequeue_add("TCP-Client disconnected!");
-		for (int i = 0; i < stbds_arrlen(sessions); ++i) {
-			if (sessions[i].id == session->id) {
-				stbds_arrdel(sessions, i);
-				messagequeue_add("TCP-Client session destroyed!");
-				break;
-			}
-		}
+		messagequeue_add("TCP-Client #%06d disconnected!", session->id);
+		session_destroy(session);
 		break;
 	}
+	case LWS_CALLBACK_CLIENT_WRITEABLE:
+		messagequeue_add("(?!) CLIENT_WRITEABLE");
+		break;
+	case LWS_CALLBACK_SERVER_WRITEABLE:
+		server_on_message(session, data, data_len);
+		break;
 	case LWS_CALLBACK_RAW_WRITEABLE:
-		messagequeue_add("RAW_WRITEABLE");
+		messagequeue_add("TCP-Client writable!");
+		session_on_writable(session);
 		break;
 	case LWS_CALLBACK_ESTABLISHED:
-		messagequeue_add("Client connected!");
 		session_init(session, wsi);
-		stbds_arrput(sessions, *session);
+		messagequeue_add("Client %06d connected!", session->id);
 		break;
 	case LWS_CALLBACK_RECEIVE: {
 		server_on_message(session, data, data_len);
-		//lws_write(wsi, &data[LWS_PRE], data_len, LWS_WRITE_TEXT);
 		break;
 	}
 	case LWS_CALLBACK_CLOSED:
-		messagequeue_add("Client disconnected!");
-		for (int i = 0; i < stbds_arrlen(sessions); ++i) {
-			if (sessions[i].id == session->id) {
-				stbds_arrdel(sessions, i);
-				messagequeue_add("Client session destroyed!");
-				break;
-			}
-		}
+		messagequeue_add("Client %06d disconnected!", session->id);
+		session_destroy(session);
 		break;
 	default: break;
 	}
@@ -455,7 +487,7 @@ static void create_lobby(struct lobby_create_request *msg, struct session *reque
 		cJSON *json = cJSON_CreateObject();
 		pack_lobby_create_response(&response, json);
 
-		send_json_message(requested_by->wsi, json);
+		session_send_message(requested_by, json);
 
 		cJSON_Delete(json);
 		return;
@@ -471,7 +503,7 @@ static void create_lobby(struct lobby_create_request *msg, struct session *reque
 	cJSON *json = cJSON_CreateObject();
 	pack_lobby_create_response(&response, json);
 
-	send_json_message(requested_by->wsi, json);
+	session_send_message(requested_by, json);
 
 	cJSON_Delete(json);
 }

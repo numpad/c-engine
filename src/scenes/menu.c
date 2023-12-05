@@ -27,42 +27,6 @@ static void switch_to_minigame_scene(struct engine_s *engine) {
 	engine_setscene(engine, (struct scene_s *)game_scene_experiments);
 }
 
-static void gui_titlebutton(NVGcontext *vg, struct engine_s *engine, float x, float y, const char *text, int enabled) {
-	const float width = 200.0f;
-	const float height = 70.0f;
-	const float edge_width = 25.0f;
-
-	nvgBeginPath(vg);
-	nvgMoveTo(vg, x, y);
-	nvgLineTo(vg, x, y + height);
-	nvgLineTo(vg, x - width, y + height);
-	nvgLineTo(vg, x - width - edge_width, y + height * 0.5f);
-	nvgLineTo(vg, x - width, y);
-	nvgFillColor(vg, nvgRGBAf(0.12f, 0.12f, 0.12f, 0.85f));
-	nvgFill(vg);
-
-	// text shadow
-	if (enabled) {
-		nvgBeginPath(vg);
-		nvgFillColor(vg, nvgRGBAf(0.5f, 0.5f, 0.7f, 0.7f));
-		nvgFontBlur(vg, 5.0f);
-		nvgFontSize(vg, 32.0f);
-		nvgText(vg, x - width + 15.0f, y + height * 0.67f, text, NULL);
-	}
-
-	// text
-	nvgBeginPath(vg);
-	if (enabled) {
-		nvgFillColor(vg, nvgRGBAf(1.0f, 1.0f, 1.0f, 1.0f));
-	} else {
-		nvgFillColor(vg, nvgRGBAf(1.0f, 1.0f, 1.0f, 0.4f));
-	}
-	nvgFontBlur(vg, 0.0f);
-	nvgFontSize(vg, 32.0f);
-	nvgText(vg, x - width + 15.0f, y + height * 0.67f, text, NULL);
-
-}
-
 static void menu_load(struct menu_s *menu, struct engine_s *engine) {
 	menu->vg_font = nvgCreateFont(engine->vg, "PermanentMarker Regular", "res/font/PermanentMarker-Regular.ttf");
 	menu->vg_gamelogo = nvgCreateImage(engine->vg, "res/image/logo_placeholder.png", 0);
@@ -83,11 +47,12 @@ static void menu_update(struct menu_s *menu, struct engine_s *engine, float dt) 
 	struct nk_context *nk = engine->nk;
 	const float padding_bottom = 30.0f;
 	const float padding_x = 30.0f;
-	const int row_height = 45;
+	const float menu_height = 330.0f;
+	const int row_height = 55;
 
-	static int multiplayer_window = 1;
+	static int multiplayer_window = 0;
 
-	if (nk_begin_titled(nk, "Main Menu", "Main Menu", nk_rect( padding_x, engine->window_height - 280.0f - padding_bottom, engine->window_width - padding_x * 2.0f, 280.0f), NK_WINDOW_TITLE | NK_WINDOW_NO_SCROLLBAR | NK_WINDOW_BACKGROUND)) {
+	if (nk_begin_titled(nk, "Main Menu", "Main Menu", nk_rect( padding_x, engine->window_height - menu_height - padding_bottom, engine->window_width - padding_x * 2.0f, menu_height), NK_WINDOW_TITLE | NK_WINDOW_NO_SCROLLBAR | NK_WINDOW_BACKGROUND)) {
 		// play game
 		nk_style_push_color(nk, &nk->style.button.text_normal, nk_rgb(60, 170, 30));
 		nk_style_push_color(nk, &nk->style.button.text_hover, nk_rgb(50, 140, 10));
@@ -156,7 +121,7 @@ static void menu_update(struct menu_s *menu, struct engine_s *engine, float dt) 
 			nk_layout_row_dynamic(nk, row_height * 0.5f, 1);
 			nk_label(nk, "Server:", NK_TEXT_ALIGN_BOTTOM | NK_TEXT_ALIGN_LEFT);
 
-			static char input_host[128] = "localhost";
+			static char input_host[128] = "192.168.0.17";
 			nk_layout_row_dynamic(nk, row_height, 1);
 			nk_edit_string_zero_terminated(nk, NK_EDIT_FIELD | NK_EDIT_SELECTABLE, input_host, sizeof(input_host) - 1, nk_filter_default);
 
@@ -232,19 +197,32 @@ static void menu_update(struct menu_s *menu, struct engine_s *engine, float dt) 
 }
 
 static void menu_draw(struct menu_s *menu, struct engine_s *engine) {
-	struct NVGcontext *vg = engine->vg;
+	struct input_drag_s *drag = &engine->input_drag;
 
-	int mx, my;
-	Uint32 mousebtn = SDL_GetMouseState(&mx, &my);
+	static float squeeze = 0.0f;
+	if (drag->state == INPUT_DRAG_BEGIN) {
+		squeeze += 0.3f;
+	}
+	if (drag->state == INPUT_DRAG_IN_PROGRESS) {
+		squeeze += 0.4f;
+		if (squeeze > 1.0f) squeeze *= 0.7f;
+	} else {
+		squeeze *= 0.78f; 
+		if (squeeze < 0.0f) squeeze = 0.0f;
+	}
+
+	const float sq_x = (squeeze) * 0.1f;
+	const float sq_y = (-squeeze) * 0.1f;
 
 	// draw terrain
 	glm_mat4_identity(engine->u_view);
-	const float t_scale = (sinf(engine->time_elapsed) * 0.5f + 0.5f) * 0.02f * engine->window_aspect * 0.3f + 0.25f * engine->window_aspect * 0.3f;
-	glm_scale(engine->u_view, (vec3){ t_scale, t_scale, t_scale });
-	glm_translate(engine->u_view, (vec3){ -2.0f, -1.0f - engine->window_aspect * -2.333f, 0.0f });
+	const float t_scale = (sinf(engine->time_elapsed) * 0.5f + 0.5f) * 0.02f + 0.25f * engine->window_aspect * 0.8f;
+	glm_translate(engine->u_view, (vec3){ -0.68f + -sq_x * 2.0f, 0.85f, 0.0f });
+	glm_scale(engine->u_view, (vec3){ t_scale + sq_x, t_scale + sq_y, t_scale });
 	isoterrain_draw(menu->terrain, engine->u_projection, engine->u_view);
 
 	/* draw logo
+	struct NVGcontext *vg = engine->vg;
 	const float xcenter = engine->window_width * 0.5f;
 	const float ystart = 50.0f;
 	const float width_title = engine->window_width * 0.8f;
@@ -256,13 +234,6 @@ static void menu_draw(struct menu_s *menu, struct engine_s *engine) {
 	nvgFill(vg);
 	*/
 
-	// continue button
-	/*
-	gui_titlebutton(vg, engine, engine->window_width, engine->window_height * 0.5f + 100.0f, "Continue", 0);
-	gui_titlebutton(vg, engine, engine->window_width, engine->window_height * 0.5f + 180.0f, "New game", 1);
-	gui_titlebutton(vg, engine, engine->window_width, engine->window_height * 0.5f + 260.0f, "Settings", 1);
-	*/
-	
 }
 
 static void menu_on_message(struct menu_s *menu, struct engine_s *engine, struct message_header *msg) {

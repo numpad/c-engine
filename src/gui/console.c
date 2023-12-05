@@ -106,13 +106,17 @@ void console_add_message(struct console_s *console, struct console_msg_s msg) {
 
 void console_log(struct console_s *console, char *fmt, ...) {
 	va_list argp;
+
 	va_start(argp, fmt);
 	
 	int len = snprintf(NULL, 0, fmt, argp);
 	char buf[len + 1];
 	buf[len] = '\0';
 
-	snprintf(buf, len + 1, fmt, argp);
+	va_end(argp);
+
+	va_start(argp, fmt);
+	snprintf(buf, len, fmt, argp);
 
 	console_add_message(console, (struct console_msg_s){ .message = buf });
 

@@ -326,18 +326,16 @@ void engine_update(struct engine_s *engine) {
 				printf("TCP_Recv failure, got 0 bytes... Disconnecting.\n");
 				engine_gameserver_disconnect(engine);
 			} else {
-				data[bytes_recv] = 0;
-
 				// we received something, but maybe it is no json/valid message?
-				printf("Received: [%d] '%.*s'\n", bytes_recv, bytes_recv, data);
-
 				cJSON *json = cJSON_Parse(data);
-				if (json) {
+				if (json != NULL) {
+					// it may be valid json, but a valid message?
 					struct message_header *header = unpack_message(json);
 					if (header != NULL) {
+						printf("Received Response of Type: %d\n", (int)header->type);
 						scene_on_message(engine->scene, engine, header);
+						console_log(engine->console, "my id is %d", 33);
 						//printf("Got %s\n", message_type_to_name(header->type));
-						console_log(engine->console, "Received a %s", message_type_to_name(header->type));
 						free_message(json, header);
 					}
 				}
