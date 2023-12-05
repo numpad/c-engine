@@ -342,12 +342,14 @@ void engine_update(struct engine_s *engine) {
 		if (SDLNet_CheckSockets(engine->gameserver_socketset, 0) == readable_sockets) {
 			static char data[512] = {0};
 			
-			const int bytes_recv = SDLNet_TCP_Recv(engine->gameserver_tcp, &data, 511);
-			if (bytes_recv <= 0) {
+			const int data_len = SDLNet_TCP_Recv(engine->gameserver_tcp, &data, 511);
+			if (data_len <= 0) {
 				// TODO: Attempt to reconnect?
 				printf("TCP_Recv failure, got 0 bytes... Disconnecting.\n");
 				engine_gameserver_disconnect(engine);
 			} else {
+				printf("Received Raw: %.*s\n", data_len, data);
+
 				// we received something, but maybe it is no json/valid message?
 				cJSON *json = cJSON_Parse(data);
 				if (json != NULL) {

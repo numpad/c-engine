@@ -426,12 +426,6 @@ static struct lws_protocols protocols[] = {
 void *wsserver_thread(void *data) {
 	lws_set_log_level(0, NULL);
 
-	// TODO:
-	// - Create vhost to use ws & raw sockets together. [1][2]
-	// - Enable Keepalive. [1]
-	//
-	// [0]: https://libwebsockets.org/lws-api-doc-v2.3-stable/html/md_README_8coding.html#:~:text=enable%20your%20vhost%20to%20accept%20RAW%20socket%20connections
-	// [1]: https://android.googlesource.com/platform/external/libwebsockets/+/refs/tags/android-s-beta-1/minimal-examples/raw/
 	struct lws_context_creation_info info = {0};
 	info.port = 9124;
 	info.iface = NULL;

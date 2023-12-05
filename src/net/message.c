@@ -29,7 +29,18 @@ void pack_message_header(struct message_header *msg, cJSON *json) {
 
 void unpack_message_header(cJSON *json, struct message_header *msg) {
 	cJSON *header = cJSON_GetObjectItem(json, "header");
-	msg->type = cJSON_GetObjectItem(header, "type")->valueint;
+	if (header == NULL || !cJSON_IsObject(header)) {
+		msg->type = MSG_UNKNOWN;
+		return;
+	}
+
+	cJSON *header_type = cJSON_GetObjectItem(header, "type");
+	if (header_type == NULL || !cJSON_IsNumber(header_type)) {
+		msg->type = MSG_UNKNOWN;
+		return;
+	}
+
+	msg->type = header_type->valueint;
 }
 
 struct message_header *unpack_message(cJSON *json) {

@@ -168,10 +168,6 @@ static void menu_update(struct menu_s *menu, struct engine_s *engine, float dt) 
 				}
 			}
 
-			// **** debug ****
-			nk_layout_row_dynamic(nk, row_height * 0.5f, 1);
-			nk_labelf(nk, NK_TEXT_ALIGN_LEFT, "is_connected = %d", is_connected);
-
 
 			/*
 			static char *error_message = NULL;
