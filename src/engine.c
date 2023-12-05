@@ -333,7 +333,7 @@ void engine_update(struct engine_s *engine) {
 
 				cJSON *json = cJSON_Parse(data);
 				if (json) {
-					struct message_header *header = get_message(json);
+					struct message_header *header = unpack_message(json);
 					if (header != NULL) {
 						scene_on_message(engine->scene, engine, header);
 						//printf("Got %s\n", message_type_to_name(header->type));

@@ -32,7 +32,7 @@ void unpack_message_header(cJSON *json, struct message_header *msg) {
 	msg->type = cJSON_GetObjectItem(header, "type")->valueint;
 }
 
-struct message_header *get_message(cJSON *json) {
+struct message_header *unpack_message(cJSON *json) {
 	if (json == NULL) {
 		return NULL;
 	}

@@ -195,6 +195,27 @@ static void menu_update(struct menu_s *menu, struct engine_s *engine, float dt) 
 						error_message_color = color_success;
 					}
 				}
+				
+				nk_layout_row_dynamic(nk, row_height, 1);
+				if (nk_button_label(nk, "Create Lobby")) {
+					struct lobby_create_request req;
+					message_header_init(&req.header, LOBBY_CREATE_REQUEST);
+					req.lobby_id = 42;
+					req.lobby_name = "test name, please ignore";
+
+					cJSON *json = cJSON_CreateObject();
+					pack_lobby_create_request(&req, json);
+					const char *json_str = cJSON_PrintUnformatted(json);
+					size_t json_str_len = strlen(json_str);
+					const int result = SDLNet_TCP_Send(engine->gameserver_tcp, json_str, json_str_len);
+					if (result == (int)json_str_len) {
+						error_message = "Data sent!";
+						error_message_color = color_success;
+					} else {
+						error_message = "Not enough data sent...";
+						error_message_color = color_error;
+					}
+				}
 			}
 
 			if (error_message != NULL) {

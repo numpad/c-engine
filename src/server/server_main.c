@@ -27,6 +27,8 @@ void session_init(struct session *, struct lws *wsi);
 // functions
 //
 
+void send_json_message(struct lws *wsi, cJSON *message);
+
 void server_on_message(struct session *session, void *data, size_t data_len);
 static void serverui_on_input(const char *cmd, size_t cmd_len);
 
@@ -156,6 +158,23 @@ void session_init(struct session *session, struct lws *wsi) {
 	}
 }
 
+void send_json_message(struct lws *wsi, cJSON *message) {
+	assert(wsi != NULL);
+	assert(message != NULL);
+
+	// serialize json to string
+	char *json_str = cJSON_PrintUnformatted(message);
+	size_t json_str_len = strlen(json_str);
+
+	// prepare lws message
+	unsigned char data[LWS_PRE + json_str_len + 1];
+	data[json_str_len] = '\0';
+	memcpy(&data[LWS_PRE], json_str, json_str_len);
+
+	// send
+	//lws_write(wsi, data, json_str_len, LWS_WRITE_TEXT);
+}
+
 void server_on_message(struct session *session, void *data, size_t data_len) {
 	cJSON *data_json = cJSON_ParseWithLength(data, data_len);
 	if (data_json == NULL) {
@@ -171,7 +190,7 @@ void server_on_message(struct session *session, void *data, size_t data_len) {
 	assert(cJSON_IsNumber(cJSON_GetObjectItem(cJSON_GetObjectItem(data_json, "header"), "type")));
 
 
-	struct message_header *msg_header = get_message(data_json);
+	struct message_header *msg_header = unpack_message(data_json);
 	// could not unpack, maybe validation failed?
 	if (msg_header == NULL) {
 		messagequeue_add("--- Invalid JSON from #%06d ---\n%.*s\n---     Invalid JSON End      ---", session->id, (int)data_len, (char *)data);
@@ -424,14 +443,36 @@ static void create_lobby(struct lobby_create_request *msg, struct session *reque
 	assert(requested_by != NULL); // TODO: also support no session
 	assert(msg->lobby_id >= 0); // TODO: this is application logic...
 
+	struct lobby_create_response response;
+	message_header_init(&response.header, LOBBY_CREATE_RESPONSE);
+	response.lobby_id = msg->lobby_id;
+	response.create_error = 0;
+
 	if (requested_by->is_in_lobby_with_id >= 0) {
 		messagequeue_add("#%06d is already in lobby %d but requested to create %d", requested_by->id, requested_by->is_in_lobby_with_id, msg->lobby_id);
+		response.create_error = 1;
+
+		cJSON *json = cJSON_CreateObject();
+		pack_lobby_create_response(&response, json);
+
+		send_json_message(requested_by->wsi, json);
+
+		cJSON_Delete(json);
 		return;
 	}
 
 	// TODO: check if lobby exists
 
+	response.create_error = 0;
 	requested_by->is_in_lobby_with_id = msg->lobby_id;
 	messagequeue_add("#%06d created lobby %d!", requested_by->id, msg->lobby_id);
+
+
+	cJSON *json = cJSON_CreateObject();
+	pack_lobby_create_response(&response, json);
+
+	send_json_message(requested_by->wsi, json);
+
+	cJSON_Delete(json);
 }
 

@@ -30,7 +30,7 @@ void unpack_message_header(cJSON *json, struct message_header *);
  * Example:
  *
  *     cJSON *json = ...;
- *     struct message_header *msg_header = get_message(json);
+ *     struct message_header *msg_header = unpack_message(json);
  *     assert(msg_header != NULL);
  *
  *     if (msg_header->type == LOBBY_CREATE_REQUEST) {
@@ -39,7 +39,7 @@ void unpack_message_header(cJSON *json, struct message_header *);
  *     }
  *     free_message(json, msg_header);
  */
-struct message_header *get_message(cJSON *json);
+struct message_header *unpack_message(cJSON *json);
 void free_message(cJSON *json, struct message_header *);
 
 // LOBBY_CREATE_REQUEST
