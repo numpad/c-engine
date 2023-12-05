@@ -9,10 +9,11 @@
 #include <stb_ds.h>
 #include <nuklear.h>
 #include <nuklear_sdl_gles2.h>
+#include <cJSON.h>
 #include "scenes/intro.h"
 #include "scenes/menu.h"
-#include "scenes/experiments.h"
 #include "gui/console.h"
+#include "net/message.h"
 
 static Uint32 USR_EVENT_RELOAD = ((Uint32)-1);
 static Uint32 USR_EVENT_NOTIFY = ((Uint32)-1);
@@ -105,8 +106,10 @@ struct engine_s *engine_new(void) {
 	SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
 	//SDL_GL_SetAttribute(SDL_GL_MULTISAMPLEBUFFERS, 1);
 	//SDL_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES, 4);
-	SDL_GL_SetSwapInterval(1);
 	engine->gl_ctx = SDL_GL_CreateContext(engine->window);
+	if (SDL_GL_SetSwapInterval(1) != 0) {
+		fprintf(stderr, "warning: failed enabling v-sync: %s\n", SDL_GetError());
+	}
 	
 	// libs
 	engine->vg = nvgCreateGLES2(NVG_ANTIALIAS | NVG_STENCIL_STROKES);
@@ -195,11 +198,6 @@ static void on_window_resized(struct engine_s *engine, int w, int h) {
 	glViewport(0, 0, w * window_dpi_scale_x, h * window_dpi_scale_y);
 	glm_ortho(-1.0f, 1.0f, -1.0f * engine->window_aspect, 1.0f * engine->window_aspect, -1.0f, 1.0f, engine->u_projection);
 
-#ifdef DEBUG
-	char msg[64];
-	sprintf(msg, "Resized to %dx%d", w, h);
-	console_add_message(engine->console, (struct console_msg_s) { .message = msg });
-#endif
 }
 
 
@@ -242,8 +240,8 @@ void engine_setscene_dll(struct engine_s *engine, const char *filename) {
 
 	handle = dlopen(filename, RTLD_NOW | RTLD_GLOBAL | RTLD_DEEPBIND);
 
-	struct scene_experiments_s *modscene = malloc(sizeof(struct scene_experiments_s));
-	void(*test_init)(struct scene_experiments_s *scene, struct engine_s *) = dlsym(handle, "scene_experiments_init");
+	struct menu_s *modscene = malloc(sizeof(struct menu_s));
+	void(*test_init)(struct menu_s *scene, struct engine_s *) = dlsym(handle, "menu_init");
 	test_init(modscene, engine);
 
 	engine_setscene(engine, (struct scene_s *)modscene);
@@ -324,11 +322,25 @@ void engine_update(struct engine_s *engine) {
 			
 			const int bytes_recv = SDLNet_TCP_Recv(engine->gameserver_tcp, &data, 511);
 			if (bytes_recv <= 0) {
+				// TODO: Attempt to reconnect?
 				printf("TCP_Recv failure, got 0 bytes... Disconnecting.\n");
 				engine_gameserver_disconnect(engine);
 			} else {
 				data[bytes_recv] = 0;
+
+				// we received something, but maybe it is no json/valid message?
 				printf("Received: [%d] '%.*s'\n", bytes_recv, bytes_recv, data);
+
+				cJSON *json = cJSON_Parse(data);
+				if (json) {
+					struct message_header *header = get_message(json);
+					if (header != NULL) {
+						scene_on_message(engine->scene, engine, header);
+						//printf("Got %s\n", message_type_to_name(header->type));
+						console_log(engine->console, "Received a %s", message_type_to_name(header->type));
+						free_message(json, header);
+					}
+				}
 			}
 		}
 	}

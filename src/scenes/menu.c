@@ -9,6 +9,7 @@
 #include "scenes/scene_battle.h"
 #include "scenes/experiments.h"
 #include "game/isoterrain.h"
+#include "net/message.h"
 
 float easeOutExpo(float x) {
 	return x == 1.0f ? 1.0f : 1.0f - powf(2.0f, -10.0f * x);
@@ -80,13 +81,13 @@ static void menu_update(struct menu_s *menu, struct engine_s *engine, float dt) 
 
 	// gui
 	struct nk_context *nk = engine->nk;
-	const float padding_top = engine->window_height * 0.33f;
-	const float padding_x = 30.0f, padding_y = 50.0f;
+	const float padding_bottom = 30.0f;
+	const float padding_x = 30.0f;
 	const int row_height = 45;
 
-	static int join_lobby_window = 0;
+	static int multiplayer_window = 1;
 
-	if (nk_begin_titled(nk, "Main Menu", "Main Menu", nk_rect( padding_x, padding_y + padding_top, engine->window_width - padding_x * 2.0f, engine->window_height - padding_y * 2.0f - padding_top), NK_WINDOW_TITLE | NK_WINDOW_NO_SCROLLBAR | NK_WINDOW_BACKGROUND)) {
+	if (nk_begin_titled(nk, "Main Menu", "Main Menu", nk_rect( padding_x, engine->window_height - 280.0f - padding_bottom, engine->window_width - padding_x * 2.0f, 280.0f), NK_WINDOW_TITLE | NK_WINDOW_NO_SCROLLBAR | NK_WINDOW_BACKGROUND)) {
 		// play game
 		nk_style_push_color(nk, &nk->style.button.text_normal, nk_rgb(60, 170, 30));
 		nk_style_push_color(nk, &nk->style.button.text_hover, nk_rgb(50, 140, 10));
@@ -120,9 +121,9 @@ static void menu_update(struct menu_s *menu, struct engine_s *engine, float dt) 
 
 		// multiplayer
 		nk_layout_row_dynamic(nk, row_height, 1);
-		if (nk_button_symbol_label(nk, NK_SYMBOL_CIRCLE_OUTLINE, "Join Lobby", NK_TEXT_ALIGN_RIGHT)) {
-			join_lobby_window = 1;
-			nk_window_show(nk, "Join Game", NK_SHOWN);
+		if (nk_button_symbol_label(nk, NK_SYMBOL_CIRCLE_OUTLINE, "Multiplayer", NK_TEXT_ALIGN_RIGHT)) {
+			multiplayer_window = 1;
+			nk_window_show(nk, "Multiplayer", NK_SHOWN);
 		}
 
 		// minigame
@@ -141,7 +142,7 @@ static void menu_update(struct menu_s *menu, struct engine_s *engine, float dt) 
 	}
 	nk_end(nk);
 
-	if (join_lobby_window) {
+	if (multiplayer_window) {
 		const int cx = engine->window_width / 2;
 		const int cy = engine->window_height / 2;
 		const int w = 340, h = 300;
@@ -151,9 +152,9 @@ static void menu_update(struct menu_s *menu, struct engine_s *engine, float dt) 
 		const struct nk_color color_success = nk_rgb(50, 255, 50);
 		const struct nk_color color_warning = nk_rgb(255, 255, 50);
 
-		if (nk_begin_titled(nk, "Join Game", "Join Game", nk_rect(cx - w * 0.5f, cy - h * 0.5f, w, h), NK_WINDOW_TITLE | NK_WINDOW_NO_SCROLLBAR | NK_WINDOW_CLOSABLE | NK_WINDOW_BORDER | NK_WINDOW_MOVABLE)) {
+		if (nk_begin_titled(nk, "Multiplayer", "Multiplayer", nk_rect(cx - w * 0.5f, cy - h * 0.5f, w, h), NK_WINDOW_TITLE | NK_WINDOW_NO_SCROLLBAR | NK_WINDOW_CLOSABLE | NK_WINDOW_BORDER | NK_WINDOW_MOVABLE)) {
 			nk_layout_row_dynamic(nk, row_height * 0.5f, 1);
-			nk_label(nk, "Host Address:", NK_TEXT_ALIGN_BOTTOM | NK_TEXT_ALIGN_LEFT);
+			nk_label(nk, "Server:", NK_TEXT_ALIGN_BOTTOM | NK_TEXT_ALIGN_LEFT);
 
 			static char input_host[128] = "localhost";
 			nk_layout_row_dynamic(nk, row_height, 1);
@@ -171,7 +172,7 @@ static void menu_update(struct menu_s *menu, struct engine_s *engine, float dt) 
 							error_message_color = color_error;
 							break;
 						} else {
-							error_message = "Connected (?)";
+							error_message = "Connected";
 							error_message_color = color_success;
 						}
 					} while (0);
@@ -181,7 +182,7 @@ static void menu_update(struct menu_s *menu, struct engine_s *engine, float dt) 
 
 			if (engine->gameserver_tcp != NULL) {
 				nk_layout_row_dynamic(nk, row_height, 1);
-				if (nk_button_label(nk, "Send data")) {
+				if (nk_button_label(nk, "Send \"random msg\".")) {
 					const int result = SDLNet_TCP_Send(engine->gameserver_tcp, "random msg", 11);
 					if (result < 11) {
 						static char error[128] = {0};
@@ -202,8 +203,8 @@ static void menu_update(struct menu_s *menu, struct engine_s *engine, float dt) 
 			}
 		}
 
-		if (join_lobby_window && nk_window_is_closed(nk, "Join Game")) {
-			join_lobby_window = 0;
+		if (multiplayer_window && nk_window_is_closed(nk, "Multiplayer")) {
+			multiplayer_window = 0;
 		}
 		nk_end(nk);
 	}
@@ -217,11 +218,12 @@ static void menu_draw(struct menu_s *menu, struct engine_s *engine) {
 
 	// draw terrain
 	glm_mat4_identity(engine->u_view);
-	glm_scale(engine->u_view, (vec3){ 0.5f, 0.5f, 0.5f });
-	glm_translate(engine->u_view, (vec3){ 0.0f, engine->window_aspect * -2.333f, 0.0f });
+	const float t_scale = (sinf(engine->time_elapsed) * 0.5f + 0.5f) * 0.02f * engine->window_aspect * 0.3f + 0.25f * engine->window_aspect * 0.3f;
+	glm_scale(engine->u_view, (vec3){ t_scale, t_scale, t_scale });
+	glm_translate(engine->u_view, (vec3){ -2.0f, -1.0f - engine->window_aspect * -2.333f, 0.0f });
 	isoterrain_draw(menu->terrain, engine->u_projection, engine->u_view);
 
-	// draw logo
+	/* draw logo
 	const float xcenter = engine->window_width * 0.5f;
 	const float ystart = 50.0f;
 	const float width_title = engine->window_width * 0.8f;
@@ -231,12 +233,43 @@ static void menu_draw(struct menu_s *menu, struct engine_s *engine) {
 	NVGpaint paint = nvgImagePattern(vg, xcenter - width_title * 0.5f, ystart, width_title, height_title, 0.0f, menu->vg_gamelogo, 1.0f);
 	nvgFillPaint(vg, paint);
 	nvgFill(vg);
+	*/
 
 	// continue button
+	/*
 	gui_titlebutton(vg, engine, engine->window_width, engine->window_height * 0.5f + 100.0f, "Continue", 0);
 	gui_titlebutton(vg, engine, engine->window_width, engine->window_height * 0.5f + 180.0f, "New game", 1);
 	gui_titlebutton(vg, engine, engine->window_width, engine->window_height * 0.5f + 260.0f, "Settings", 1);
+	*/
 	
+}
+
+static void menu_on_message(struct menu_s *menu, struct engine_s *engine, struct message_header *msg) {
+	switch ((enum message_type)msg->type) {
+		case LOBBY_CREATE_RESPONSE: {
+			struct lobby_create_response *response = (struct lobby_create_response *)msg;
+			if (response->create_error) {
+				printf("Failed creating lobby #%d...\n", response->lobby_id);
+			} else {
+				printf("Lobby #%d was created.\n", response->lobby_id);
+			}
+			break;
+		}
+		case LOBBY_JOIN_RESPONSE: {
+			struct lobby_join_response *response = (struct lobby_join_response *)msg;
+			if (response->join_error) {
+				printf("Failed joining into lobby #%d...\n", response->lobby_id);
+			} else {
+				printf("Joined lobby #%d!\n", response->lobby_id);
+			}
+			break;
+		}
+		case MSG_UNKNOWN:
+		case LOBBY_CREATE_REQUEST:
+		case LOBBY_JOIN_REQUEST:
+			fprintf(stderr, "Can't handle message %s...\n", message_type_to_name(msg->type));
+			break;
+	}
 }
 
 void menu_init(struct menu_s *menu, struct engine_s *engine) {
@@ -248,6 +281,7 @@ void menu_init(struct menu_s *menu, struct engine_s *engine) {
 	menu->base.destroy = (scene_destroy_fn)menu_destroy;
 	menu->base.update = (scene_update_fn)menu_update;
 	menu->base.draw = (scene_draw_fn)menu_draw;
+	menu->base.on_message = (scene_on_message_fn)menu_on_message;
 
 	// init gui
 	menu->gui = NULL;

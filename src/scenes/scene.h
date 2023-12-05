@@ -8,17 +8,20 @@
 
 struct engine_s;
 struct scene_s;
+struct message_header;
 
 typedef void(*scene_load_fn)(struct scene_s *, struct engine_s *);
 typedef void(*scene_destroy_fn)(struct scene_s *, struct engine_s *);
 typedef void(*scene_update_fn)(struct scene_s *, struct engine_s *, float);
 typedef void(*scene_draw_fn)(struct scene_s *, struct engine_s *);
+typedef void(*scene_on_message_fn)(struct scene_s *, struct engine_s *, struct message_header *);
 
 struct scene_s {
 	scene_load_fn load;
 	scene_destroy_fn destroy;
 	scene_update_fn update;
 	scene_draw_fn draw;
+	scene_on_message_fn on_message;
 };
 
 void scene_init(struct scene_s *scene, struct engine_s *engine);
@@ -26,6 +29,7 @@ void scene_destroy(struct scene_s *scene, struct engine_s *engine);
 void scene_load(struct scene_s *scene, struct engine_s *engine);
 void scene_update(struct scene_s *scene, struct engine_s *engine, float dt);
 void scene_draw(struct scene_s *scene, struct engine_s *engine);
+void scene_on_message(struct scene_s *scene, struct engine_s *engine, struct message_header *);
 
 #endif
 

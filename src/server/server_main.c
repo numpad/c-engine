@@ -16,15 +16,23 @@
 
 struct session {
 	struct lws *wsi;
-	int random;
+	int id; // unique until disconnected
+	
+	int is_in_lobby_with_id;
 };
 
+void session_init(struct session *, struct lws *wsi);
+
 //
-// server code
+// functions
 //
+
+void server_on_message(struct session *session, void *data, size_t data_len);
+static void serverui_on_input(const char *cmd, size_t cmd_len);
 
 void *wsserver_thread(void *data);
 
+// ui
 static WINDOW *create_messages_window(void);
 static WINDOW *create_input_window(void);
 
@@ -34,6 +42,9 @@ static const char *fmt_date(time_t rawtime);
 static void messagequeue_add(char *fmt, ...);
 
 struct session *add_session(struct lws *wsi);
+
+// game logic
+static void create_lobby(struct lobby_create_request *msg, struct session *);
 
 //
 // vars
@@ -111,20 +122,7 @@ int main(int argc, char **argv) {
 		} else if (in_char == 4 /* ^D */) {
 			running = 0;
 		} else if (in_char == '\n') {
-			// build command for raw tcp...
-			int command_len = snprintf(NULL, 0, "%.*s", (int)in_command_i, in_command);
-			char command[command_len + 1];
-			snprintf(command, command_len + 1, "%.*s", (int)in_command_i, in_command);
-			// ...and for websockets
-			char ws_command[LWS_PRE + command_len + 1];
-			snprintf(&ws_command[LWS_PRE], command_len + 1, "%.*s", (int)in_command_i, in_command);
-
-			size_t session_len = stbds_arrlen(sessions);
-			for (size_t i = 0; i < session_len; ++i) {
-				lws_write(sessions[i].wsi, (unsigned char *)&ws_command[LWS_PRE], command_len + 1, LWS_WRITE_TEXT);
-			}
-
-			messagequeue_add("[%s]  %s  (seen by %zu)", fmt_time(time(NULL)), command, session_len);
+			serverui_on_input(in_command, in_command_i);
 			werase(win_input);
 			in_command_i = 0;
 		} else if (in_char != ERR) {
@@ -140,6 +138,93 @@ int main(int argc, char **argv) {
 	endwin();
 
 	return 0;
+}
+
+//
+// server logic
+//
+
+void session_init(struct session *session, struct lws *wsi) {
+	session->wsi = wsi;
+	session->id = (int)((rand() / (float)RAND_MAX) * 999999.0f + 100000.0f);
+	session->is_in_lobby_with_id = -1;
+	
+	// id needs to be unique
+	size_t sessions_count = stbds_arrlen(sessions);
+	for (size_t i = 0; i < sessions_count; ++i) {
+		assert(session->id != sessions[i].id);
+	}
+}
+
+void server_on_message(struct session *session, void *data, size_t data_len) {
+	cJSON *data_json = cJSON_ParseWithLength(data, data_len);
+	if (data_json == NULL) {
+		// just a raw message, no json.
+		messagequeue_add("--- Raw Message from #%06d ---\n%.*s\n---     Raw Message End      ---", session->id, (int)data_len, (char *)data);
+		return;
+	}
+
+	// TODO: this can easily occur, but message.h doesnt validate the data yet.
+	//       we just fail here for visibility, these asserts can be removed later.
+	assert(cJSON_GetObjectItem(data_json, "header") != NULL);
+	assert(cJSON_GetObjectItem(cJSON_GetObjectItem(data_json, "header"), "type") != NULL);
+	assert(cJSON_IsNumber(cJSON_GetObjectItem(cJSON_GetObjectItem(data_json, "header"), "type")));
+
+
+	struct message_header *msg_header = get_message(data_json);
+	// could not unpack, maybe validation failed?
+	if (msg_header == NULL) {
+		messagequeue_add("--- Invalid JSON from #%06d ---\n%.*s\n---     Invalid JSON End      ---", session->id, (int)data_len, (char *)data);
+		cJSON_Delete(data_json);
+		return;
+	}
+
+	// we got a fully valid message.
+	messagequeue_add("Received %s from #%06d", message_type_to_name(msg_header->type), session->id);
+	switch ((enum message_type)msg_header->type) {
+		case LOBBY_CREATE_REQUEST:
+			create_lobby((struct lobby_create_request *)msg_header, session);
+			break;
+		case LOBBY_JOIN_REQUEST:
+			messagequeue_add("TODO: implement logic for \"join lobby\"...");
+			break;
+		case MSG_UNKNOWN:
+		case LOBBY_CREATE_RESPONSE:
+		case LOBBY_JOIN_RESPONSE:
+			// these messages we cant handle
+			break;
+	}
+	
+	free_message(data_json, msg_header);
+}
+
+//
+// server ui
+//
+
+static void serverui_on_input(const char *cmd, size_t cmd_len) {
+	// input to c string
+	int input_len = snprintf(NULL, 0, "%.*s", (int)cmd_len, cmd);
+	char input[input_len + 1];
+	snprintf(input, input_len + 1, "%.*s", (int)cmd_len, cmd);
+	
+	int is_command = (input[0] == '/');
+	if (is_command) {
+		if (strncmp(input, "/newlobby", 13) == 0) {
+		}
+
+	} else {
+		// TODO: remove. just sends the raw input for debugging purposes.
+		char ws_command[LWS_PRE + input_len + 1];
+		snprintf(&ws_command[LWS_PRE], input_len + 1, "%.*s", (int)cmd_len, cmd);
+
+		size_t session_len = stbds_arrlen(sessions);
+		for (size_t i = 0; i < session_len; ++i) {
+			lws_write(sessions[i].wsi, (unsigned char *)&ws_command[LWS_PRE], input_len + 1, LWS_WRITE_TEXT);
+		}
+
+		messagequeue_add("[%s]  %s  (seen by %zu)", fmt_time(time(NULL)), input, session_len);
+	}
 }
 
 static WINDOW *create_messages_window(void) {
@@ -206,19 +291,17 @@ static int ws_callback(struct lws *wsi, enum lws_callback_reasons reason, void *
 	switch ((int)reason) {
 	case LWS_CALLBACK_ESTABLISHED:
 		messagequeue_add("WebSocket connected!");
-		session->wsi = wsi;
-		session->random = rand() % 999;
+		session_init(session, wsi);
 		stbds_arrput(sessions, *session);
 		break;
-	case LWS_CALLBACK_RECEIVE:
-		messagequeue_add("WebSocket Userdata: %d", session->random);
-		messagequeue_add("WebSocket said: '%.*s'", data_len, (char *)data);
-		//lws_write(wsi, data, data_len, LWS_WRITE_TEXT);
+	case LWS_CALLBACK_RECEIVE: {
+		server_on_message(session, data, data_len);
 		break;
+	}
 	case LWS_CALLBACK_CLOSED:
 		messagequeue_add("WebSocket disconnected!");
 		for (int i = 0; i < stbds_arrlen(sessions); ++i) {
-			if (sessions[i].random == session->random) {
+			if (sessions[i].id == session->id) {
 				stbds_arrdel(sessions, i);
 				messagequeue_add("Client session destroyed!");
 				break;
@@ -240,20 +323,18 @@ static int rawtcp_callback(struct lws *wsi, enum lws_callback_reasons reason, vo
 	switch ((int)reason) {
 	case LWS_CALLBACK_RAW_ADOPT: {
 		messagequeue_add("TCP-Client connected!");
-		session->wsi = wsi;
-		session->random = rand() % 999;
+		session_init(session, wsi);
 		stbds_arrput(sessions, *session);
 		break;
 	}
 	case LWS_CALLBACK_RAW_RX: {
-		messagequeue_add("TCP-Client Userdata: %d", session->random);
-		messagequeue_add("TCP-Client said: '%.*s'", (int)data_len - 1, (char *)data);
+		server_on_message(session, data, data_len);
 		break;
 	}
 	case LWS_CALLBACK_RAW_CLOSE: {
 		messagequeue_add("TCP-Client disconnected!");
 		for (int i = 0; i < stbds_arrlen(sessions); ++i) {
-			if (sessions[i].random == session->random) {
+			if (sessions[i].id == session->id) {
 				stbds_arrdel(sessions, i);
 				messagequeue_add("TCP-Client session destroyed!");
 				break;
@@ -266,19 +347,18 @@ static int rawtcp_callback(struct lws *wsi, enum lws_callback_reasons reason, vo
 		break;
 	case LWS_CALLBACK_ESTABLISHED:
 		messagequeue_add("Client connected!");
-		session->wsi = wsi;
-		session->random = rand() % 999;
+		session_init(session, wsi);
 		stbds_arrput(sessions, *session);
 		break;
-	case LWS_CALLBACK_RECEIVE:
-		messagequeue_add("Client Userdata: %d", session->random);
-		messagequeue_add("Client said: '%.*s'", data_len, (char *)data);
-		//lws_write(wsi, data, data_len, LWS_WRITE_TEXT);
+	case LWS_CALLBACK_RECEIVE: {
+		server_on_message(session, data, data_len);
+		//lws_write(wsi, &data[LWS_PRE], data_len, LWS_WRITE_TEXT);
 		break;
+	}
 	case LWS_CALLBACK_CLOSED:
 		messagequeue_add("Client disconnected!");
 		for (int i = 0; i < stbds_arrlen(sessions); ++i) {
-			if (sessions[i].random == session->random) {
+			if (sessions[i].id == session->id) {
 				stbds_arrdel(sessions, i);
 				messagequeue_add("Client session destroyed!");
 				break;
@@ -329,5 +409,29 @@ void *wsserver_thread(void *data) {
 	lws_context_destroy(ctx);
 
 	return (void *)0;
+}
+
+//
+// game logic
+//
+
+/* Creates a new lobby.
+ * @param The requests data.
+ * @param session The session which requested this. Can be NULL, if the server creates the lobby for example.
+ */
+static void create_lobby(struct lobby_create_request *msg, struct session *requested_by) {
+	assert(msg != NULL);
+	assert(requested_by != NULL); // TODO: also support no session
+	assert(msg->lobby_id >= 0); // TODO: this is application logic...
+
+	if (requested_by->is_in_lobby_with_id >= 0) {
+		messagequeue_add("#%06d is already in lobby %d but requested to create %d", requested_by->id, requested_by->is_in_lobby_with_id, msg->lobby_id);
+		return;
+	}
+
+	// TODO: check if lobby exists
+
+	requested_by->is_in_lobby_with_id = msg->lobby_id;
+	messagequeue_add("#%06d created lobby %d!", requested_by->id, msg->lobby_id);
 }
 
