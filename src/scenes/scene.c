@@ -6,6 +6,7 @@ void scene_init(struct scene_s *scene, struct engine_s *engine) {
 	scene->destroy = NULL;
 	scene->update = NULL;
 	scene->draw = NULL;
+	scene->on_message = NULL;
 }
 
 void scene_destroy(struct scene_s *scene, struct engine_s *engine) {

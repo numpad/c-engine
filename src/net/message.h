@@ -10,6 +10,7 @@ enum message_type {
 	// lobby related
 	LOBBY_CREATE_REQUEST, LOBBY_CREATE_RESPONSE,
 	LOBBY_JOIN_REQUEST, LOBBY_JOIN_RESPONSE,
+	LOBBY_LIST_REQUEST, LOBBY_LIST_RESPONSE,
 };
 
 const char *message_type_to_name(enum message_type type);
@@ -83,6 +84,26 @@ struct lobby_join_response {
 
 void pack_lobby_join_response(struct lobby_join_response *msg, cJSON *json);
 void unpack_lobby_join_response(cJSON *json, struct lobby_join_response *msg);
+
+
+// LOBBY_LIST_REQUEST
+struct lobby_list_request {
+	struct message_header header;
+};
+
+void pack_lobby_list_request(struct lobby_list_request *, cJSON *json);
+void unpack_lobby_list_request(cJSON *json, struct lobby_list_request *);
+
+
+// LOBBY_LIST_RESPONSE
+struct lobby_list_response {
+	struct message_header header;
+	int ids_of_lobbies_len;
+	int ids_of_lobbies[8];
+};
+
+void pack_lobby_list_response(struct lobby_list_response *msg, cJSON *json);
+void unpack_lobby_list_response(cJSON *json, struct lobby_list_response *msg);
 
 #endif
 

@@ -4,6 +4,7 @@
 #include <SDL_net.h>
 #include <nanovg.h>
 #include <cglm/cglm.h>
+#include <stb_ds.h>
 #include <nuklear.h>
 #include "engine.h"
 #include "scenes/scene_battle.h"
@@ -12,6 +13,16 @@
 #include "net/message.h"
 #include "platform.h"
 
+//
+// state
+//
+static int *ids_of_lobbies = NULL;
+void reset_ids_of_lobbies(void) {
+	if (ids_of_lobbies != NULL) {
+		stbds_arrfree(ids_of_lobbies);
+		ids_of_lobbies = NULL;
+	}
+}
 
 //
 // util
@@ -35,6 +46,8 @@ static void switch_to_minigame_scene(struct engine_s *engine) {
 //
 
 static void menu_load(struct menu_s *menu, struct engine_s *engine) {
+	reset_ids_of_lobbies();
+
 	menu->vg_font = nvgCreateFont(engine->vg, "PermanentMarker Regular", "res/font/PermanentMarker-Regular.ttf");
 	menu->vg_gamelogo = nvgCreateImage(engine->vg, "res/image/logo_placeholder.png", 0);
 
@@ -158,88 +171,45 @@ static void menu_update(struct menu_s *menu, struct engine_s *engine, float dt) 
 			if (is_connected) {
 				nk_layout_row_dynamic(nk, row_height * 0.5f, 3);
 				if (nk_button_label(nk, "Refresh")) {
-					struct lobby_join_request req;
-					message_header_init(&req.header, LOBBY_JOIN_REQUEST);
-					req.lobby_id = 901;
+					printf("Refresh requested...\n");
+					reset_ids_of_lobbies();
+
+					struct lobby_list_request req;
+					message_header_init(&req.header, LOBBY_LIST_REQUEST);
 					cJSON *json = cJSON_CreateObject();
-					pack_lobby_join_request(&req, json);
+					pack_lobby_list_request(&req, json);
+					engine_gameserver_send(engine, json);
+					cJSON_Delete(json);
+				}
+
+				nk_label(nk, "", 0);
+
+				if (nk_button_label(nk, "Create Lobby")) {
+					struct lobby_create_request req;
+					message_header_init(&req.header, LOBBY_CREATE_REQUEST);
+					req.lobby_id = rand() % 999;
+					req.lobby_name = "Created Lobby";
+					cJSON *json = cJSON_CreateObject();
+					pack_lobby_create_request(&req, json);
 					engine_gameserver_send(engine, json);
 					cJSON_Delete(json);
 				}
 			}
 
-
-			/*
-			static char *error_message = NULL;
-			static struct nk_color error_message_color;
-			const struct nk_color color_error = nk_rgb(255, 50, 50);
-			const struct nk_color color_success = nk_rgb(50, 255, 50);
-			const struct nk_color color_warning = nk_rgb(255, 255, 50);
-			static char input_host[128] = "192.168.0.17";
-			nk_layout_row_dynamic(nk, row_height, 1);
-			nk_edit_string_zero_terminated(nk, NK_EDIT_FIELD | NK_EDIT_SIMPLE, input_host, sizeof(input_host) - 1, nk_filter_default);
-
-			if (engine->gameserver_tcp == NULL) {
-				nk_layout_row_dynamic(nk, row_height, 1);
-				if (nk_button_label(nk, "Join")) {
-					error_message = "Connecting...";
-					error_message_color = color_warning;
-
-					do {
-						if (engine_gameserver_connect(engine, input_host) != 0) {
-							error_message = "Connecting failed...";
-							error_message_color = color_error;
-							break;
-						} else {
-							error_message = "Connected";
-							error_message_color = color_success;
-						}
-					} while (0);
-
-				}
-			} else {
-				nk_layout_row_dynamic(nk, row_height, 1);
-				if (nk_button_label(nk, "Send \"random msg\".")) {
-					const int result = SDLNet_TCP_Send(engine->gameserver_tcp, "random msg", 11);
-					if (result < 11) {
-						static char error[128] = {0};
-						sprintf(error, "Sent only %d bytes...", result);
-						error_message = error;
-						//error_message = "Failed sending...";
-						error_message_color = color_warning;
-					} else {
-						error_message = "Data sent!";
-						error_message_color = color_success;
-					}
-				}
-				
-				nk_layout_row_dynamic(nk, row_height, 1);
-				if (nk_button_label(nk, "Create Lobby")) {
-					struct lobby_create_request req;
-					message_header_init(&req.header, LOBBY_CREATE_REQUEST);
-					req.lobby_id = 42;
-					req.lobby_name = "test name, please ignore";
-
-					cJSON *json = cJSON_CreateObject();
-					pack_lobby_create_request(&req, json);
-					const char *json_str = cJSON_PrintUnformatted(json);
-					size_t json_str_len = strlen(json_str);
-					const int result = SDLNet_TCP_Send(engine->gameserver_tcp, json_str, json_str_len);
-					if (result == (int)json_str_len) {
-						error_message = "Data sent!";
-						error_message_color = color_success;
-					} else {
-						error_message = "Not enough data sent...";
-						error_message_color = color_error;
-					}
-				}
-			}
-
-			if (error_message != NULL) {
+			// lobbies
+			if (is_connected) {
 				nk_layout_row_dynamic(nk, row_height * 0.5f, 1);
-				nk_label_colored(nk, error_message, NK_TEXT_ALIGN_BOTTOM | NK_TEXT_ALIGN_LEFT, error_message_color);
+				nk_label(nk, "Server Browser:", NK_TEXT_ALIGN_LEFT);
+
+				int lobbies_len = stbds_arrlen(ids_of_lobbies);
+				for (int i = 0; i < lobbies_len; ++i) {
+					nk_layout_row_dynamic(nk, row_height * 0.5f, 2);
+					nk_labelf(nk, NK_TEXT_ALIGN_LEFT, "#%d", ids_of_lobbies[i]);
+					if (nk_button_label(nk, "Join")) {
+						platform_vibrate(150);
+					}
+				}
 			}
-			*/
 		}
 
 		if (multiplayer_window && nk_window_is_closed(nk, "Multiplayer")) {
@@ -289,6 +259,7 @@ static void menu_draw(struct menu_s *menu, struct engine_s *engine) {
 }
 
 static void menu_on_message(struct menu_s *menu, struct engine_s *engine, struct message_header *msg) {
+	printf("menu_on_message\n");
 	switch ((enum message_type)msg->type) {
 		case LOBBY_CREATE_RESPONSE: {
 			struct lobby_create_response *response = (struct lobby_create_response *)msg;
@@ -308,9 +279,19 @@ static void menu_on_message(struct menu_s *menu, struct engine_s *engine, struct
 			}
 			break;
 		}
+		case LOBBY_LIST_RESPONSE: {
+			printf("got a lobby list response!\n");
+			struct lobby_list_response *response = (struct lobby_list_response *)msg;
+			reset_ids_of_lobbies();
+			for (int i = 0; i < response->ids_of_lobbies_len; ++i) {
+				stbds_arrpush(ids_of_lobbies, response->ids_of_lobbies[i]);
+			}
+			break;
+		}
 		case MSG_UNKNOWN:
 		case LOBBY_CREATE_REQUEST:
 		case LOBBY_JOIN_REQUEST:
+		case LOBBY_LIST_REQUEST:
 			fprintf(stderr, "Can't handle message %s...\n", message_type_to_name(msg->type));
 			break;
 	}

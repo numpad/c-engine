@@ -317,7 +317,8 @@ void engine_gameserver_send(struct engine_s *engine, cJSON *json) {
 
 	// send data
 	const int result = SDLNet_TCP_Send(engine->gameserver_tcp, data, data_len);
-	assert(result >= 0); // result shouldnt be negative.
+	printf("sent %d of %d bytes\n", result, (int)data_len);
+	assert(result == (int)data_len); // result shouldnt be negative.
 	if (result < (int)data_len) {
 		fprintf(stderr, "Failed sending tcp data, that means we disconnect...\n");
 
@@ -340,6 +341,7 @@ void engine_update(struct engine_s *engine) {
 	if (engine->gameserver_tcp != NULL) {
 		const int readable_sockets = 1;
 		if (SDLNet_CheckSockets(engine->gameserver_socketset, 0) == readable_sockets) {
+			printf("Sockets readable\n");
 			static char data[512] = {0};
 			
 			const int data_len = SDLNet_TCP_Recv(engine->gameserver_tcp, &data, 511);
@@ -348,10 +350,10 @@ void engine_update(struct engine_s *engine) {
 				printf("TCP_Recv failure, got 0 bytes... Disconnecting.\n");
 				engine_gameserver_disconnect(engine);
 			} else {
-				printf("Received Raw: %.*s\n", data_len, data);
+				printf("Received Raw: [%d] %.*s\n", data_len, data_len, data);
 
 				// we received something, but maybe it is no json/valid message?
-				cJSON *json = cJSON_Parse(data);
+				cJSON *json = cJSON_ParseWithLength(data, data_len);
 				if (json != NULL) {
 					// it may be valid json, but a valid message?
 					struct message_header *header = unpack_message(json);

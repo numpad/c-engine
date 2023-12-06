@@ -12,6 +12,8 @@ const char *message_type_to_name(enum message_type type) {
 	case LOBBY_CREATE_RESPONSE: return "LOBBY_CREATE_RESPONSE";
 	case LOBBY_JOIN_REQUEST:    return "LOBBY_JOIN_REQUEST";
 	case LOBBY_JOIN_RESPONSE:   return "LOBBY_JOIN_RESPONSE";
+	case LOBBY_LIST_RESPONSE:   return "LOBBY_LIST_RESPONSE";
+	case LOBBY_LIST_REQUEST:    return "LOBBY_LIST_REQUEST";
 	case MSG_UNKNOWN:           return "MSG_UNKNOWN";
 	}
 
@@ -73,6 +75,16 @@ struct message_header *unpack_message(cJSON *json) {
 		case LOBBY_JOIN_RESPONSE: {
 			struct lobby_join_response *res = malloc(sizeof(*res));
 			unpack_lobby_join_response(json, res);
+			return (struct message_header *)res;
+		}
+		case LOBBY_LIST_REQUEST: {
+			struct lobby_list_request *req = malloc(sizeof(*req));
+			unpack_lobby_list_request(json, req);
+			return (struct message_header *)req;
+		}
+		case LOBBY_LIST_RESPONSE: {
+			struct lobby_list_response *res = malloc(sizeof(*res));
+			unpack_lobby_list_response(json, res);
 			return (struct message_header *)res;
 		}
 		case MSG_UNKNOWN:
@@ -155,5 +167,50 @@ void unpack_lobby_join_response(cJSON *json, struct lobby_join_response *msg) {
 
 	msg->lobby_id = cJSON_GetObjectItem(json, "lobby_id")->valueint;
 	msg->join_error = cJSON_GetObjectItem(json, "join_error")->valueint;
+}
+
+// LOBBY_LIST_REQUEST
+void pack_lobby_list_request(struct lobby_list_request *msg, cJSON *json) {
+	assert(msg->header.type == LOBBY_LIST_REQUEST);
+	pack_message_header(&msg->header, json);
+
+	// no fields to store
+}
+
+void unpack_lobby_list_request(cJSON *json, struct lobby_list_request *msg) {
+	unpack_message_header(json, &msg->header);
+	assert(msg->header.type == LOBBY_LIST_REQUEST);
+	
+	// no fields to retrieve
+}
+
+// LOBBY_LIST_RESPONSE
+void pack_lobby_list_response(struct lobby_list_response *msg, cJSON *json) {
+	assert(msg->header.type == LOBBY_LIST_RESPONSE);
+	pack_message_header(&msg->header, json);
+	assert(msg->ids_of_lobbies_len <= 8); // TODO: fix this.
+
+	cJSON *ids = cJSON_CreateIntArray(msg->ids_of_lobbies, msg->ids_of_lobbies_len);
+	cJSON_AddItemToObject(json, "ids_of_lobbies", ids);
+}
+
+void unpack_lobby_list_response(cJSON *json, struct lobby_list_response *msg) {
+	unpack_message_header(json, &msg->header);
+	assert(msg->header.type == LOBBY_LIST_RESPONSE);
+	
+	cJSON *ids = cJSON_GetObjectItem(json, "ids_of_lobbies");
+	if (ids == NULL || !cJSON_IsArray(ids)) {
+		msg->header.type = MSG_UNKNOWN;
+		return;
+	}
+
+	msg->ids_of_lobbies_len = cJSON_GetArraySize(ids);
+	assert(msg->ids_of_lobbies_len <= 8); // TODO: fix this.
+	for (int i = 0; i < msg->ids_of_lobbies_len; ++i) {
+		cJSON *id = cJSON_GetArrayItem(ids, i);
+		assert(id != NULL);
+		assert(cJSON_IsNumber(id));
+		msg->ids_of_lobbies[i] = id->valueint;
+	}
 }
 

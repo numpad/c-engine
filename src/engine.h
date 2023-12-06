@@ -6,13 +6,13 @@
 #include <SDL_opengles2.h>
 #include <cglm/cglm.h>
 #include <nanovg.h>
+#include <cJSON.h>
 #include "scenes/scene.h"
 #include "input.h"
 
 struct nk_context;
 struct engine_s;
 struct console_s;
-typedef struct cJSON cJSON;
 typedef void(*engine_callback_fn)(struct engine_s*);
 
 struct engine_s {
