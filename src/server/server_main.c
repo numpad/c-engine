@@ -55,6 +55,7 @@ struct session *add_session(struct lws *wsi);
 
 // game logic
 static void create_lobby(struct lobby_create_request *msg, struct session *);
+static void list_lobbies(struct lobby_list_request *msg, struct session *requested_by);
 
 //
 // vars
@@ -65,7 +66,7 @@ const size_t messagequeue_max = 128;
 static char *messagequeue[128];
 static size_t messagequeue_len = 0;
 
-static struct session *sessions = NULL;
+static struct session **sessions = NULL;
 
 int main(int argc, char **argv) {
 	initscr();
@@ -162,11 +163,11 @@ void session_init(struct session *session, struct lws *wsi) {
 	// id needs to be unique
 	size_t sessions_count = stbds_arrlen(sessions);
 	for (size_t i = 0; i < sessions_count; ++i) {
-		assert(session->id != sessions[i].id);
+		assert(session->id != sessions[i]->id);
 	}
 
 	// store in sessions
-	stbds_arrput(sessions, *session);
+	stbds_arrput(sessions, session);
 
 }
 
@@ -175,9 +176,8 @@ void session_destroy(struct session *session) {
 
 	// remove from session
 	for (int i = 0; i < stbds_arrlen(sessions); ++i) {
-		if (sessions[i].id == session->id) {
+		if (sessions[i]->id == session->id) {
 			stbds_arrdel(sessions, i);
-			messagequeue_add("[DEV] Client session destroyed!");
 			break;
 		}
 	}
@@ -185,10 +185,8 @@ void session_destroy(struct session *session) {
 
 void session_on_writable(struct session *session) {
 	size_t msg_queue_len = stbds_arrlen(session->msg_queue);
-	messagequeue_add("Session %d is now writable with %d messages!", session->id, msg_queue_len);
 	for (size_t i = 0; i < msg_queue_len; ++i) {
 		char *msg = session->msg_queue[i];
-		messagequeue_add("Sending %s now!", &msg[LWS_PRE]);
 		lws_write(session->wsi, (unsigned char *)&msg[LWS_PRE], strlen(&msg[LWS_PRE]), LWS_WRITE_TEXT);
 		free(msg);
 	}
@@ -203,10 +201,13 @@ void session_send_message(struct session *session, cJSON *message) {
 
 	// serialize json to string
 	char *json_str = cJSON_PrintUnformatted(message);
-	messagequeue_add("Sent: [%s]", json_str);
 	size_t json_str_len = strlen(json_str);
-	messagequeue_add("Len was: %d", json_str_len);
 
+	// dont send nothing
+	assert(json_str_len > 0);
+	if (json_str_len == 0) {
+		return;
+	}
 
 	// prepare lws message
 	char *data = malloc(LWS_PRE + json_str_len + 1);
@@ -256,19 +257,7 @@ void server_on_message(struct session *session, void *data, size_t data_len) {
 			messagequeue_add("TODO: implement logic for \"join lobby\"...");
 			break;
 		case LOBBY_LIST_REQUEST: {
-			struct lobby_list_request *req = (struct lobby_list_request *)msg_header;
-			messagequeue_add("Responding with Lobby List Response...");
-
-			struct lobby_list_response res;
-			message_header_init(&res.header, LOBBY_LIST_RESPONSE);
-			res.ids_of_lobbies_len = 3;
-			res.ids_of_lobbies[0] = 123;
-			res.ids_of_lobbies[1] = 69;
-			res.ids_of_lobbies[2] = rand() % 999;
-			cJSON *json = cJSON_CreateObject();
-			pack_lobby_list_response(&res, json);
-			session_send_message(session, json);
-			cJSON_Delete(json);
+			list_lobbies((struct lobby_list_request *)msg_header, session);
 			break;
 		}
 		case MSG_UNKNOWN:
@@ -294,12 +283,12 @@ static void serverui_on_input(const char *cmd, size_t cmd_len) {
 	
 	int is_command = (input[0] == '/');
 	if (is_command) {
+		messagequeue_add("%s", input);
 		if (strncmp(input, "/queue", strlen("/queue")) == 0) {
-			messagequeue_add("Got command queue, total sessions: %d.", stbds_arrlen(sessions));
 			for (int i = 0; i < stbds_arrlen(sessions); ++i) {
-				struct session *s = &sessions[i];
+				struct session *s = sessions[i];
 				if (s->msg_queue != NULL) {
-					messagequeue_add("Message Queue for %d:", s->id);
+					messagequeue_add("Outstanding messages for client %d:", s->id);
 					for (int j = 0; j < stbds_arrlen(s->msg_queue); ++j) {
 						messagequeue_add(" - %s", s->msg_queue[i]);
 					}
@@ -309,6 +298,15 @@ static void serverui_on_input(const char *cmd, size_t cmd_len) {
 			}
 		}
 
+		if (strncmp(input, "/sessions", strlen("/sessions")) == 0) {
+			const int sessions_len = stbds_arrlen(sessions);
+			for (int i = 0; i < sessions_len; ++i) {
+				const struct session *s = sessions[i];
+				messagequeue_add("Session #%d (%d): In Lobby: %d (%p)", i, s->id, s->is_in_lobby_with_id, s);
+			}
+			messagequeue_add("Total: %d Sessions", sessions_len);
+		}
+
 	} else {
 		// TODO: remove. just sends the raw input for debugging purposes.
 		char ws_command[LWS_PRE + input_len + 1];
@@ -316,7 +314,7 @@ static void serverui_on_input(const char *cmd, size_t cmd_len) {
 
 		size_t session_len = stbds_arrlen(sessions);
 		for (size_t i = 0; i < session_len; ++i) {
-			lws_write(sessions[i].wsi, (unsigned char *)&ws_command[LWS_PRE], input_len + 1, LWS_WRITE_TEXT);
+			lws_write(sessions[i]->wsi, (unsigned char *)&ws_command[LWS_PRE], input_len + 1, LWS_WRITE_TEXT);
 		}
 
 		messagequeue_add("[%s]  %s  (seen by %zu)", fmt_time(time(NULL)), input, session_len);
@@ -400,9 +398,6 @@ static int ws_callback(struct lws *wsi, enum lws_callback_reasons reason, void *
 	case LWS_CALLBACK_SERVER_WRITEABLE:
 		session_on_writable(session);
 		break;
-	case LWS_CALLBACK_CLIENT_WRITEABLE:
-		messagequeue_add("WebSocket Client? writable!");
-		break;
 	default: break;
 	}
 
@@ -427,14 +422,11 @@ static int rawtcp_callback(struct lws *wsi, enum lws_callback_reasons reason, vo
 		session_destroy(session);
 		break;
 	}
-	case LWS_CALLBACK_CLIENT_WRITEABLE:
-		messagequeue_add("(?!) CLIENT_WRITEABLE");
-		break;
 	case LWS_CALLBACK_SERVER_WRITEABLE:
 		session_on_writable(session);
 		break;
 	case LWS_CALLBACK_RAW_WRITEABLE:
-		messagequeue_add("TCP-Client writable!");
+		// raw tcp client is writable
 		session_on_writable(session);
 		break;
 	case LWS_CALLBACK_ESTABLISHED:
@@ -498,6 +490,7 @@ void *wsserver_thread(void *data) {
  * @param session The session which requested this. Can be NULL, if the server creates the lobby for example.
  */
 static void create_lobby(struct lobby_create_request *msg, struct session *requested_by) {
+	messagequeue_add("[create_lobby] Session Ptr: %p", requested_by);
 	assert(msg != NULL);
 	assert(requested_by != NULL); // TODO: also support no session
 	assert(msg->lobby_id >= 0); // TODO: this is application logic...
@@ -523,8 +516,9 @@ static void create_lobby(struct lobby_create_request *msg, struct session *reque
 	// TODO: check if lobby exists
 
 	response.create_error = 0;
+	messagequeue_add("Moving from Lobby %d to %d", requested_by->is_in_lobby_with_id, msg->lobby_id);
 	requested_by->is_in_lobby_with_id = msg->lobby_id;
-	messagequeue_add("#%06d created lobby %d!", requested_by->id, msg->lobby_id);
+	messagequeue_add("#%06d created lobby %d!", requested_by->id, requested_by->is_in_lobby_with_id);
 
 
 	cJSON *json = cJSON_CreateObject();
@@ -532,6 +526,27 @@ static void create_lobby(struct lobby_create_request *msg, struct session *reque
 
 	session_send_message(requested_by, json);
 
+	cJSON_Delete(json);
+}
+
+static void list_lobbies(struct lobby_list_request *msg, struct session *requested_by) {
+	int sessions_len = stbds_arrlen(sessions);
+	if (sessions_len > 8) sessions_len = 8;
+
+	struct lobby_list_response res;
+	message_header_init(&res.header, LOBBY_LIST_RESPONSE);
+	res.ids_of_lobbies_len = 0;
+	for (int i = 0; i < sessions_len; ++i) {
+		const int lobby_id = sessions[i]->is_in_lobby_with_id;
+		if (lobby_id >= 0) {
+			++res.ids_of_lobbies_len;
+			res.ids_of_lobbies[i] = lobby_id;
+			messagequeue_add("have lobby %d", lobby_id);
+		}
+	}
+	cJSON *json = cJSON_CreateObject();
+	pack_lobby_list_response(&res, json);
+	session_send_message(requested_by, json);
 	cJSON_Delete(json);
 }
 

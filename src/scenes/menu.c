@@ -16,8 +16,11 @@
 //
 // state
 //
+static int id_of_current_lobby = -1;
 static int *ids_of_lobbies = NULL;
 void reset_ids_of_lobbies(void) {
+	id_of_current_lobby = -1;
+
 	if (ids_of_lobbies != NULL) {
 		stbds_arrfree(ids_of_lobbies);
 		ids_of_lobbies = NULL;
@@ -187,7 +190,7 @@ static void menu_update(struct menu_s *menu, struct engine_s *engine, float dt) 
 				if (nk_button_label(nk, "Create Lobby")) {
 					struct lobby_create_request req;
 					message_header_init(&req.header, LOBBY_CREATE_REQUEST);
-					req.lobby_id = rand() % 999;
+					req.lobby_id = rand() % 950 + 17;
 					req.lobby_name = "Created Lobby";
 					cJSON *json = cJSON_CreateObject();
 					pack_lobby_create_request(&req, json);
@@ -199,9 +202,13 @@ static void menu_update(struct menu_s *menu, struct engine_s *engine, float dt) 
 			// lobbies
 			if (is_connected) {
 				nk_layout_row_dynamic(nk, row_height * 0.5f, 1);
-				nk_label(nk, "Server Browser:", NK_TEXT_ALIGN_LEFT);
+				nk_label(nk, "Server Browser:", NK_TEXT_ALIGN_LEFT | NK_TEXT_ALIGN_BOTTOM);
 
 				int lobbies_len = stbds_arrlen(ids_of_lobbies);
+				if (lobbies_len == 0) {
+					nk_layout_row_dynamic(nk, row_height * 0.8f, 1);
+					nk_label_colored(nk, "No lobbies found :(", NK_TEXT_ALIGN_MIDDLE | NK_TEXT_ALIGN_CENTERED, nk_rgb(88, 88, 88));
+				}
 				for (int i = 0; i < lobbies_len; ++i) {
 					nk_layout_row_dynamic(nk, row_height * 0.5f, 2);
 					nk_labelf(nk, NK_TEXT_ALIGN_LEFT, "#%d", ids_of_lobbies[i]);
@@ -259,7 +266,6 @@ static void menu_draw(struct menu_s *menu, struct engine_s *engine) {
 }
 
 static void menu_on_message(struct menu_s *menu, struct engine_s *engine, struct message_header *msg) {
-	printf("menu_on_message\n");
 	switch ((enum message_type)msg->type) {
 		case LOBBY_CREATE_RESPONSE: {
 			struct lobby_create_response *response = (struct lobby_create_response *)msg;
@@ -280,9 +286,7 @@ static void menu_on_message(struct menu_s *menu, struct engine_s *engine, struct
 			break;
 		}
 		case LOBBY_LIST_RESPONSE: {
-			printf("got a lobby list response!\n");
 			struct lobby_list_response *response = (struct lobby_list_response *)msg;
-			reset_ids_of_lobbies();
 			for (int i = 0; i < response->ids_of_lobbies_len; ++i) {
 				stbds_arrpush(ids_of_lobbies, response->ids_of_lobbies[i]);
 			}
