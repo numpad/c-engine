@@ -344,6 +344,11 @@ void engine_update(struct engine_s *engine) {
 			static char data[512] = {0};
 			
 			const int data_len = SDLNet_TCP_Recv(engine->gameserver_tcp, &data, 511);
+			// FIXME: can receive multiple reponses at once. curently cJSON_ParseWithLength only "detects" the first one.
+			//        this did not happen with websockets, but it did with a raw tcp stream.
+			//        current options:
+			//         - handle this on the server: send 1 message from queue and if more exist, request another write, repeat. (meh, might still not work. also slower.)
+			//         - count the number of json object in the response and parse one by one. later we should also handle partial messages. (sounds good)
 			if (data_len <= 0) {
 				// TODO: Attempt to reconnect?
 				printf("TCP_Recv failure, got 0 bytes... Disconnecting.\n");

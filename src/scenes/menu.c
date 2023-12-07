@@ -19,8 +19,6 @@
 static int id_of_current_lobby = -1;
 static int *ids_of_lobbies = NULL;
 void reset_ids_of_lobbies(void) {
-	id_of_current_lobby = -1;
-
 	if (ids_of_lobbies != NULL) {
 		stbds_arrfree(ids_of_lobbies);
 		ids_of_lobbies = NULL;
@@ -49,6 +47,7 @@ static void switch_to_minigame_scene(struct engine_s *engine) {
 //
 
 static void menu_load(struct menu_s *menu, struct engine_s *engine) {
+	id_of_current_lobby = -1;
 	reset_ids_of_lobbies();
 
 	menu->vg_font = nvgCreateFont(engine->vg, "PermanentMarker Regular", "res/font/PermanentMarker-Regular.ttf");
@@ -154,6 +153,8 @@ static void menu_update(struct menu_s *menu, struct engine_s *engine, float dt) 
 				if (nk_button_label(nk, "Disconnect")) {
 					engine_gameserver_disconnect(engine);
 					server_ips_i = 0;
+					id_of_current_lobby = -1;
+					reset_ids_of_lobbies();
 				}
 			} else {
 				const int new_server_ips_i = nk_combo(nk, server_ips, 4, server_ips_i, 30.0f, nk_vec2(200.0f, 200.0f));
@@ -172,6 +173,7 @@ static void menu_update(struct menu_s *menu, struct engine_s *engine, float dt) 
 
 			// toolbar
 			if (is_connected) {
+				// refresh
 				nk_layout_row_dynamic(nk, row_height * 0.5f, 3);
 				if (nk_button_label(nk, "Refresh")) {
 					printf("Refresh requested...\n");
@@ -187,15 +189,28 @@ static void menu_update(struct menu_s *menu, struct engine_s *engine, float dt) 
 
 				nk_label(nk, "", 0);
 
-				if (nk_button_label(nk, "Create Lobby")) {
-					struct lobby_create_request req;
-					message_header_init(&req.header, LOBBY_CREATE_REQUEST);
-					req.lobby_id = rand() % 950 + 17;
-					req.lobby_name = "Created Lobby";
-					cJSON *json = cJSON_CreateObject();
-					pack_lobby_create_request(&req, json);
-					engine_gameserver_send(engine, json);
-					cJSON_Delete(json);
+				// create or leave
+				if (id_of_current_lobby >= 0) {
+					if (nk_button_label(nk, "Leave Lobby")) {
+						struct lobby_join_request req;
+						message_header_init(&req.header, LOBBY_JOIN_REQUEST);
+						req.lobby_id = -1;
+						cJSON *json = cJSON_CreateObject();
+						pack_lobby_join_request(&req, json);
+						engine_gameserver_send(engine, json);
+						cJSON_Delete(json);
+					}
+				} else {
+					if (nk_button_label(nk, "Create Lobby")) {
+						struct lobby_create_request req;
+						message_header_init(&req.header, LOBBY_CREATE_REQUEST);
+						req.lobby_id = rand() % 950 + 17;
+						req.lobby_name = "Created Lobby";
+						cJSON *json = cJSON_CreateObject();
+						pack_lobby_create_request(&req, json);
+						engine_gameserver_send(engine, json);
+						cJSON_Delete(json);
+					}
 				}
 			}
 
@@ -211,9 +226,18 @@ static void menu_update(struct menu_s *menu, struct engine_s *engine, float dt) 
 				}
 				for (int i = 0; i < lobbies_len; ++i) {
 					nk_layout_row_dynamic(nk, row_height * 0.5f, 2);
-					nk_labelf(nk, NK_TEXT_ALIGN_LEFT, "#%d", ids_of_lobbies[i]);
+					nk_labelf(nk, NK_TEXT_ALIGN_LEFT | NK_TEXT_ALIGN_MIDDLE, "#%d", ids_of_lobbies[i]);
+
 					if (nk_button_label(nk, "Join")) {
 						platform_vibrate(150);
+
+						struct lobby_join_request req;
+						message_header_init(&req.header, LOBBY_JOIN_REQUEST);
+						req.lobby_id = ids_of_lobbies[i];
+						cJSON *json = cJSON_CreateObject();
+						pack_lobby_join_request(&req, json);
+						engine_gameserver_send(engine, json);
+						cJSON_Delete(json);
 					}
 				}
 			}
@@ -273,6 +297,7 @@ static void menu_on_message(struct menu_s *menu, struct engine_s *engine, struct
 				printf("Failed creating lobby #%d...\n", response->lobby_id);
 			} else {
 				printf("Lobby #%d was created.\n", response->lobby_id);
+				id_of_current_lobby = response->lobby_id; // TODO: join_response is enough, the lobby_create_request triggers 2 responses, create_response and then join_response.
 			}
 			break;
 		}
@@ -282,12 +307,14 @@ static void menu_on_message(struct menu_s *menu, struct engine_s *engine, struct
 				printf("Failed joining into lobby #%d...\n", response->lobby_id);
 			} else {
 				printf("Joined lobby #%d!\n", response->lobby_id);
+				id_of_current_lobby = response->lobby_id;
 			}
 			break;
 		}
 		case LOBBY_LIST_RESPONSE: {
 			struct lobby_list_response *response = (struct lobby_list_response *)msg;
 			for (int i = 0; i < response->ids_of_lobbies_len; ++i) {
+				printf("List of lobbies: %d\n", response->ids_of_lobbies[i]);
 				stbds_arrpush(ids_of_lobbies, response->ids_of_lobbies[i]);
 			}
 			break;
