@@ -191,15 +191,6 @@ static void menu_update(struct menu_s *menu, struct engine_s *engine, float dt) 
 
 				// create or leave
 				if (id_of_current_lobby >= 0) {
-					if (nk_button_label(nk, "Leave Lobby")) {
-						struct lobby_join_request req;
-						message_header_init(&req.header, LOBBY_JOIN_REQUEST);
-						req.lobby_id = -1;
-						cJSON *json = cJSON_CreateObject();
-						pack_lobby_join_request(&req, json);
-						engine_gameserver_send(engine, json);
-						cJSON_Delete(json);
-					}
 				} else {
 					if (nk_button_label(nk, "Create Lobby")) {
 						struct lobby_create_request req;
@@ -214,8 +205,8 @@ static void menu_update(struct menu_s *menu, struct engine_s *engine, float dt) 
 				}
 			}
 
-			// lobbies
-			if (is_connected) {
+			// list lobbies
+			if (is_connected && id_of_current_lobby < 0) {
 				nk_layout_row_dynamic(nk, row_height * 0.5f, 1);
 				nk_label(nk, "Server Browser:", NK_TEXT_ALIGN_LEFT | NK_TEXT_ALIGN_BOTTOM);
 
@@ -239,6 +230,32 @@ static void menu_update(struct menu_s *menu, struct engine_s *engine, float dt) 
 						engine_gameserver_send(engine, json);
 						cJSON_Delete(json);
 					}
+				}
+			}
+
+			// show current lobby
+			if (is_connected && id_of_current_lobby >= 0) {
+				// title
+				nk_layout_row_dynamic(nk, row_height * 0.5f, 1);
+				nk_labelf(nk, NK_TEXT_ALIGN_LEFT | NK_TEXT_ALIGN_BOTTOM, "Lobby #%d", id_of_current_lobby);
+
+				// player list
+				nk_layout_row_dynamic(nk, row_height * 0.4f, 1);
+				nk_label(nk, " * You", NK_TEXT_ALIGN_LEFT | NK_TEXT_ALIGN_MIDDLE);
+				nk_layout_row_dynamic(nk, row_height * 0.4f, 1);
+				nk_label_colored(nk, " * Waiting for others...", NK_TEXT_ALIGN_LEFT | NK_TEXT_ALIGN_MIDDLE, nk_rgb(88, 88, 88));
+
+				// leave
+				nk_layout_row_dynamic(nk, row_height * 0.5f, 2);
+				nk_label(nk, "", 0);
+				if (nk_button_label(nk, "Leave Lobby")) {
+					struct lobby_join_request req;
+					message_header_init(&req.header, LOBBY_JOIN_REQUEST);
+					req.lobby_id = -1;
+					cJSON *json = cJSON_CreateObject();
+					pack_lobby_join_request(&req, json);
+					engine_gameserver_send(engine, json);
+					cJSON_Delete(json);
 				}
 			}
 		}
@@ -312,6 +329,8 @@ static void menu_on_message(struct menu_s *menu, struct engine_s *engine, struct
 			break;
 		}
 		case LOBBY_LIST_RESPONSE: {
+			reset_ids_of_lobbies();
+
 			struct lobby_list_response *response = (struct lobby_list_response *)msg;
 			for (int i = 0; i < response->ids_of_lobbies_len; ++i) {
 				printf("List of lobbies: %d\n", response->ids_of_lobbies[i]);
