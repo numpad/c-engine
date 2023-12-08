@@ -43,67 +43,37 @@ void unpack_message_header(cJSON *json, struct message_header *);
 struct message_header *unpack_message(cJSON *json);
 void free_message(cJSON *json, struct message_header *);
 
-// LOBBY_CREATE_REQUEST
-struct lobby_create_request {
-	struct message_header header;
-	int lobby_id;
-	char *lobby_name;
-};
 
-void pack_lobby_create_request(struct lobby_create_request *, cJSON *json);
-void unpack_lobby_create_request(cJSON *json, struct lobby_create_request *);
-
-
-// LOBBY_CREATE_RESPONSE
-struct lobby_create_response {
-	struct message_header header;
-	int lobby_id;
-	int create_error;
-};
-
-void pack_lobby_create_response(struct lobby_create_response *, cJSON *json);
-void unpack_lobby_create_response(cJSON *json, struct lobby_create_response *);
+#define MESSAGE_DECLARATION(_type, _name, _fields) \
+	struct _name {                                 \
+		struct message_header header;              \
+		_fields;                                   \
+	};                                             \
+	void _name##_init(struct _name *);             \
+	void _name##_destroy(struct _name *);          \
+	void pack_##_name(struct _name *, cJSON *);    \
+	void unpack_##_name(cJSON *, struct _name *)
 
 
-// LOBBY_JOIN_REQUEST
-struct lobby_join_request {
-	struct message_header header;
-	int lobby_id;
-};
+MESSAGE_DECLARATION(LOBBY_CREATE_REQUEST, lobby_create_request,
+	int lobby_id; char *lobby_name);
 
-void pack_lobby_join_request(struct lobby_join_request *, cJSON *json);
-void unpack_lobby_join_request(cJSON *json, struct lobby_join_request *);
+MESSAGE_DECLARATION(LOBBY_CREATE_RESPONSE, lobby_create_response,
+	int lobby_id; int create_error);
 
+MESSAGE_DECLARATION(LOBBY_JOIN_REQUEST, lobby_join_request,
+	int lobby_id);
 
-// LOBBY_JOIN_RESPONSE
-struct lobby_join_response {
-	struct message_header header;
-	int lobby_id;
-	int join_error;
-};
+MESSAGE_DECLARATION(LOBBY_JOIN_RESPONSE, lobby_join_response,
+	int lobby_id; int join_error);
 
-void pack_lobby_join_response(struct lobby_join_response *msg, cJSON *json);
-void unpack_lobby_join_response(cJSON *json, struct lobby_join_response *msg);
+MESSAGE_DECLARATION(LOBBY_LIST_REQUEST, lobby_list_request,
+	void);
 
+MESSAGE_DECLARATION(LOBBY_LIST_RESPONSE, lobby_list_response,
+	int ids_of_lobbies_len; int ids_of_lobbies[8]);
 
-// LOBBY_LIST_REQUEST
-struct lobby_list_request {
-	struct message_header header;
-};
-
-void pack_lobby_list_request(struct lobby_list_request *, cJSON *json);
-void unpack_lobby_list_request(cJSON *json, struct lobby_list_request *);
-
-
-// LOBBY_LIST_RESPONSE
-struct lobby_list_response {
-	struct message_header header;
-	int ids_of_lobbies_len;
-	int ids_of_lobbies[8];
-};
-
-void pack_lobby_list_response(struct lobby_list_response *msg, cJSON *json);
-void unpack_lobby_list_response(cJSON *json, struct lobby_list_response *msg);
+#undef MESSAGE_DECLARATION
 
 #endif
 
