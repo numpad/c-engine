@@ -5,27 +5,54 @@
 #include <assert.h>
 #include <cJSON.h>
 
-struct message_function_info {
-	const char *name;
-	(struct message_header*, cJSON*) *pack_fn;
-	(cJSON*; struct message_header*) *unpack_fn;
+const message_function_info_t message_function_infos[MSG_TYPE_MAX] = {
+	[MSG_UNKNOWN] = (message_function_info_t){
+		.name="MSG_UNKNOWN",
+		.pack_fn=NULL,
+		.unpack_fn=NULL,
+		.struct_size=0,
+	},
+	[LOBBY_CREATE_REQUEST] = (message_function_info_t){
+		.name        = "LOBBY_CREATE_REQUEST",
+		.pack_fn     = (message_pack_fn)pack_lobby_create_request,
+		.unpack_fn   = (message_unpack_fn)unpack_lobby_create_request,
+		.struct_size = sizeof(struct lobby_create_request),
+	},
+	[LOBBY_CREATE_RESPONSE] = (message_function_info_t){
+		.name        = "LOBBY_CREATE_RESPONSE",
+		.pack_fn     = (message_pack_fn)pack_lobby_create_response,
+		.unpack_fn   = (message_unpack_fn)unpack_lobby_create_response,
+		.struct_size = sizeof(struct lobby_create_response),
+	},
+	[LOBBY_JOIN_REQUEST] = (message_function_info_t){
+		.name        = "LOBBY_JOIN_REQUEST",
+		.pack_fn     = (message_pack_fn)pack_lobby_join_request,
+		.unpack_fn   = (message_unpack_fn)unpack_lobby_join_request,
+		.struct_size = sizeof(struct lobby_join_request),
+	},
+	[LOBBY_JOIN_RESPONSE] = (message_function_info_t){
+		.name        = "LOBBY_JOIN_RESPONSE",
+		.pack_fn     = (message_pack_fn)pack_lobby_join_response,
+		.unpack_fn   = (message_unpack_fn)unpack_lobby_join_response,
+		.struct_size = sizeof(struct lobby_join_response),
+	},
+	[LOBBY_LIST_REQUEST] = (message_function_info_t){
+		.name        = "LOBBY_LIST_REQUEST",
+		.pack_fn     = (message_pack_fn)pack_lobby_list_request,
+		.unpack_fn   = (message_unpack_fn)unpack_lobby_list_request,
+		.struct_size = sizeof(struct lobby_list_request),
+	},
+	[LOBBY_LIST_RESPONSE] = (message_function_info_t){
+		.name        = "LOBBY_LIST_RESPONSE",
+		.pack_fn     = (message_pack_fn)pack_lobby_list_response,
+		.unpack_fn   = (message_unpack_fn)unpack_lobby_list_response,
+		.struct_size = sizeof(struct lobby_list_response),
+	},
 };
-
-extern const struct message_function_info message_function_infos[];
 
 // Message Header
 const char *message_type_to_name(enum message_type type) {
-	switch (type) {
-	case LOBBY_CREATE_REQUEST:  return "LOBBY_CREATE_REQUEST";
-	case LOBBY_CREATE_RESPONSE: return "LOBBY_CREATE_RESPONSE";
-	case LOBBY_JOIN_REQUEST:    return "LOBBY_JOIN_REQUEST";
-	case LOBBY_JOIN_RESPONSE:   return "LOBBY_JOIN_RESPONSE";
-	case LOBBY_LIST_RESPONSE:   return "LOBBY_LIST_RESPONSE";
-	case LOBBY_LIST_REQUEST:    return "LOBBY_LIST_REQUEST";
-	case MSG_UNKNOWN:           return "MSG_UNKNOWN";
-	}
-
-	return NULL;
+	return message_function_infos[type].name;
 }
 
 void message_header_init(struct message_header *msg, int16_t type) {
@@ -55,34 +82,18 @@ void unpack_message_header(cJSON *json, struct message_header *msg) {
 
 cJSON *pack_message(struct message_header *msg) {
 	assert(msg != NULL);
-	
-	cJSON *json = cJSON_CreateObject();
-	switch ((enum message_type)msg->type) {
-		case LOBBY_CREATE_REQUEST:
-			pack_lobby_create_request((struct lobby_create_request *)msg, json);
-			return json;
-		case LOBBY_CREATE_RESPONSE:
-			pack_lobby_create_response((struct lobby_create_response *)msg, json);
-			return json;
-		case LOBBY_JOIN_REQUEST:
-			pack_lobby_join_request((struct lobby_join_request *)msg, json);
-			return json;
-		case LOBBY_JOIN_RESPONSE:
-			pack_lobby_join_response((struct lobby_join_response *)msg, json);
-			return json;
-		case LOBBY_LIST_REQUEST:
-			pack_lobby_list_request((struct lobby_list_request *)msg, json);
-			return json;
-		case LOBBY_LIST_RESPONSE:
-			pack_lobby_list_response((struct lobby_list_response *)msg, json);
-			return json;
-		case MSG_UNKNOWN:
-		default:
-			cJSON_Delete(json);
-			break;
+	assert(msg->type < MSG_TYPE_MAX);
+	if (msg->type == MSG_UNKNOWN) {
+		return NULL;
 	}
 
-	return NULL;
+	message_pack_fn pack_fn = message_function_infos[msg->type].pack_fn;
+	assert(pack_fn != NULL);
+
+	cJSON *json = cJSON_CreateObject();
+	pack_fn(msg, json);
+
+	return json;
 }
 
 struct message_header *unpack_message(cJSON *json) {
@@ -96,42 +107,16 @@ struct message_header *unpack_message(cJSON *json) {
 		return NULL;
 	}
 
-	switch ((enum message_type)header.type) {
-		case LOBBY_CREATE_REQUEST: {
-			struct lobby_create_request *req = malloc(sizeof(*req));
-			unpack_lobby_create_request(json, req);
-			return (struct message_header *)req;
-		}
-		case LOBBY_CREATE_RESPONSE: {
-			struct lobby_create_response *res = malloc(sizeof(*res));
-			unpack_lobby_create_response(json, res);
-			return (struct message_header *)res;
-		}
-		case LOBBY_JOIN_REQUEST: {
-			struct lobby_join_request *req = malloc(sizeof(*req));
-			unpack_lobby_join_request(json, req);
-			return (struct message_header *)req;
-		}
-		case LOBBY_JOIN_RESPONSE: {
-			struct lobby_join_response *res = malloc(sizeof(*res));
-			unpack_lobby_join_response(json, res);
-			return (struct message_header *)res;
-		}
-		case LOBBY_LIST_REQUEST: {
-			struct lobby_list_request *req = malloc(sizeof(*req));
-			unpack_lobby_list_request(json, req);
-			return (struct message_header *)req;
-		}
-		case LOBBY_LIST_RESPONSE: {
-			struct lobby_list_response *res = malloc(sizeof(*res));
-			unpack_lobby_list_response(json, res);
-			return (struct message_header *)res;
-		}
-		case MSG_UNKNOWN:
-			break;
-	}
+	const message_function_info_t *info = &message_function_infos[header.type];
+	const message_unpack_fn unpack_fn = info->unpack_fn;
+	const size_t struct_size = info->struct_size;
+	assert(unpack_fn != NULL);
+	assert(struct_size > 0);
 
-	return NULL;
+	struct message_header *msg = malloc(struct_size);
+	unpack_fn(json, msg);
+	assert(msg->type != MSG_UNKNOWN);
+	return msg;
 }
 
 void free_message(cJSON *json, struct message_header *msg) {

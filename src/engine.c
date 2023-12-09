@@ -367,6 +367,8 @@ void engine_update(struct engine_s *engine) {
 						printf("Received a %s\n", message_type_to_name(header->type));
 						scene_on_message(engine->scene, engine, header);
 						free_message(json, header);
+					} else {
+						cJSON_Delete(json);
 					}
 				}
 			}
