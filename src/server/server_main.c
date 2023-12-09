@@ -214,6 +214,7 @@ void session_send_message(struct session *session, cJSON *message) {
 	char *data = malloc(LWS_PRE + json_str_len + 1);
 	memcpy(&data[LWS_PRE], json_str, json_str_len);
 	data[LWS_PRE + json_str_len] = '\0';
+	free(json_str);
 
 	// enqueue message and request writing
 	stbds_arrpush(session->msg_queue, data);

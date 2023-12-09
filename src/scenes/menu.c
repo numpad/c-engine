@@ -181,10 +181,7 @@ static void menu_update(struct menu_s *menu, struct engine_s *engine, float dt) 
 
 					struct lobby_list_request req;
 					message_header_init(&req.header, LOBBY_LIST_REQUEST);
-					cJSON *json = cJSON_CreateObject();
-					pack_lobby_list_request(&req, json);
-					engine_gameserver_send(engine, json);
-					cJSON_Delete(json);
+					engine_gameserver_send(engine, (struct message_header *)&req);
 				}
 
 				nk_label(nk, "", 0);
@@ -197,10 +194,7 @@ static void menu_update(struct menu_s *menu, struct engine_s *engine, float dt) 
 						message_header_init(&req.header, LOBBY_CREATE_REQUEST);
 						req.lobby_id = rand() % 950 + 17;
 						req.lobby_name = "Created Lobby";
-						cJSON *json = cJSON_CreateObject();
-						pack_lobby_create_request(&req, json);
-						engine_gameserver_send(engine, json);
-						cJSON_Delete(json);
+						engine_gameserver_send(engine, (struct message_header *)&req);
 					}
 				}
 			}
@@ -225,10 +219,7 @@ static void menu_update(struct menu_s *menu, struct engine_s *engine, float dt) 
 						struct lobby_join_request req;
 						message_header_init(&req.header, LOBBY_JOIN_REQUEST);
 						req.lobby_id = ids_of_lobbies[i];
-						cJSON *json = cJSON_CreateObject();
-						pack_lobby_join_request(&req, json);
-						engine_gameserver_send(engine, json);
-						cJSON_Delete(json);
+						engine_gameserver_send(engine, (struct message_header *)&req);
 					}
 				}
 			}
@@ -252,10 +243,7 @@ static void menu_update(struct menu_s *menu, struct engine_s *engine, float dt) 
 					struct lobby_join_request req;
 					message_header_init(&req.header, LOBBY_JOIN_REQUEST);
 					req.lobby_id = -1;
-					cJSON *json = cJSON_CreateObject();
-					pack_lobby_join_request(&req, json);
-					engine_gameserver_send(engine, json);
-					cJSON_Delete(json);
+					engine_gameserver_send(engine, (struct message_header *)&req);
 				}
 			}
 		}

@@ -6,13 +6,13 @@
 #include <SDL_opengles2.h>
 #include <cglm/cglm.h>
 #include <nanovg.h>
-#include <cJSON.h>
 #include "scenes/scene.h"
 #include "input.h"
 
 struct nk_context;
 struct engine_s;
 struct console_s;
+struct message_header;
 typedef void(*engine_callback_fn)(struct engine_s*);
 
 struct engine_s {
@@ -65,7 +65,7 @@ void engine_setscene_dll(struct engine_s *engine, const char *filename);
 // networking
 int engine_gameserver_connect(struct engine_s *, const char *address);
 void engine_gameserver_disconnect(struct engine_s *);
-void engine_gameserver_send(struct engine_s *, cJSON *json);
+void engine_gameserver_send(struct engine_s *, struct message_header *msg);
 
 // main loop
 void engine_update(struct engine_s *engine);

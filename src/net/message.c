@@ -5,6 +5,14 @@
 #include <assert.h>
 #include <cJSON.h>
 
+struct message_function_info {
+	const char *name;
+	(struct message_header*, cJSON*) *pack_fn;
+	(cJSON*; struct message_header*) *unpack_fn;
+};
+
+extern const struct message_function_info message_function_infos[];
+
 // Message Header
 const char *message_type_to_name(enum message_type type) {
 	switch (type) {
@@ -43,6 +51,38 @@ void unpack_message_header(cJSON *json, struct message_header *msg) {
 	}
 
 	msg->type = header_type->valueint;
+}
+
+cJSON *pack_message(struct message_header *msg) {
+	assert(msg != NULL);
+	
+	cJSON *json = cJSON_CreateObject();
+	switch ((enum message_type)msg->type) {
+		case LOBBY_CREATE_REQUEST:
+			pack_lobby_create_request((struct lobby_create_request *)msg, json);
+			return json;
+		case LOBBY_CREATE_RESPONSE:
+			pack_lobby_create_response((struct lobby_create_response *)msg, json);
+			return json;
+		case LOBBY_JOIN_REQUEST:
+			pack_lobby_join_request((struct lobby_join_request *)msg, json);
+			return json;
+		case LOBBY_JOIN_RESPONSE:
+			pack_lobby_join_response((struct lobby_join_response *)msg, json);
+			return json;
+		case LOBBY_LIST_REQUEST:
+			pack_lobby_list_request((struct lobby_list_request *)msg, json);
+			return json;
+		case LOBBY_LIST_RESPONSE:
+			pack_lobby_list_response((struct lobby_list_response *)msg, json);
+			return json;
+		case MSG_UNKNOWN:
+		default:
+			cJSON_Delete(json);
+			break;
+	}
+
+	return NULL;
 }
 
 struct message_header *unpack_message(cJSON *json) {

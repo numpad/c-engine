@@ -41,6 +41,13 @@ void unpack_message_header(cJSON *json, struct message_header *);
  *     free_message(json, msg_header);
  */
 struct message_header *unpack_message(cJSON *json);
+/**
+ * Serializes a message struct and returns it as a cJSON object.
+ * @param msg A message struct.
+ * @returns The message serialized into a cJSON object. Ne
+ *          Needs to be freed using `cJSON_Delete()`!
+ */
+cJSON *pack_message(struct message_header *msg);
 void free_message(cJSON *json, struct message_header *);
 
 

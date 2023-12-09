@@ -304,16 +304,18 @@ void engine_gameserver_disconnect(struct engine_s *engine) {
 	}
 }
 
-void engine_gameserver_send(struct engine_s *engine, cJSON *json) {
+void engine_gameserver_send(struct engine_s *engine, struct message_header *msg) {
 	assert(engine != NULL);
-	assert(json != NULL);
+	assert(msg != NULL);
 	if (engine->gameserver_tcp == NULL) {
 		return;
 	}
 
-	// serialize 
-	const char *data = cJSON_PrintUnformatted(json);
+	// serialize
+	cJSON *json = pack_message(msg);
+	char *data = cJSON_PrintUnformatted(json);
 	const size_t data_len = strlen(data);
+	cJSON_Delete(json);
 
 	// send data
 	const int result = SDLNet_TCP_Send(engine->gameserver_tcp, data, data_len);
@@ -324,6 +326,8 @@ void engine_gameserver_send(struct engine_s *engine, cJSON *json) {
 		// TODO: is just disconnecting the right choice here?
 		engine_gameserver_disconnect(engine);
 	}
+
+	free(data);
 }
 
 // main loop
