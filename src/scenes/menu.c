@@ -295,7 +295,7 @@ static void menu_draw(struct menu_s *menu, struct engine_s *engine) {
 }
 
 static void menu_on_message(struct menu_s *menu, struct engine_s *engine, struct message_header *msg) {
-	switch ((enum message_type)msg->type) {
+	switch (msg->type) {
 		case LOBBY_CREATE_RESPONSE: {
 			struct lobby_create_response *response = (struct lobby_create_response *)msg;
 			if (response->create_error) {
@@ -321,12 +321,12 @@ static void menu_on_message(struct menu_s *menu, struct engine_s *engine, struct
 
 			struct lobby_list_response *response = (struct lobby_list_response *)msg;
 			for (int i = 0; i < response->ids_of_lobbies_len; ++i) {
-				printf("List of lobbies: %d\n", response->ids_of_lobbies[i]);
 				stbds_arrpush(ids_of_lobbies, response->ids_of_lobbies[i]);
 			}
 			break;
 		}
-		case MSG_UNKNOWN:
+		case MSG_TYPE_UNKNOWN:
+		case MSG_TYPE_MAX:
 		case LOBBY_CREATE_REQUEST:
 		case LOBBY_JOIN_REQUEST:
 		case LOBBY_LIST_REQUEST:
@@ -340,10 +340,10 @@ void menu_init(struct menu_s *menu, struct engine_s *engine) {
 	scene_init((struct scene_s *)menu, engine);
 
 	// init function pointers
-	menu->base.load = (scene_load_fn)menu_load;
-	menu->base.destroy = (scene_destroy_fn)menu_destroy;
-	menu->base.update = (scene_update_fn)menu_update;
-	menu->base.draw = (scene_draw_fn)menu_draw;
+	menu->base.load       = (scene_load_fn)menu_load;
+	menu->base.destroy    = (scene_destroy_fn)menu_destroy;
+	menu->base.update     = (scene_update_fn)menu_update;
+	menu->base.draw       = (scene_draw_fn)menu_draw;
 	menu->base.on_message = (scene_on_message_fn)menu_on_message;
 
 	// init gui

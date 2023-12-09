@@ -120,7 +120,7 @@ static void planet_collide(planet_t *planet, vec2 pos, vec2 vel, float radius, p
 
 	vec2 away; // planet →
 	glm_vec2_negate_to(to_planet, away);
-	glm_normalize(away);
+	glm_vec2_normalize(away);
 
 	const float d = glm_vec2_norm(to_planet);
 	if (in_atmosphere != NULL && d < planet->gravity_radius) {

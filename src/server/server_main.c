@@ -251,7 +251,7 @@ void server_on_message(struct session *session, void *data, size_t data_len) {
 
 	// we got a fully valid message.
 	messagequeue_add("Received %s from #%06d", message_type_to_name(msg_header->type), session->id);
-	switch ((enum message_type)msg_header->type) {
+	switch (msg_header->type) {
 		case LOBBY_CREATE_REQUEST:
 			create_lobby((struct lobby_create_request *)msg_header, session);
 			break;
@@ -262,11 +262,13 @@ void server_on_message(struct session *session, void *data, size_t data_len) {
 			list_lobbies((struct lobby_list_request *)msg_header, session);
 			break;
 		}
-		case MSG_UNKNOWN:
 		case LOBBY_CREATE_RESPONSE:
 		case LOBBY_JOIN_RESPONSE:
 		case LOBBY_LIST_RESPONSE:
 			// these messages we cant handle
+		case MSG_TYPE_UNKNOWN:
+		case MSG_TYPE_MAX:
+			// these messages are invalid
 			break;
 	}
 	

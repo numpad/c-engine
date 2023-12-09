@@ -6,22 +6,25 @@
 #include <cJSON.h>
 
 enum message_type {
-	MSG_UNKNOWN = 0, // TODO: rename to MSG_TYPE_UNKOWN
+	MSG_TYPE_UNKNOWN = 0,
 	// lobby related
 	LOBBY_CREATE_REQUEST, LOBBY_CREATE_RESPONSE,
-	LOBBY_JOIN_REQUEST, LOBBY_JOIN_RESPONSE,
-	LOBBY_LIST_REQUEST, LOBBY_LIST_RESPONSE,
+	LOBBY_JOIN_REQUEST,   LOBBY_JOIN_RESPONSE,
+	LOBBY_LIST_REQUEST,   LOBBY_LIST_RESPONSE,
 	//
 	MSG_TYPE_MAX,
 };
 
 struct message_header {
-	uint16_t type; // TODO: change to enum message_type
+	enum message_type type;
 };
 
 typedef void (*message_pack_fn)(struct message_header *, cJSON *);
 typedef void (*message_unpack_fn)(cJSON *, struct message_header *);
 
+/** Holds meta information about a message.
+ * This way, we can choose at runtime how to (un)pack a message based on its type.
+ */
 typedef struct {
 	const char *name;
 	message_pack_fn   pack_fn;

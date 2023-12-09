@@ -6,7 +6,7 @@ CFLAGS = -std=gnu99 -fPIC -Wall -Wextra -pedantic \
 		 -DFLECS_CUSTOM_BUILD -DFLECS_SYSTEM -DFLECS_MODULE -DFLECS_PIPELINE -DFLECS_TIMER -DFLECS_HTTP -DFLECS_SNAPSHOT -DFLECS_PARSER -DFLECS_APP -DFLECS_OS_API_IMPL \
 		 -DNK_INCLUDE_DEFAULT_ALLOCATOR -DNK_INCLUDE_DEFAULT_FONT -DNK_INCLUDE_FONT_BAKING -DNK_INCLUDE_FIXED_TYPES -DNK_INCLUDE_STANDARD_IO -DNK_INCLUDE_STANDARD_VARARGS -DNK_INCLUDE_VERTEX_BUFFER_OUTPUT -DNK_NO_STB_TRUETYPE_IMPLEMENTATION -DNK_NO_STB_RECT_PACK_IMPLEMENTATION \
 		 # flecs needs gnu99
-INCLUDES = -Isrc/ -I/usr/include/SDL2 -Ilib/nanovg/src -Ilib/stb -Ilib/cglm/include -Ilib/flecs -Ilib/cJSON -Ilib/nuklear
+INCLUDES = -I src/ -isystem /usr/include/SDL2 -isystem lib/nanovg/src -isystem lib/stb -isystem lib/cglm/include -isystem lib/flecs -isystem lib/cJSON -isystem lib/nuklear
 LIBS = -lm -lGL -lSDL2 -lSDL2_mixer -lSDL2_net # -lSDL2_ttf
 
 BIN = bin/native/
@@ -60,6 +60,8 @@ debug: $(TARGET)
 # release-specific
 release: CFLAGS += -O2
 release: $(TARGET)
+
+$(BIN)lib/%.o: CFLAGS += -w
 
 $(TARGET): $(OBJ)
 	$(CC) $(CFLAGS) $(INCLUDES) -o $@ $^ $(LIBS)

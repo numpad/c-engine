@@ -6,8 +6,8 @@
 #include <cJSON.h>
 
 const message_function_info_t message_function_infos[MSG_TYPE_MAX] = {
-	[MSG_UNKNOWN] = (message_function_info_t){
-		.name="MSG_UNKNOWN",
+	[MSG_TYPE_UNKNOWN] = (message_function_info_t){
+		.name="MSG_TYPE_UNKNOWN",
 		.pack_fn=NULL,
 		.unpack_fn=NULL,
 		.struct_size=0,
@@ -67,13 +67,13 @@ void pack_message_header(struct message_header *msg, cJSON *json) {
 void unpack_message_header(cJSON *json, struct message_header *msg) {
 	cJSON *header = cJSON_GetObjectItem(json, "header");
 	if (header == NULL || !cJSON_IsObject(header)) {
-		msg->type = MSG_UNKNOWN;
+		msg->type = MSG_TYPE_UNKNOWN;
 		return;
 	}
 
 	cJSON *header_type = cJSON_GetObjectItem(header, "type");
 	if (header_type == NULL || !cJSON_IsNumber(header_type)) {
-		msg->type = MSG_UNKNOWN;
+		msg->type = MSG_TYPE_UNKNOWN;
 		return;
 	}
 
@@ -83,7 +83,7 @@ void unpack_message_header(cJSON *json, struct message_header *msg) {
 cJSON *pack_message(struct message_header *msg) {
 	assert(msg != NULL);
 	assert(msg->type < MSG_TYPE_MAX);
-	if (msg->type == MSG_UNKNOWN) {
+	if (msg->type == MSG_TYPE_UNKNOWN) {
 		return NULL;
 	}
 
@@ -115,7 +115,7 @@ struct message_header *unpack_message(cJSON *json) {
 
 	struct message_header *msg = malloc(struct_size);
 	unpack_fn(json, msg);
-	assert(msg->type != MSG_UNKNOWN);
+	assert(msg->type != MSG_TYPE_UNKNOWN);
 	return msg;
 }
 
@@ -225,7 +225,7 @@ void unpack_lobby_list_response(cJSON *json, struct lobby_list_response *msg) {
 	
 	cJSON *ids = cJSON_GetObjectItem(json, "ids_of_lobbies");
 	if (ids == NULL || !cJSON_IsArray(ids)) {
-		msg->header.type = MSG_UNKNOWN;
+		msg->header.type = MSG_TYPE_UNKNOWN;
 		return;
 	}
 
