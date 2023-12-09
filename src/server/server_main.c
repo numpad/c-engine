@@ -29,7 +29,7 @@ struct session {
 
 void session_init(struct session *, struct lws *wsi);
 void session_destroy(struct session *s);
-void session_send_message(struct session *, cJSON *message);
+void session_send_message(struct session *, struct message_header *message);
 void session_on_writable(struct session *);
 
 //
@@ -195,14 +195,16 @@ void session_on_writable(struct session *session) {
 	session->msg_queue = NULL;
 }
 
-void session_send_message(struct session *session, cJSON *message) {
+void session_send_message(struct session *session, struct message_header *message) {
 	assert(session != NULL);
 	assert(session->wsi != NULL);
 	assert(message != NULL);
 
 	// serialize json to string
-	char *json_str = cJSON_PrintUnformatted(message);
+	cJSON *json = pack_message(message);
+	char *json_str = cJSON_PrintUnformatted(json);
 	size_t json_str_len = strlen(json_str);
+	cJSON_Delete(json);
 
 	// dont send nothing
 	assert(json_str_len > 0);
@@ -507,13 +509,8 @@ static void create_lobby(struct lobby_create_request *msg, struct session *reque
 	if (requested_by->is_in_lobby_with_id >= 0) {
 		messagequeue_add("#%06d is already in lobby %d but requested to create %d", requested_by->id, requested_by->is_in_lobby_with_id, msg->lobby_id);
 		response.create_error = 1;
+		session_send_message(requested_by, (struct message_header *)&response);
 
-		cJSON *json = cJSON_CreateObject();
-		pack_lobby_create_response(&response, json);
-
-		session_send_message(requested_by, json);
-
-		cJSON_Delete(json);
 		return;
 	}
 
@@ -523,23 +520,15 @@ static void create_lobby(struct lobby_create_request *msg, struct session *reque
 	requested_by->is_in_lobby_with_id = msg->lobby_id;
 	messagequeue_add("#%06d created, and joined lobby %d!", requested_by->id, requested_by->is_in_lobby_with_id);
 
+	session_send_message(requested_by, (struct message_header *)&response);
 
-	cJSON *json = cJSON_CreateObject();
-	pack_lobby_create_response(&response, json);
-
-	session_send_message(requested_by, json);
-
-	cJSON_Delete(json);
 
 	// also send join response
 	struct lobby_join_response join;
 	message_header_init(&join.header, LOBBY_JOIN_RESPONSE);
 	join.join_error = 0;
 	join.lobby_id = requested_by->is_in_lobby_with_id;
-	json = cJSON_CreateObject();
-	pack_lobby_join_response(&join, json);
-	session_send_message(requested_by, json);
-	cJSON_Delete(json);
+	session_send_message(requested_by, (struct message_header *)&join);
 }
 
 static void join_lobby(struct lobby_join_request *msg, struct session *requested_by) {
@@ -564,13 +553,7 @@ static void join_lobby(struct lobby_join_request *msg, struct session *requested
 	join.lobby_id = msg->lobby_id;
 
 send_response:
-	{
-	// send response
-	cJSON *json = cJSON_CreateObject();
-	pack_lobby_join_response(&join, json);
-	session_send_message(requested_by, json);
-	cJSON_Delete(json);
-	}
+	session_send_message(requested_by, (struct message_header *)&join);
 }
 
 /** Sends a list of all lobbies to `requested_by`.
@@ -591,9 +574,6 @@ static void list_lobbies(struct lobby_list_request *msg, struct session *request
 			++res.ids_of_lobbies_len;
 		}
 	}
-	cJSON *json = cJSON_CreateObject();
-	pack_lobby_list_response(&res, json);
-	session_send_message(requested_by, json);
-	cJSON_Delete(json);
+	session_send_message(requested_by, (struct message_header *)&res);
 }
 
