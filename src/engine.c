@@ -14,12 +14,15 @@
 #include "scenes/menu.h"
 #include "gui/console.h"
 #include "net/message.h"
+#include "util/aux.h"
 
 static Uint32 USR_EVENT_RELOAD = ((Uint32)-1);
 static Uint32 USR_EVENT_NOTIFY = ((Uint32)-1);
 static Uint32 USR_EVENT_GOBACK = ((Uint32)-1);
 
 static void on_window_resized(struct engine_s *engine, int w, int h);
+static void engine_poll_events(struct engine_s *engine);
+static void engine_gameserver_receive(struct engine_s *engine);
 
 #ifdef __unix__
 #include <signal.h>
@@ -332,6 +335,71 @@ void engine_gameserver_send(struct engine_s *engine, struct message_header *msg)
 
 // main loop
 void engine_update(struct engine_s *engine) {
+	// poll server
+	if (engine->gameserver_tcp != NULL) {
+		engine_gameserver_receive(engine);
+	}
+	
+	// poll events
+	nk_input_begin(engine->nk);
+	engine_poll_events(engine);
+	nk_input_end(engine->nk);
+
+	// update
+	const float dt = 1.0f / 60.0f;
+	engine->time_elapsed += dt;
+
+	console_update(engine->console, engine, dt);
+	scene_update(engine->scene, engine, dt);
+}
+
+void engine_draw(struct engine_s *engine) {
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+	
+	nvgBeginFrame(engine->vg, engine->window_width, engine->window_height, engine->window_pixel_ratio);
+
+	// run scene
+	scene_draw(engine->scene, engine);
+
+	console_draw(engine->console, engine);
+
+#ifdef DEBUG
+	// display seconds
+	char seconds[32];
+	sprintf(seconds, "%.2fs", engine->time_elapsed);
+
+	nvgBeginPath(engine->vg);
+	nvgTextAlign(engine->vg, NVG_ALIGN_TOP | NVG_ALIGN_LEFT);
+	nvgFillColor(engine->vg, nvgRGBf(0.0f, 0.0f, 0.0f));
+	nvgFontBlur(engine->vg, 2.0f);
+	nvgFontSize(engine->vg, 14.0f);
+	nvgText(engine->vg, 4.0f, 4.0f, seconds, NULL);
+
+	nvgBeginPath(engine->vg);
+	nvgTextAlign(engine->vg, NVG_ALIGN_TOP | NVG_ALIGN_LEFT);
+	nvgFillColor(engine->vg, nvgRGBf(1.0f, 1.0f, 0.6f));
+	nvgFontBlur(engine->vg, 0.0f);
+	nvgFontSize(engine->vg, 14.0f);
+	nvgText(engine->vg, 3.0f, 3.0f, seconds, NULL);
+#endif
+
+	nk_sdl_render(NK_ANTI_ALIASING_ON, 512 * 1024, 128 * 1024);
+	nvgEndFrame(engine->vg);
+
+	SDL_GL_SwapWindow(engine->window);
+}
+
+void engine_mainloop(struct engine_s *engine) {
+	engine_update(engine);
+	engine_draw(engine);
+}
+
+void engine_mainloop_emcc(void *engine) {
+	engine_mainloop((struct engine_s *)engine);
+}
+
+// event polling
+static void engine_poll_events(struct engine_s *engine) {
 	struct input_drag_s prev_input_drag = engine->input_drag;
 
 	if (prev_input_drag.state == INPUT_DRAG_END) {
@@ -340,43 +408,6 @@ void engine_update(struct engine_s *engine) {
 		engine->input_drag.state = INPUT_DRAG_IN_PROGRESS;
 	}
 
-	// poll server
-	if (engine->gameserver_tcp != NULL) {
-		const int readable_sockets = 1;
-		// Check if sockets are readable.
-		if (SDLNet_CheckSockets(engine->gameserver_socketset, 0) == readable_sockets) {
-			static char data[512] = {0};
-			
-			const int data_len = SDLNet_TCP_Recv(engine->gameserver_tcp, &data, 511);
-			// FIXME: can receive multiple reponses at once. curently cJSON_ParseWithLength only "detects" the first one.
-			//        this did not happen with websockets, but it did with a raw tcp stream.
-			//        current options:
-			//         - handle this on the server: send 1 message from queue and if more exist, request another write, repeat. (meh, might still not work. also slower.)
-			//         - count the number of json object in the response and parse one by one. later we should also handle partial messages. (sounds good)
-			if (data_len <= 0) {
-				// TODO: Attempt to reconnect?
-				printf("TCP_Recv failure, got 0 bytes... Disconnecting.\n");
-				engine_gameserver_disconnect(engine);
-			} else {
-				// we received something, but maybe it is no json/valid message?
-				cJSON *json = cJSON_ParseWithLength(data, data_len);
-				if (json != NULL) {
-					// it may be valid json, but a valid message?
-					struct message_header *header = unpack_message(json);
-					if (header != NULL) {
-						printf("Received a %s\n", message_type_to_name(header->type));
-						scene_on_message(engine->scene, engine, header);
-						free_message(json, header);
-					} else {
-						cJSON_Delete(json);
-					}
-				}
-			}
-		}
-	}
-	
-	// poll events
-    nk_input_begin(engine->nk);
 	SDL_Event event;
 	while (SDL_PollEvent(&event)) {
         // TODO: stop event propagation when interacting with gui?
@@ -457,58 +488,55 @@ void engine_update(struct engine_s *engine) {
 			engine_setscene(engine, (struct scene_s *)menu_scene);
 		}
 	}
-    nk_input_end(engine->nk);
-
-	// update
-	const float dt = 1.0f / 60.0f;
-	engine->time_elapsed += dt;
-
-	console_update(engine->console, engine, dt);
-	scene_update(engine->scene, engine, dt);
 }
 
-void engine_draw(struct engine_s *engine) {
-	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
-	
-	nvgBeginFrame(engine->vg, engine->window_width, engine->window_height, engine->window_pixel_ratio);
-
-	// run scene
-	scene_draw(engine->scene, engine);
-
-	console_draw(engine->console, engine);
-
-#ifdef DEBUG
-	// display seconds
-	char seconds[32];
-	sprintf(seconds, "%.2fs", engine->time_elapsed);
-
-	nvgBeginPath(engine->vg);
-	nvgTextAlign(engine->vg, NVG_ALIGN_TOP | NVG_ALIGN_LEFT);
-	nvgFillColor(engine->vg, nvgRGBf(0.0f, 0.0f, 0.0f));
-	nvgFontBlur(engine->vg, 2.0f);
-	nvgFontSize(engine->vg, 14.0f);
-	nvgText(engine->vg, 4.0f, 4.0f, seconds, NULL);
-
-	nvgBeginPath(engine->vg);
-	nvgTextAlign(engine->vg, NVG_ALIGN_TOP | NVG_ALIGN_LEFT);
-	nvgFillColor(engine->vg, nvgRGBf(1.0f, 1.0f, 0.6f));
-	nvgFontBlur(engine->vg, 0.0f);
-	nvgFontSize(engine->vg, 14.0f);
-	nvgText(engine->vg, 3.0f, 3.0f, seconds, NULL);
-#endif
-
-	nk_sdl_render(NK_ANTI_ALIASING_ON, 512 * 1024, 128 * 1024);
-	nvgEndFrame(engine->vg);
-
-	SDL_GL_SwapWindow(engine->window);
+// receive & parse messages
+static void propagate_received_message(struct engine_s *engine, const char *data, size_t data_len) {
+	// we received something, but maybe it is no json/valid message?
+	cJSON *json = cJSON_ParseWithLength(data, data_len);
+	if (json != NULL) {
+		// it may be valid json, but a valid message?
+		struct message_header *header = unpack_message(json);
+		if (header != NULL) {
+			printf("Received a %s\n", message_type_to_name(header->type));
+			scene_on_message(engine->scene, engine, header);
+			free_message(json, header);
+		} else {
+			cJSON_Delete(json);
+		}
+	}
 }
 
-void engine_mainloop(struct engine_s *engine) {
-	engine_update(engine);
-	engine_draw(engine);
-}
+static void engine_gameserver_receive(struct engine_s *engine) {
+	assert(engine != NULL);
 
-void engine_mainloop_emcc(void *engine) {
-	engine_mainloop((struct engine_s *)engine);
-}
+	const int readable_sockets = 1;
+	// Check if sockets are readable.
+	if (SDLNet_CheckSockets(engine->gameserver_socketset, 0) == readable_sockets) {
+		static char data[512] = {0};
 
+		// TODO: we handle reading multiple objects in a single recv, but not partial objects.
+		const int data_len = SDLNet_TCP_Recv(engine->gameserver_tcp, &data, 511);
+		if (data_len <= 0) {
+			// TODO: Attempt to reconnect?
+			printf("TCP_Recv failure, got 0 bytes... Disconnecting.\n");
+			engine_gameserver_disconnect(engine);
+		} else {
+			// handle multiple json objects in a single message
+			const char *begin = data;
+			while (begin != NULL && begin < data + data_len) {
+				// find the end of this object
+				const char *end = str_match_bracket(begin, data_len, '{', '}');
+				if (end == NULL) break;
+
+				const int len = end - begin + 1;
+
+				propagate_received_message(engine, begin, len);
+
+				begin += len;
+			}
+			assert(begin == data + data_len);
+
+		}
+	}
+}

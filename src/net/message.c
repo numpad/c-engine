@@ -1,4 +1,6 @@
+#define MESSAGE_IMPL
 #include "message.h"
+#undef MESSAGE_IMPL
 
 #include <stddef.h>
 #include <stdlib.h>
@@ -184,6 +186,7 @@ void pack_lobby_join_response(struct lobby_join_response *msg, cJSON *json) {
 
 	cJSON_AddNumberToObject(json, "lobby_id", msg->lobby_id);
 	cJSON_AddNumberToObject(json, "join_error", msg->join_error);
+	cJSON_AddNumberToObject(json, "is_other_user", msg->is_other_user);
 }
 
 void unpack_lobby_join_response(cJSON *json, struct lobby_join_response *msg) {
@@ -192,6 +195,7 @@ void unpack_lobby_join_response(cJSON *json, struct lobby_join_response *msg) {
 
 	msg->lobby_id = cJSON_GetObjectItem(json, "lobby_id")->valueint;
 	msg->join_error = cJSON_GetObjectItem(json, "join_error")->valueint;
+	msg->is_other_user = cJSON_GetObjectItem(json, "is_other_user")->valueint;
 }
 
 // LOBBY_LIST_REQUEST

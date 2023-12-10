@@ -33,7 +33,7 @@ SRC = main.c src/engine.c src/platform.c \
 	  src/ecs/components.c \
 	  src/gui/console.c \
 	  src/game/terrain.c src/game/isoterrain.c src/game/cards.c \
-	  src/util/easing.c src/util/fs.c \
+	  src/util/easing.c src/util/fs.c src/util/aux.c \
 	  src/gl/shader.c src/gl/texture.c src/gl/vbuffer.c \
 	  src/net/message.c \
 	  src/scenes/scene.c \

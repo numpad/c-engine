@@ -16,6 +16,7 @@
 //
 // state
 //
+static int others_in_lobby = 0;
 static int id_of_current_lobby = -1;
 static int *ids_of_lobbies = NULL;
 void reset_ids_of_lobbies(void) {
@@ -48,6 +49,7 @@ static void switch_to_minigame_scene(struct engine_s *engine) {
 
 static void menu_load(struct menu_s *menu, struct engine_s *engine) {
 	id_of_current_lobby = -1;
+	others_in_lobby = 0;
 	reset_ids_of_lobbies();
 
 	menu->vg_font = nvgCreateFont(engine->vg, "PermanentMarker Regular", "res/font/PermanentMarker-Regular.ttf");
@@ -72,7 +74,7 @@ static void menu_update(struct menu_s *menu, struct engine_s *engine, float dt) 
 	const float menu_height = 330.0f;
 	const int row_height = 55;
 
-	static int multiplayer_window = 1;
+	static int multiplayer_window = 0;
 
 	if (nk_begin_titled(nk, "Main Menu", "Main Menu", nk_rect( padding_x, engine->window_height - menu_height - padding_bottom, engine->window_width - padding_x * 2.0f, menu_height), NK_WINDOW_TITLE | NK_WINDOW_NO_SCROLLBAR | NK_WINDOW_BACKGROUND)) {
 		// play game
@@ -154,6 +156,7 @@ static void menu_update(struct menu_s *menu, struct engine_s *engine, float dt) 
 					engine_gameserver_disconnect(engine);
 					server_ips_i = 0;
 					id_of_current_lobby = -1;
+					others_in_lobby = 0;
 					reset_ids_of_lobbies();
 				}
 			} else {
@@ -180,7 +183,7 @@ static void menu_update(struct menu_s *menu, struct engine_s *engine, float dt) 
 					reset_ids_of_lobbies();
 
 					struct lobby_list_request req;
-					message_header_init(&req.header, LOBBY_LIST_REQUEST);
+					message_header_init((struct message_header *)&req, LOBBY_LIST_REQUEST);
 					engine_gameserver_send(engine, (struct message_header *)&req);
 				}
 
@@ -233,6 +236,10 @@ static void menu_update(struct menu_s *menu, struct engine_s *engine, float dt) 
 				// player list
 				nk_layout_row_dynamic(nk, row_height * 0.4f, 1);
 				nk_label(nk, " * You", NK_TEXT_ALIGN_LEFT | NK_TEXT_ALIGN_MIDDLE);
+				for (int i = 0; i < others_in_lobby; ++i) {
+					nk_layout_row_dynamic(nk, row_height * 0.4f, 1);
+					nk_label(nk, " * Other user", NK_TEXT_ALIGN_LEFT | NK_TEXT_ALIGN_MIDDLE);
+				}
 				nk_layout_row_dynamic(nk, row_height * 0.4f, 1);
 				nk_label_colored(nk, " * Waiting for others...", NK_TEXT_ALIGN_LEFT | NK_TEXT_ALIGN_MIDDLE, nk_rgb(88, 88, 88));
 
@@ -243,6 +250,7 @@ static void menu_update(struct menu_s *menu, struct engine_s *engine, float dt) 
 					struct lobby_join_request req;
 					message_header_init(&req.header, LOBBY_JOIN_REQUEST);
 					req.lobby_id = -1;
+					others_in_lobby = 0;
 					engine_gameserver_send(engine, (struct message_header *)&req);
 				}
 			}
@@ -299,10 +307,18 @@ static void menu_on_message(struct menu_s *menu, struct engine_s *engine, struct
 		case LOBBY_CREATE_RESPONSE: {
 			struct lobby_create_response *response = (struct lobby_create_response *)msg;
 			if (response->create_error) {
-				printf("Failed creating lobby #%d...\n", response->lobby_id);
-			} else {
-				printf("Lobby #%d was created.\n", response->lobby_id);
-				id_of_current_lobby = response->lobby_id; // TODO: join_response is enough, the lobby_create_request triggers 2 responses, create_response and then join_response.
+				break;
+			}
+			int exists = 0;
+			const int lobbies_len = stbds_arrlen(ids_of_lobbies);
+			for (int i = 0; i < lobbies_len; ++i) {
+				if (ids_of_lobbies[i] == response->lobby_id) {
+					exists = 1;
+					break;
+				}
+			}
+			if (!exists) {
+				stbds_arrpush(ids_of_lobbies, response->lobby_id);
 			}
 			break;
 		}
@@ -310,9 +326,18 @@ static void menu_on_message(struct menu_s *menu, struct engine_s *engine, struct
 			struct lobby_join_response *response = (struct lobby_join_response *)msg;
 			if (response->join_error) {
 				printf("Failed joining into lobby #%d...\n", response->lobby_id);
-			} else {
+				break;
+			}
+
+			if (response->is_other_user == 0) {
 				printf("Joined lobby #%d!\n", response->lobby_id);
 				id_of_current_lobby = response->lobby_id;
+				break;
+			}
+
+			if (response->is_other_user) {
+				printf("Other user joined/left\n");
+				others_in_lobby += (response->lobby_id >= 0 ? 1 : -1);
 			}
 			break;
 		}

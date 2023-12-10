@@ -27,9 +27,19 @@ struct session {
 
 };
 
+// Group Filter
+// A group filter function tests if the session `tested` is inside the `owner`s group.
+// Returns 1 (true) if `tested` is in the group, 0 otherwise.
+typedef int (*session_group_filter)(struct session *owner, struct session *tested);
+static int group_lobby(struct session *o, struct session *t) { return (t->is_in_lobby_with_id == o->is_in_lobby_with_id); }
+static int group_lobby_without_owner(struct session *o, struct session *t) { return (o->id != t->id && t->is_in_lobby_with_id == o->is_in_lobby_with_id); }
+static int group_everybody(struct session *o, struct session *t) { return 1; }
+static int group_everybody_without_owner(struct session *o, struct session *t) { return (o->id != t->id); }
+
 void session_init(struct session *, struct lws *wsi);
 void session_destroy(struct session *s);
 void session_send_message(struct session *, struct message_header *message);
+void session_send_message_group(struct session *owner, struct message_header *message, session_group_filter group);
 void session_on_writable(struct session *);
 
 //
@@ -199,6 +209,7 @@ void session_send_message(struct session *session, struct message_header *messag
 	assert(session != NULL);
 	assert(session->wsi != NULL);
 	assert(message != NULL);
+	assert(message->type != MSG_TYPE_UNKNOWN && message->type < MSG_TYPE_MAX);
 
 	// serialize json to string
 	cJSON *json = pack_message(message);
@@ -221,6 +232,22 @@ void session_send_message(struct session *session, struct message_header *messag
 	// enqueue message and request writing
 	stbds_arrpush(session->msg_queue, data);
 	lws_callback_on_writable(session->wsi);
+}
+
+void session_send_message_group(struct session *owner, struct message_header *message, session_group_filter group_fn) {
+	assert(message != NULL);
+	assert(group_fn != NULL);
+
+	// TODO: optimize serializing in every send_message(), we can just create the message once and read it for each send.
+	const size_t sessions_len = stbds_arrlen(sessions);
+	for (size_t i = 0; i < sessions_len; ++i) {
+		struct session *tested = sessions[i];
+		const int is_in_group = group_fn(owner, tested);
+		
+		if (is_in_group) {
+			session_send_message(tested, message);
+		}
+	}
 }
 
 void server_on_message(struct session *session, void *data, size_t data_len) {
@@ -514,7 +541,7 @@ static void create_lobby(struct lobby_create_request *msg, struct session *reque
 		return;
 	}
 
-	// TODO: check if lobby exists
+	// TODO: check if lobby already exists
 
 	response.create_error = 0;
 	requested_by->is_in_lobby_with_id = msg->lobby_id;
@@ -522,19 +549,29 @@ static void create_lobby(struct lobby_create_request *msg, struct session *reque
 
 	session_send_message(requested_by, (struct message_header *)&response);
 
-
 	// also send join response
 	struct lobby_join_response join;
 	message_header_init(&join.header, LOBBY_JOIN_RESPONSE);
+	join.is_other_user = 0;
 	join.join_error = 0;
 	join.lobby_id = requested_by->is_in_lobby_with_id;
 	session_send_message(requested_by, (struct message_header *)&join);
+
+	// also notify all others
+	struct lobby_create_response create;
+	message_header_init(&create.header, LOBBY_CREATE_RESPONSE);
+	create.create_error = 0;
+	create.lobby_id = msg->lobby_id;
+	session_send_message_group(requested_by, &create.header, group_everybody_without_owner);
 }
 
 static void join_lobby(struct lobby_join_request *msg, struct session *requested_by) {
 	
 	struct lobby_join_response join;
 	message_header_init(&join.header, LOBBY_JOIN_RESPONSE);
+	join.is_other_user = 0;
+	join.join_error = 0;
+	join.lobby_id = -1;
 	
 	// if already in a lobby, leave.
 	const int is_already_in_lobby = (requested_by->is_in_lobby_with_id >= 0);
@@ -545,8 +582,29 @@ static void join_lobby(struct lobby_join_request *msg, struct session *requested
 		goto send_response;
 	}
 
-	// apply data
-	requested_by->is_in_lobby_with_id = msg->lobby_id;
+	// check if the lobby exists.
+	int lobby_exists = (msg->lobby_id == -1); // "-1" is indicates a leave and always "exists".
+	if (lobby_exists == 0) {
+		const size_t sessions_len = stbds_arrlen(sessions);
+		for (size_t i = 0; i < sessions_len; ++i) {
+			struct session *s = sessions[i];
+			if (msg->lobby_id == s->is_in_lobby_with_id) {
+				lobby_exists = 1;
+				break;
+			}
+		}
+	}
+
+	// lobby doesnt exist? then we cant join.
+	if (lobby_exists == 0) {
+		join.join_error = 2; // INFO: lobby does not exist.
+		join.lobby_id = -1;
+		goto send_response;
+	}
+
+	if (msg->lobby_id >= 0) {
+		requested_by->is_in_lobby_with_id = msg->lobby_id;
+	}
 
 	// lobby_id can be -1 to indicate a leave
 	join.join_error = 0;
@@ -554,6 +612,16 @@ static void join_lobby(struct lobby_join_request *msg, struct session *requested
 
 send_response:
 	session_send_message(requested_by, (struct message_header *)&join);
+
+	if (join.join_error == 0) {
+		join.is_other_user = 1;
+		messagequeue_add("Sending to group...");
+		session_send_message_group(requested_by, &join.header, group_lobby_without_owner);
+	}
+
+	if (msg->lobby_id == -1) {
+		requested_by->is_in_lobby_with_id = msg->lobby_id;
+	}
 }
 
 /** Sends a list of all lobbies to `requested_by`.
@@ -568,7 +636,15 @@ static void list_lobbies(struct lobby_list_request *msg, struct session *request
 	message_header_init(&res.header, LOBBY_LIST_RESPONSE);
 	res.ids_of_lobbies_len = 0;
 	for (int i = 0; i < sessions_len; ++i) {
-		const int lobby_id = sessions[i]->is_in_lobby_with_id;
+		int lobby_id = sessions[i]->is_in_lobby_with_id;
+		
+		// check if we already added lobby_id to list.
+		for (int j = 0; j < res.ids_of_lobbies_len; ++j) {
+			if (lobby_id == res.ids_of_lobbies[j]) {
+				lobby_id = -1; // already exists
+			}
+		}
+
 		if (lobby_id >= 0) {
 			res.ids_of_lobbies[res.ids_of_lobbies_len] = lobby_id;
 			++res.ids_of_lobbies_len;

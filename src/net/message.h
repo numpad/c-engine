@@ -67,16 +67,15 @@ struct message_header *unpack_message(cJSON *json);
 cJSON *pack_message(struct message_header *msg);
 void free_message(cJSON *json, struct message_header *);
 
-
 #define MESSAGE_DECLARATION(_type, _name, _fields) \
 	struct _name {                                 \
 		struct message_header header;              \
 		_fields;                                   \
 	};                                             \
-	void _name##_init(struct _name *);             \
+	void _name##_init   (struct _name *s);         \
 	void _name##_destroy(struct _name *);          \
-	void pack_##_name(struct _name *, cJSON *);    \
-	void unpack_##_name(cJSON *, struct _name *)
+	void pack_##_name   (struct _name *, cJSON *); \
+	void unpack_##_name (cJSON *, struct _name *)
 
 
 MESSAGE_DECLARATION(LOBBY_CREATE_REQUEST, lobby_create_request,
@@ -89,7 +88,7 @@ MESSAGE_DECLARATION(LOBBY_JOIN_REQUEST, lobby_join_request,
 	int lobby_id);
 
 MESSAGE_DECLARATION(LOBBY_JOIN_RESPONSE, lobby_join_response,
-	int lobby_id; int join_error);
+	int lobby_id; int join_error; int is_other_user);
 
 MESSAGE_DECLARATION(LOBBY_LIST_REQUEST, lobby_list_request,
 	void);
