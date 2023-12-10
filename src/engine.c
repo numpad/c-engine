@@ -12,6 +12,7 @@
 #include <cJSON.h>
 #include "scenes/intro.h"
 #include "scenes/menu.h"
+#include "scenes/experiments.h"
 #include "gui/console.h"
 #include "net/message.h"
 #include "util/aux.h"
@@ -243,8 +244,8 @@ void engine_setscene_dll(struct engine_s *engine, const char *filename) {
 
 	handle = dlopen(filename, RTLD_NOW | RTLD_GLOBAL | RTLD_DEEPBIND);
 
-	struct menu_s *modscene = malloc(sizeof(struct menu_s));
-	void(*test_init)(struct menu_s *scene, struct engine_s *) = dlsym(handle, "menu_init");
+	struct scene_experiments_s *modscene = malloc(sizeof(*modscene));
+	void(*test_init)(struct scene_experiments_s *scene, struct engine_s *) = dlsym(handle, "scene_experiments_init");
 	test_init(modscene, engine);
 
 	engine_setscene(engine, (struct scene_s *)modscene);
