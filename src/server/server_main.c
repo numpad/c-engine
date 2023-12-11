@@ -15,13 +15,10 @@
 // logic
 //
 
-// Group Filter
-// A group filter function tests if the session `tested` is inside the `owner`s group.
-// Returns 1 (true) if `tested` is in the group, 0 otherwise.
-static int group_lobby(struct session *o, struct session *t) { return (t->group_id == o->group_id); }
-static int group_lobby_without_owner(struct session *o, struct session *t) { return (o->id != t->id && t->group_id == o->group_id); }
-static int group_everybody(struct session *o, struct session *t) { return 1; }
-static int group_everybody_without_owner(struct session *o, struct session *t) { return (o->id != t->id); }
+static int filter_group(struct session *o, struct session *t) { return (t->group_id == o->group_id); }
+static int filter_group_exclude(struct session *o, struct session *t) { return (o->id != t->id && t->group_id == o->group_id); }
+static int filter_everybody(struct session *o, struct session *t) { return 1; }
+static int filter_everybody_exclude(struct session *o, struct session *t) { return (o->id != t->id); }
 
 //
 // functions
@@ -140,6 +137,14 @@ int main(int argc, char **argv) {
 //
 // server logic
 //
+
+static void server_on_connect(struct session *session) {
+	messagequeue_add("Client %d connected.", session->id);
+}
+
+static void server_on_disconnect(struct session *session) {
+	messagequeue_add("Client %d disconnected.", session->id);
+}
 
 static void server_on_message(struct session *session, struct message_header *msg_header) {
 
@@ -280,6 +285,8 @@ void *wsserver_thread(void *data) {
 	}
 
 	// register callbacks
+	gserver.callback_on_connect = server_on_connect;
+	gserver.callback_on_disconnect = server_on_disconnect;
 	gserver.callback_on_message = server_on_message;
 
 	messagequeue_add("Starting Websocket server on :%d...", port);
@@ -341,7 +348,7 @@ static void create_lobby(struct lobby_create_request *msg, struct session *reque
 	message_header_init(&create.header, LOBBY_CREATE_RESPONSE);
 	create.create_error = 0;
 	create.lobby_id = msg->lobby_id;
-	gameserver_send_filtered(&gserver, &create.header, requested_by, group_everybody_without_owner);
+	gameserver_send_filtered(&gserver, &create.header, requested_by, filter_everybody_exclude);
 }
 
 static void join_lobby(struct lobby_join_request *msg, struct session *requested_by) {
@@ -395,7 +402,7 @@ send_response:
 	if (join.join_error == 0) {
 		join.is_other_user = 1;
 		messagequeue_add("Sending to group...");
-		gameserver_send_filtered(&gserver, &join.header, requested_by, group_lobby_without_owner);
+		gameserver_send_filtered(&gserver, &join.header, requested_by, filter_group_exclude);
 	}
 
 	if (msg->lobby_id == 0) {

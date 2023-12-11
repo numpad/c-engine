@@ -249,8 +249,8 @@ static void gameserver_on_disconnect(struct gameserver *server, struct session *
 	}
 
 	// propagate
-	if (server->callback_on_connect != NULL) {
-		server->callback_on_connect(session);
+	if (server->callback_on_disconnect != NULL) {
+		server->callback_on_disconnect(session);
 	}
 }
 
