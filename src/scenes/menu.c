@@ -1,4 +1,5 @@
 #include "menu.h"
+#include <stdint.h>
 #include <math.h>
 #include <SDL.h>
 #include <SDL_net.h>
@@ -17,7 +18,7 @@
 // state
 //
 static int others_in_lobby = 0;
-static int id_of_current_lobby = -1;
+static int id_of_current_lobby = 0;
 static int *ids_of_lobbies = NULL;
 void reset_ids_of_lobbies(void) {
 	if (ids_of_lobbies != NULL) {
@@ -48,7 +49,7 @@ static void switch_to_minigame_scene(struct engine_s *engine) {
 //
 
 static void menu_load(struct menu_s *menu, struct engine_s *engine) {
-	id_of_current_lobby = -1;
+	id_of_current_lobby = 0;
 	others_in_lobby = 0;
 	reset_ids_of_lobbies();
 
@@ -155,7 +156,7 @@ static void menu_update(struct menu_s *menu, struct engine_s *engine, float dt) 
 				if (nk_button_label(nk, "Disconnect")) {
 					engine_gameserver_disconnect(engine);
 					server_ips_i = 0;
-					id_of_current_lobby = -1;
+					id_of_current_lobby = 0;
 					others_in_lobby = 0;
 					reset_ids_of_lobbies();
 				}
@@ -190,7 +191,7 @@ static void menu_update(struct menu_s *menu, struct engine_s *engine, float dt) 
 				nk_label(nk, "", 0);
 
 				// create or leave
-				if (id_of_current_lobby >= 0) {
+				if (id_of_current_lobby > 0) {
 				} else {
 					if (nk_button_label(nk, "Create Lobby")) {
 						struct lobby_create_request req;
@@ -203,7 +204,7 @@ static void menu_update(struct menu_s *menu, struct engine_s *engine, float dt) 
 			}
 
 			// list lobbies
-			if (is_connected && id_of_current_lobby < 0) {
+			if (is_connected && id_of_current_lobby == 0) {
 				nk_layout_row_dynamic(nk, row_height * 0.5f, 1);
 				nk_label(nk, "Server Browser:", NK_TEXT_ALIGN_LEFT | NK_TEXT_ALIGN_BOTTOM);
 
@@ -228,7 +229,7 @@ static void menu_update(struct menu_s *menu, struct engine_s *engine, float dt) 
 			}
 
 			// show current lobby
-			if (is_connected && id_of_current_lobby >= 0) {
+			if (is_connected && id_of_current_lobby > 0) {
 				// title
 				nk_layout_row_dynamic(nk, row_height * 0.5f, 1);
 				nk_labelf(nk, NK_TEXT_ALIGN_LEFT | NK_TEXT_ALIGN_BOTTOM, "Lobby #%d", id_of_current_lobby);
@@ -249,7 +250,7 @@ static void menu_update(struct menu_s *menu, struct engine_s *engine, float dt) 
 				if (nk_button_label(nk, "Leave Lobby")) {
 					struct lobby_join_request req;
 					message_header_init(&req.header, LOBBY_JOIN_REQUEST);
-					req.lobby_id = -1;
+					req.lobby_id = 0;
 					others_in_lobby = 0;
 					engine_gameserver_send(engine, (struct message_header *)&req);
 				}
@@ -337,7 +338,7 @@ static void menu_on_message(struct menu_s *menu, struct engine_s *engine, struct
 
 			if (response->is_other_user) {
 				printf("Other user joined/left\n");
-				others_in_lobby += (response->lobby_id >= 0 ? 1 : -1);
+				others_in_lobby += (response->lobby_id > 0 ? 1 : -1);
 			}
 			break;
 		}

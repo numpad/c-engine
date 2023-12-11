@@ -8,46 +8,25 @@
 #include <arpa/inet.h>
 #include <libwebsockets.h>
 #include <stb_ds.h>
+#include "gameserver.h"
 #include "net/message.h"
 
 //
 // logic
 //
 
-struct session {
-	// connection
-	struct lws *wsi;
-	int id; // unique until disconnected
-
-	// message queue
-	char **msg_queue;
-
-	// game logic
-	int is_in_lobby_with_id;
-
-};
-
 // Group Filter
 // A group filter function tests if the session `tested` is inside the `owner`s group.
 // Returns 1 (true) if `tested` is in the group, 0 otherwise.
-typedef int (*session_group_filter)(struct session *owner, struct session *tested);
-static int group_lobby(struct session *o, struct session *t) { return (t->is_in_lobby_with_id == o->is_in_lobby_with_id); }
-static int group_lobby_without_owner(struct session *o, struct session *t) { return (o->id != t->id && t->is_in_lobby_with_id == o->is_in_lobby_with_id); }
+static int group_lobby(struct session *o, struct session *t) { return (t->group_id == o->group_id); }
+static int group_lobby_without_owner(struct session *o, struct session *t) { return (o->id != t->id && t->group_id == o->group_id); }
 static int group_everybody(struct session *o, struct session *t) { return 1; }
 static int group_everybody_without_owner(struct session *o, struct session *t) { return (o->id != t->id); }
-
-void session_init(struct session *, struct lws *wsi);
-void session_destroy(struct session *s);
-void session_send_message(struct session *, struct message_header *message);
-void session_send_message_group(struct session *owner, struct message_header *message, session_group_filter group);
-void session_on_writable(struct session *);
 
 //
 // functions
 //
 
-
-void server_on_message(struct session *session, void *data, size_t data_len);
 static void serverui_on_input(const char *cmd, size_t cmd_len);
 
 void *wsserver_thread(void *data);
@@ -60,8 +39,6 @@ static const char *fmt_time(time_t time);
 static const char *fmt_date(time_t rawtime);
 
 static void messagequeue_add(char *fmt, ...);
-
-struct session *add_session(struct lws *wsi);
 
 // game logic
 static void create_lobby(struct lobby_create_request *msg, struct session *);
@@ -76,8 +53,7 @@ static pthread_mutex_t messagequeue_mutex = PTHREAD_MUTEX_INITIALIZER;
 const size_t messagequeue_max = 128;
 static char *messagequeue[128];
 static size_t messagequeue_len = 0;
-
-static struct session **sessions = NULL;
+static struct gameserver gserver;
 
 int main(int argc, char **argv) {
 	initscr();
@@ -88,7 +64,7 @@ int main(int argc, char **argv) {
 	WINDOW *win_messages = create_messages_window();
 	WINDOW *win_input = create_input_window();
 
-	wtimeout(win_input, 500);
+	wtimeout(win_input, 100);
 	//nodelay(stdscr, TRUE);
 	//wtimeout(win_messages, 100);
 	wmove(win_messages, 0, 0);
@@ -165,118 +141,7 @@ int main(int argc, char **argv) {
 // server logic
 //
 
-void session_init(struct session *session, struct lws *wsi) {
-	session->wsi = wsi;
-	session->id = (int)((rand() / (float)RAND_MAX) * 999999.0f + 100000.0f);
-	session->msg_queue = NULL;
-	session->is_in_lobby_with_id = -1;
-	
-	// id needs to be unique
-	size_t sessions_count = stbds_arrlen(sessions);
-	for (size_t i = 0; i < sessions_count; ++i) {
-		assert(session->id != sessions[i]->id);
-	}
-
-	// store in sessions
-	stbds_arrput(sessions, session);
-
-}
-
-void session_destroy(struct session *session) {
-	stbds_arrfree(session->msg_queue);
-
-	// remove from session
-	for (int i = 0; i < stbds_arrlen(sessions); ++i) {
-		if (sessions[i]->id == session->id) {
-			stbds_arrdel(sessions, i);
-			break;
-		}
-	}
-}
-
-void session_on_writable(struct session *session) {
-	size_t msg_queue_len = stbds_arrlen(session->msg_queue);
-	for (size_t i = 0; i < msg_queue_len; ++i) {
-		char *msg = session->msg_queue[i];
-		lws_write(session->wsi, (unsigned char *)&msg[LWS_PRE], strlen(&msg[LWS_PRE]), LWS_WRITE_TEXT);
-		free(msg);
-	}
-	stbds_arrfree(session->msg_queue);
-	session->msg_queue = NULL;
-}
-
-void session_send_message(struct session *session, struct message_header *message) {
-	assert(session != NULL);
-	assert(session->wsi != NULL);
-	assert(message != NULL);
-	assert(message->type != MSG_TYPE_UNKNOWN && message->type < MSG_TYPE_MAX);
-
-	// serialize json to string
-	cJSON *json = pack_message(message);
-	char *json_str = cJSON_PrintUnformatted(json);
-	size_t json_str_len = strlen(json_str);
-	cJSON_Delete(json);
-
-	// dont send nothing
-	assert(json_str_len > 0);
-	if (json_str_len == 0) {
-		return;
-	}
-
-	// prepare lws message
-	char *data = malloc(LWS_PRE + json_str_len + 1);
-	memcpy(&data[LWS_PRE], json_str, json_str_len);
-	data[LWS_PRE + json_str_len] = '\0';
-	free(json_str);
-
-	// enqueue message and request writing
-	stbds_arrpush(session->msg_queue, data);
-	lws_callback_on_writable(session->wsi);
-}
-
-void session_send_message_group(struct session *owner, struct message_header *message, session_group_filter group_fn) {
-	assert(message != NULL);
-	assert(group_fn != NULL);
-
-	// TODO: optimize serializing in every send_message(), we can just create the message once and read it for each send.
-	const size_t sessions_len = stbds_arrlen(sessions);
-	for (size_t i = 0; i < sessions_len; ++i) {
-		struct session *tested = sessions[i];
-		const int is_in_group = group_fn(owner, tested);
-		
-		if (is_in_group) {
-			session_send_message(tested, message);
-		}
-	}
-}
-
-void server_on_message(struct session *session, void *data, size_t data_len) {
-	if (data_len == 0) {
-		messagequeue_add("Got empty message from %06d!", session->id);
-		return;
-	}
-
-	cJSON *data_json = cJSON_ParseWithLength(data, data_len);
-	if (data_json == NULL) {
-		// just a raw message, no json.
-		messagequeue_add("--- Raw Message from #%06d ---\n%.*s\n---     Raw Message End      ---", session->id, (int)data_len, (char *)data);
-		return;
-	}
-
-	// TODO: this can easily occur, but message.h doesnt validate the data yet.
-	//       we just fail here for visibility, these asserts can be removed later.
-	assert(cJSON_GetObjectItem(data_json, "header") != NULL);
-	assert(cJSON_GetObjectItem(cJSON_GetObjectItem(data_json, "header"), "type") != NULL);
-	assert(cJSON_IsNumber(cJSON_GetObjectItem(cJSON_GetObjectItem(data_json, "header"), "type")));
-
-
-	struct message_header *msg_header = unpack_message(data_json);
-	// could not unpack, maybe validation failed?
-	if (msg_header == NULL) {
-		messagequeue_add("--- Invalid JSON from #%06d ---\n%.*s\n---     Invalid JSON End      ---", session->id, (int)data_len, (char *)data);
-		cJSON_Delete(data_json);
-		return;
-	}
+static void server_on_message(struct session *session, struct message_header *msg_header) {
 
 	// we got a fully valid message.
 	messagequeue_add("Received %s from #%06d", message_type_to_name(msg_header->type), session->id);
@@ -300,8 +165,6 @@ void server_on_message(struct session *session, void *data, size_t data_len) {
 			// these messages are invalid
 			break;
 	}
-	
-	free_message(data_json, msg_header);
 }
 
 //
@@ -317,6 +180,7 @@ static void serverui_on_input(const char *cmd, size_t cmd_len) {
 	int is_command = (input[0] == '/');
 	if (is_command) {
 		messagequeue_add("%s", input);
+		/*
 		if (strncmp(input, "/queue", strlen("/queue")) == 0) {
 			for (int i = 0; i < stbds_arrlen(sessions); ++i) {
 				struct session *s = sessions[i];
@@ -335,22 +199,16 @@ static void serverui_on_input(const char *cmd, size_t cmd_len) {
 			const int sessions_len = stbds_arrlen(sessions);
 			for (int i = 0; i < sessions_len; ++i) {
 				const struct session *s = sessions[i];
-				messagequeue_add("Session #%d (%d): In Lobby: %d", i, s->id, s->is_in_lobby_with_id);
+				messagequeue_add("Session #%d (%d): In Lobby: %d", i, s->id, s->group_id);
 			}
 			messagequeue_add("Total: %d Sessions", sessions_len);
 		}
+		*/
 
 	} else {
 		// TODO: remove. just sends the raw input for debugging purposes.
-		char ws_command[LWS_PRE + input_len + 1];
-		snprintf(&ws_command[LWS_PRE], input_len + 1, "%.*s", (int)cmd_len, cmd);
-
-		size_t session_len = stbds_arrlen(sessions);
-		for (size_t i = 0; i < session_len; ++i) {
-			lws_write(sessions[i]->wsi, (unsigned char *)&ws_command[LWS_PRE], input_len + 1, LWS_WRITE_TEXT);
-		}
-
-		messagequeue_add("[%s]  %s  (seen by %zu)", fmt_time(time(NULL)), input, session_len);
+		gameserver_send_raw(&gserver, NULL, (uint8_t *)input, input_len);
+		messagequeue_add("[%s] %s", fmt_time(time(NULL)), input);
 	}
 }
 
@@ -412,104 +270,25 @@ static void messagequeue_add(char *fmt, ...) {
 // server impls
 //
 
-static int ws_callback(struct lws *wsi, enum lws_callback_reasons reason, void *user, void *data, size_t data_len) {
-	struct session *session = user;
-
-	switch ((int)reason) {
-	case LWS_CALLBACK_ESTABLISHED:
-		session_init(session, wsi);
-		messagequeue_add("WebSocket #%06d connected!", session->id);
-		break;
-	case LWS_CALLBACK_RECEIVE: {
-		server_on_message(session, data, data_len);
-		break;
-	}
-	case LWS_CALLBACK_CLOSED:
-		messagequeue_add("WebSocket #%06d disconnected!", session->id);
-		session_destroy(session);
-		break;
-	case LWS_CALLBACK_SERVER_WRITEABLE:
-		session_on_writable(session);
-		break;
-	default: break;
-	}
-
-	return 0;
-}
-
-static int rawtcp_callback(struct lws *wsi, enum lws_callback_reasons reason, void *user, void *data, size_t data_len) {
-	struct session *session = user;
-
-	switch ((int)reason) {
-	case LWS_CALLBACK_RAW_ADOPT: {
-		session_init(session, wsi);
-		messagequeue_add("TCP-Client #%06d connected!", session->id);
-		break;
-	}
-	case LWS_CALLBACK_RAW_RX: {
-		server_on_message(session, data, data_len);
-		break;
-	}
-	case LWS_CALLBACK_RAW_CLOSE: {
-		messagequeue_add("TCP-Client #%06d disconnected!", session->id);
-		session_destroy(session);
-		break;
-	}
-	case LWS_CALLBACK_SERVER_WRITEABLE:
-		session_on_writable(session);
-		break;
-	case LWS_CALLBACK_RAW_WRITEABLE:
-		// raw tcp client is writable
-		session_on_writable(session);
-		break;
-	case LWS_CALLBACK_ESTABLISHED:
-		session_init(session, wsi);
-		messagequeue_add("Client %06d connected!", session->id);
-		break;
-	case LWS_CALLBACK_RECEIVE: {
-		server_on_message(session, data, data_len);
-		break;
-	}
-	case LWS_CALLBACK_CLOSED:
-		messagequeue_add("Client %06d disconnected!", session->id);
-		session_destroy(session);
-		break;
-	default: break;
-	}
-
-	return 0;
-}
-
-// Browser/SDLNet → binary/ws_callback()
-// Native/SDLNet → rawtcp_callback()
-static struct lws_protocols protocols[] = {
-	{""      , rawtcp_callback, sizeof(struct session), 512, 0, NULL, 0},
-	{"binary", ws_callback    , sizeof(struct session), 512, 0, NULL, 0}, // needed for SDLNet-to-WebSocket translation.
-	{NULL    , NULL           , 0,   0, 0, NULL, 0},
-};
 void *wsserver_thread(void *data) {
-	lws_set_log_level(0, NULL);
+	const int port = 9124;
 
-	struct lws_context_creation_info info = {0};
-	info.port = 9124;
-	info.iface = NULL;
-	info.protocols = protocols;
-	info.gid = -1;
-	info.uid = -1;
-	info.options = LWS_SERVER_OPTION_FALLBACK_TO_RAW;
-
-	struct lws_context *ctx = lws_create_context(&info);
-	if (ctx == NULL) {
+	// init server
+	if (gameserver_init(&gserver, port)) {
+		messagequeue_add("Failed starting Websocket server!");
 		return (void *)1;
 	}
 
-	messagequeue_add("WebSocket listening on :%d...", info.port);
+	// register callbacks
+	gserver.callback_on_message = server_on_message;
+
+	messagequeue_add("Starting Websocket server on :%d...", port);
 	
-	while (1) {
-		lws_service(ctx, 100);
-	}
-	
-	lws_context_destroy(ctx);
+	// run
+	gameserver_listen(&gserver);
+
+	// destroy
+	gameserver_destroy(&gserver);
 
 	return (void *)0;
 }
@@ -533,10 +312,10 @@ static void create_lobby(struct lobby_create_request *msg, struct session *reque
 	response.lobby_id = msg->lobby_id;
 	response.create_error = 0;
 
-	if (requested_by->is_in_lobby_with_id >= 0) {
-		messagequeue_add("#%06d is already in lobby %d but requested to create %d", requested_by->id, requested_by->is_in_lobby_with_id, msg->lobby_id);
+	if (requested_by->group_id > 0) {
+		messagequeue_add("#%06d is already in lobby %d but requested to create %d", requested_by->id, requested_by->group_id, msg->lobby_id);
 		response.create_error = 1;
-		session_send_message(requested_by, (struct message_header *)&response);
+		gameserver_send_to(&gserver, &response.header, requested_by);
 
 		return;
 	}
@@ -544,25 +323,25 @@ static void create_lobby(struct lobby_create_request *msg, struct session *reque
 	// TODO: check if lobby already exists
 
 	response.create_error = 0;
-	requested_by->is_in_lobby_with_id = msg->lobby_id;
-	messagequeue_add("#%06d created, and joined lobby %d!", requested_by->id, requested_by->is_in_lobby_with_id);
+	requested_by->group_id = msg->lobby_id;
+	messagequeue_add("#%06d created, and joined lobby %d!", requested_by->id, requested_by->group_id);
 
-	session_send_message(requested_by, (struct message_header *)&response);
+	gameserver_send_to(&gserver, &response.header, requested_by);
 
 	// also send join response
 	struct lobby_join_response join;
 	message_header_init(&join.header, LOBBY_JOIN_RESPONSE);
 	join.is_other_user = 0;
 	join.join_error = 0;
-	join.lobby_id = requested_by->is_in_lobby_with_id;
-	session_send_message(requested_by, (struct message_header *)&join);
+	join.lobby_id = requested_by->group_id;
+	gameserver_send_to(&gserver, &join.header, requested_by);
 
 	// also notify all others
 	struct lobby_create_response create;
 	message_header_init(&create.header, LOBBY_CREATE_RESPONSE);
 	create.create_error = 0;
 	create.lobby_id = msg->lobby_id;
-	session_send_message_group(requested_by, &create.header, group_everybody_without_owner);
+	gameserver_send_filtered(&gserver, &create.header, requested_by, group_everybody_without_owner);
 }
 
 static void join_lobby(struct lobby_join_request *msg, struct session *requested_by) {
@@ -571,24 +350,24 @@ static void join_lobby(struct lobby_join_request *msg, struct session *requested
 	message_header_init(&join.header, LOBBY_JOIN_RESPONSE);
 	join.is_other_user = 0;
 	join.join_error = 0;
-	join.lobby_id = -1;
+	join.lobby_id = 0;
 	
 	// if already in a lobby, leave.
-	const int is_already_in_lobby = (requested_by->is_in_lobby_with_id >= 0);
-	if (is_already_in_lobby && msg->lobby_id != -1) {
-		messagequeue_add("Cannot join %d, Already in lobby %d", msg->lobby_id, requested_by->is_in_lobby_with_id);
+	const int is_already_in_lobby = (requested_by->group_id > 0);
+	if (is_already_in_lobby && msg->lobby_id != 0) {
+		messagequeue_add("Cannot join %d, Already in lobby %d", msg->lobby_id, requested_by->group_id);
 		join.join_error = 1; // can only LEAVE (-1) while in lobby
-		join.lobby_id = requested_by->is_in_lobby_with_id; // shouldn't matter, just to be sure.
+		join.lobby_id = requested_by->group_id; // shouldn't matter, just to be sure.
 		goto send_response;
 	}
 
 	// check if the lobby exists.
-	int lobby_exists = (msg->lobby_id == -1); // "-1" is indicates a leave and always "exists".
+	int lobby_exists = (msg->lobby_id == 0); // "0" is indicates a leave and always "exists".
 	if (lobby_exists == 0) {
-		const size_t sessions_len = stbds_arrlen(sessions);
+		const size_t sessions_len = stbds_arrlen(gserver.sessions);
 		for (size_t i = 0; i < sessions_len; ++i) {
-			struct session *s = sessions[i];
-			if (msg->lobby_id == s->is_in_lobby_with_id) {
+			struct session *s = gserver.sessions[i];
+			if (msg->lobby_id == s->group_id) {
 				lobby_exists = 1;
 				break;
 			}
@@ -598,29 +377,29 @@ static void join_lobby(struct lobby_join_request *msg, struct session *requested
 	// lobby doesnt exist? then we cant join.
 	if (lobby_exists == 0) {
 		join.join_error = 2; // INFO: lobby does not exist.
-		join.lobby_id = -1;
+		join.lobby_id = 0;
 		goto send_response;
 	}
 
-	if (msg->lobby_id >= 0) {
-		requested_by->is_in_lobby_with_id = msg->lobby_id;
+	if (msg->lobby_id != 0) {
+		requested_by->group_id = msg->lobby_id;
 	}
 
-	// lobby_id can be -1 to indicate a leave
+	// lobby_id can be 0 to indicate a leave
 	join.join_error = 0;
 	join.lobby_id = msg->lobby_id;
 
 send_response:
-	session_send_message(requested_by, (struct message_header *)&join);
+	gameserver_send_to(&gserver, &join.header, requested_by);
 
 	if (join.join_error == 0) {
 		join.is_other_user = 1;
 		messagequeue_add("Sending to group...");
-		session_send_message_group(requested_by, &join.header, group_lobby_without_owner);
+		gameserver_send_filtered(&gserver, &join.header, requested_by, group_lobby_without_owner);
 	}
 
-	if (msg->lobby_id == -1) {
-		requested_by->is_in_lobby_with_id = msg->lobby_id;
+	if (msg->lobby_id == 0) {
+		requested_by->group_id = msg->lobby_id;
 	}
 }
 
@@ -629,27 +408,27 @@ send_response:
  * @param requested_by The client who requested the list.
  */
 static void list_lobbies(struct lobby_list_request *msg, struct session *requested_by) {
-	int sessions_len = stbds_arrlen(sessions);
+	int sessions_len = stbds_arrlen(gserver.sessions);
 	if (sessions_len > 8) sessions_len = 8;
 
 	struct lobby_list_response res;
 	message_header_init(&res.header, LOBBY_LIST_RESPONSE);
 	res.ids_of_lobbies_len = 0;
 	for (int i = 0; i < sessions_len; ++i) {
-		int lobby_id = sessions[i]->is_in_lobby_with_id;
+		int lobby_id = gserver.sessions[i]->group_id;
 		
 		// check if we already added lobby_id to list.
 		for (int j = 0; j < res.ids_of_lobbies_len; ++j) {
 			if (lobby_id == res.ids_of_lobbies[j]) {
-				lobby_id = -1; // already exists
+				lobby_id = 0; // already exists
 			}
 		}
 
-		if (lobby_id >= 0) {
+		if (lobby_id > 0) {
 			res.ids_of_lobbies[res.ids_of_lobbies_len] = lobby_id;
 			++res.ids_of_lobbies_len;
 		}
 	}
-	session_send_message(requested_by, (struct message_header *)&res);
+	gameserver_send_to(&gserver, &res.header, requested_by);
 }
 
