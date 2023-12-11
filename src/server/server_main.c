@@ -6,7 +6,6 @@
 #include <unistd.h>
 #include <pthread.h>
 #include <arpa/inet.h>
-#include <libwebsockets.h>
 #include <stb_ds.h>
 #include "gameserver.h"
 #include "net/message.h"
@@ -22,7 +21,7 @@
 
 static void serverui_on_input(const char *cmd, size_t cmd_len);
 
-void *wsserver_thread(void *data);
+static void *thread_run_gameserver(void *data);
 
 // ui
 static WINDOW *create_messages_window(void);
@@ -31,7 +30,7 @@ static WINDOW *create_input_window(void);
 static const char *fmt_time(time_t time);
 static const char *fmt_date(time_t rawtime);
 
-static void messagequeue_add(char *fmt, ...);
+static void console_log(char *fmt, ...);
 
 //
 // vars
@@ -56,12 +55,12 @@ int main(int argc, char **argv) {
 	//nodelay(stdscr, TRUE);
 	//wtimeout(win_messages, 100);
 	wmove(win_messages, 0, 0);
-	messagequeue_add("[%s]  Server started on %s", fmt_time(time(NULL)), fmt_date(time(NULL)));
-	messagequeue_add("[%s]  PID : %ld\n", fmt_time(time(NULL)), (long)getpid());
+	console_log("[%s]  Server started on %s", fmt_time(time(NULL)), fmt_date(time(NULL)));
+	console_log("[%s]  PID : %ld\n", fmt_time(time(NULL)), (long)getpid());
 
 	// start bg services
-	pthread_t ws_thread;
-	pthread_create(&ws_thread, NULL, wsserver_thread, NULL);
+	pthread_t gameserver_thread;
+	pthread_create(&gameserver_thread, NULL, thread_run_gameserver, NULL);
 
 	int running = 1;
 	while (running) {
@@ -115,7 +114,7 @@ int main(int argc, char **argv) {
 		}
 	}
 
-	pthread_join(ws_thread, NULL);
+	pthread_join(gameserver_thread, NULL);
 	pthread_mutex_destroy(&messagequeue_mutex);
 
 	delwin(win_messages);
@@ -130,15 +129,15 @@ int main(int argc, char **argv) {
 //
 
 static void server_on_connect(struct gameserver *gs, struct session *session) {
-	messagequeue_add("Client %d connected.", session->id);
+	console_log("Client %d connected.", session->id);
 }
 
 static void server_on_disconnect(struct gameserver *gs, struct session *session) {
-	messagequeue_add("Client %d disconnected.", session->id);
+	console_log("Client %d disconnected.", session->id);
 }
 
 static void server_on_message(struct gameserver *gs, struct session *session, struct message_header *message) {
-	messagequeue_add("Received %s from #%06d", message_type_to_name(message->type), session->id);
+	console_log("Received %s from #%06d", message_type_to_name(message->type), session->id);
 	services_dispatcher(gs, message, session);
 }
 
@@ -154,18 +153,18 @@ static void serverui_on_input(const char *cmd, size_t cmd_len) {
 	
 	int is_command = (input[0] == '/');
 	if (is_command) {
-		messagequeue_add("%s", input);
+		console_log("%s", input);
 		/*
 		if (strncmp(input, "/queue", strlen("/queue")) == 0) {
 			for (int i = 0; i < stbds_arrlen(sessions); ++i) {
 				struct session *s = sessions[i];
 				if (s->msg_queue != NULL) {
-					messagequeue_add("Outstanding messages for client %d:", s->id);
+					console_log("Outstanding messages for client %d:", s->id);
 					for (int j = 0; j < stbds_arrlen(s->msg_queue); ++j) {
-						messagequeue_add(" - %s", s->msg_queue[i]);
+						console_log(" - %s", s->msg_queue[i]);
 					}
 				} else {
-					messagequeue_add("No Message Queue for %d:", s->id);
+					console_log("No Message Queue for %d:", s->id);
 				}
 			}
 		}
@@ -174,16 +173,16 @@ static void serverui_on_input(const char *cmd, size_t cmd_len) {
 			const int sessions_len = stbds_arrlen(sessions);
 			for (int i = 0; i < sessions_len; ++i) {
 				const struct session *s = sessions[i];
-				messagequeue_add("Session #%d (%d): In Lobby: %d", i, s->id, s->group_id);
+				console_log("Session #%d (%d): In Lobby: %d", i, s->id, s->group_id);
 			}
-			messagequeue_add("Total: %d Sessions", sessions_len);
+			console_log("Total: %d Sessions", sessions_len);
 		}
 		*/
 
 	} else {
 		// TODO: remove. just sends the raw input for debugging purposes.
 		gameserver_send_raw(&gserver, NULL, (uint8_t *)input, input_len);
-		messagequeue_add("[%s] %s", fmt_time(time(NULL)), input);
+		console_log("[%s] %s", fmt_time(time(NULL)), input);
 	}
 }
 
@@ -219,7 +218,7 @@ static const char *fmt_date(time_t rawtime) {
 	return buffer;
 }
 
-static void messagequeue_add(char *fmt, ...) {
+static void console_log(char *fmt, ...) {
 	va_list args;
 	
 	// determine size
@@ -245,12 +244,12 @@ static void messagequeue_add(char *fmt, ...) {
 // server impls
 //
 
-void *wsserver_thread(void *data) {
+static void *thread_run_gameserver(void *data) {
 	const int port = 9124;
 
 	// init server
 	if (gameserver_init(&gserver, port)) {
-		messagequeue_add("Failed starting Websocket server!");
+		console_log("Failed starting Websocket server!");
 		return (void *)1;
 	}
 
@@ -259,7 +258,7 @@ void *wsserver_thread(void *data) {
 	gserver.callback_on_disconnect = server_on_disconnect;
 	gserver.callback_on_message = server_on_message;
 
-	messagequeue_add("Starting Websocket server on :%d...", port);
+	console_log("Starting Websocket server on :%d...", port);
 	
 	// run
 	gameserver_listen(&gserver);

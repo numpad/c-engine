@@ -81,7 +81,7 @@ void gameserver_send_raw(struct gameserver *gserver, struct session *receiver, u
 	
 	// if the receiver is NULL, we send to everybody
 	// TODO: use receiver->message_queue and callback_on_writable()
-	if (receiver != NULL) {
+	if (receiver == NULL) {
 		const size_t sessions_len = stbds_arrlen(gserver->sessions);
 		for (size_t i = 0; i < sessions_len; ++i) {
 			lws_write(gserver->sessions[i]->wsi, &message[LWS_PRE], data_len, LWS_WRITE_TEXT);
