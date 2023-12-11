@@ -7,6 +7,7 @@
 
 struct gameserver;
 struct session;
+struct message_header;
 
 struct lobby_create_request;
 struct lobby_join_request;
@@ -17,10 +18,7 @@ struct lobby_list_request;
 // api
 //
 
-// group service
-void create_lobby(struct gameserver *gserver, struct lobby_create_request *msg, struct session *requested_by);
-void join_lobby  (struct gameserver *gserver, struct lobby_join_request *msg, struct session *requested_by);
-void list_lobbies(struct gameserver *gserver, struct lobby_list_request *msg, struct session *requested_by);
+void services_dispatcher(struct gameserver *gs, struct message_header *message, struct session *session);
 
 #endif
 

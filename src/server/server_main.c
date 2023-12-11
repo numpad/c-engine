@@ -137,28 +137,9 @@ static void server_on_disconnect(struct gameserver *gs, struct session *session)
 	messagequeue_add("Client %d disconnected.", session->id);
 }
 
-static void server_on_message(struct gameserver *gs, struct session *session, struct message_header *msg_header) {
-	messagequeue_add("Received %s from #%06d", message_type_to_name(msg_header->type), session->id);
-	switch (msg_header->type) {
-		case LOBBY_CREATE_REQUEST:
-			create_lobby(gs, (struct lobby_create_request *)msg_header, session);
-			break;
-		case LOBBY_JOIN_REQUEST:
-			join_lobby(gs, (struct lobby_join_request *)msg_header, session);
-			break;
-		case LOBBY_LIST_REQUEST: {
-			list_lobbies(gs, (struct lobby_list_request *)msg_header, session);
-			break;
-		}
-		case LOBBY_CREATE_RESPONSE:
-		case LOBBY_JOIN_RESPONSE:
-		case LOBBY_LIST_RESPONSE:
-			// these messages we cant handle
-		case MSG_TYPE_UNKNOWN:
-		case MSG_TYPE_MAX:
-			// these messages are invalid
-			break;
-	}
+static void server_on_message(struct gameserver *gs, struct session *session, struct message_header *message) {
+	messagequeue_add("Received %s from #%06d", message_type_to_name(message->type), session->id);
+	services_dispatcher(gs, message, session);
 }
 
 //

@@ -8,7 +8,7 @@
  * @param msg The requests data.
  * @param session The session which requested this. Can be NULL, if the server creates the lobby for example.
  */
-void create_lobby(struct gameserver *gserver, struct lobby_create_request *msg, struct session *requested_by) {
+void group_service_create_lobby(struct gameserver *gserver, struct lobby_create_request *msg, struct session *requested_by) {
 	assert(msg != NULL);
 	assert(requested_by != NULL); // TODO: also support no session
 	assert(msg->lobby_id >= 0); // TODO: this is application logic...
@@ -50,7 +50,7 @@ void create_lobby(struct gameserver *gserver, struct lobby_create_request *msg, 
 	gameserver_send_filtered(gserver, &create.header, requested_by, filter_everybody_exclude);
 }
 
-void join_lobby(struct gameserver *gserver, struct lobby_join_request *msg, struct session *requested_by) {
+void group_service_join_lobby(struct gameserver *gserver, struct lobby_join_request *msg, struct session *requested_by) {
 	
 	struct lobby_join_response join;
 	message_header_init(&join.header, LOBBY_JOIN_RESPONSE);
@@ -113,7 +113,7 @@ send_response:
  * @param msg The request data.
  * @param requested_by The client who requested the list.
  */
-void list_lobbies(struct gameserver *gserver, struct lobby_list_request *msg, struct session *requested_by) {
+void group_service_list_lobbies(struct gameserver *gserver, struct lobby_list_request *msg, struct session *requested_by) {
 	int sessions_len = stbds_arrlen(gserver->sessions);
 	if (sessions_len > 8) sessions_len = 8;
 
