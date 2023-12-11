@@ -33,6 +33,11 @@ static struct lws_protocols protocols[] = {
 // api
 //
 
+int filter_group            (struct session *o, struct session *t) { return (t->group_id == o->group_id); }
+int filter_group_exclude    (struct session *o, struct session *t) { return (o->id != t->id && t->group_id == o->group_id); }
+int filter_everybody        (struct session *o, struct session *t) { return 1; }
+int filter_everybody_exclude(struct session *o, struct session *t) { return (o->id != t->id); }
+
 // initialization
 int gameserver_init(struct gameserver *server, uint16_t port) {
 	memset(server, 0, sizeof(*server));
@@ -231,7 +236,7 @@ static void gameserver_on_connect(struct gameserver *server, struct session *ses
 
 	// propagate
 	if (server->callback_on_connect != NULL) {
-		server->callback_on_connect(session);
+		server->callback_on_connect(server, session);
 	}
 }
 
@@ -250,7 +255,7 @@ static void gameserver_on_disconnect(struct gameserver *server, struct session *
 
 	// propagate
 	if (server->callback_on_disconnect != NULL) {
-		server->callback_on_disconnect(session);
+		server->callback_on_disconnect(server, session);
 	}
 }
 
@@ -284,7 +289,7 @@ static void gameserver_on_message(struct gameserver *server, struct session *ses
 
 	// propagate
 	if (server->callback_on_message != NULL) {
-		server->callback_on_message(session, message);
+		server->callback_on_message(server, session, message);
 	}
 
 	free_message(data_json, message);

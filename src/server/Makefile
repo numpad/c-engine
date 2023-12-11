@@ -11,6 +11,7 @@ TARGET = server
 
 SRC = src/server/server_main.c \
 	  src/server/gameserver.c \
+	  src/server/services/group_service.c \
 	  src/net/message.c \
 	  lib/stb/stb_ds.c lib/cJSON/cJSON.c
 OBJ = $(addprefix $(BIN),$(SRC:.c=.o))

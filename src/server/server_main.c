@@ -10,15 +10,11 @@
 #include <stb_ds.h>
 #include "gameserver.h"
 #include "net/message.h"
+#include "services/services.h"
 
 //
 // logic
 //
-
-static int filter_group(struct session *o, struct session *t) { return (t->group_id == o->group_id); }
-static int filter_group_exclude(struct session *o, struct session *t) { return (o->id != t->id && t->group_id == o->group_id); }
-static int filter_everybody(struct session *o, struct session *t) { return 1; }
-static int filter_everybody_exclude(struct session *o, struct session *t) { return (o->id != t->id); }
 
 //
 // functions
@@ -36,11 +32,6 @@ static const char *fmt_time(time_t time);
 static const char *fmt_date(time_t rawtime);
 
 static void messagequeue_add(char *fmt, ...);
-
-// game logic
-static void create_lobby(struct lobby_create_request *msg, struct session *);
-static void join_lobby(struct lobby_join_request *msg, struct session *session);
-static void list_lobbies(struct lobby_list_request *msg, struct session *requested_by);
 
 //
 // vars
@@ -138,27 +129,25 @@ int main(int argc, char **argv) {
 // server logic
 //
 
-static void server_on_connect(struct session *session) {
+static void server_on_connect(struct gameserver *gs, struct session *session) {
 	messagequeue_add("Client %d connected.", session->id);
 }
 
-static void server_on_disconnect(struct session *session) {
+static void server_on_disconnect(struct gameserver *gs, struct session *session) {
 	messagequeue_add("Client %d disconnected.", session->id);
 }
 
-static void server_on_message(struct session *session, struct message_header *msg_header) {
-
-	// we got a fully valid message.
+static void server_on_message(struct gameserver *gs, struct session *session, struct message_header *msg_header) {
 	messagequeue_add("Received %s from #%06d", message_type_to_name(msg_header->type), session->id);
 	switch (msg_header->type) {
 		case LOBBY_CREATE_REQUEST:
-			create_lobby((struct lobby_create_request *)msg_header, session);
+			create_lobby(gs, (struct lobby_create_request *)msg_header, session);
 			break;
 		case LOBBY_JOIN_REQUEST:
-			join_lobby((struct lobby_join_request *)msg_header, session);
+			join_lobby(gs, (struct lobby_join_request *)msg_header, session);
 			break;
 		case LOBBY_LIST_REQUEST: {
-			list_lobbies((struct lobby_list_request *)msg_header, session);
+			list_lobbies(gs, (struct lobby_list_request *)msg_header, session);
 			break;
 		}
 		case LOBBY_CREATE_RESPONSE:
@@ -303,139 +292,3 @@ void *wsserver_thread(void *data) {
 //
 // game logic
 //
-
-/* Creates a new lobby and moves `requested_by` into it.
- * @param msg The requests data.
- * @param session The session which requested this. Can be NULL, if the server creates the lobby for example.
- */
-static void create_lobby(struct lobby_create_request *msg, struct session *requested_by) {
-	messagequeue_add("[create_lobby] Session Ptr: %p", requested_by);
-	assert(msg != NULL);
-	assert(requested_by != NULL); // TODO: also support no session
-	assert(msg->lobby_id >= 0); // TODO: this is application logic...
-
-	struct lobby_create_response response;
-	message_header_init(&response.header, LOBBY_CREATE_RESPONSE);
-	response.lobby_id = msg->lobby_id;
-	response.create_error = 0;
-
-	if (requested_by->group_id > 0) {
-		messagequeue_add("#%06d is already in lobby %d but requested to create %d", requested_by->id, requested_by->group_id, msg->lobby_id);
-		response.create_error = 1;
-		gameserver_send_to(&gserver, &response.header, requested_by);
-
-		return;
-	}
-
-	// TODO: check if lobby already exists
-
-	response.create_error = 0;
-	requested_by->group_id = msg->lobby_id;
-	messagequeue_add("#%06d created, and joined lobby %d!", requested_by->id, requested_by->group_id);
-
-	gameserver_send_to(&gserver, &response.header, requested_by);
-
-	// also send join response
-	struct lobby_join_response join;
-	message_header_init(&join.header, LOBBY_JOIN_RESPONSE);
-	join.is_other_user = 0;
-	join.join_error = 0;
-	join.lobby_id = requested_by->group_id;
-	gameserver_send_to(&gserver, &join.header, requested_by);
-
-	// also notify all others
-	struct lobby_create_response create;
-	message_header_init(&create.header, LOBBY_CREATE_RESPONSE);
-	create.create_error = 0;
-	create.lobby_id = msg->lobby_id;
-	gameserver_send_filtered(&gserver, &create.header, requested_by, filter_everybody_exclude);
-}
-
-static void join_lobby(struct lobby_join_request *msg, struct session *requested_by) {
-	
-	struct lobby_join_response join;
-	message_header_init(&join.header, LOBBY_JOIN_RESPONSE);
-	join.is_other_user = 0;
-	join.join_error = 0;
-	join.lobby_id = 0;
-	
-	// if already in a lobby, leave.
-	const int is_already_in_lobby = (requested_by->group_id > 0);
-	if (is_already_in_lobby && msg->lobby_id != 0) {
-		messagequeue_add("Cannot join %d, Already in lobby %d", msg->lobby_id, requested_by->group_id);
-		join.join_error = 1; // can only LEAVE (-1) while in lobby
-		join.lobby_id = requested_by->group_id; // shouldn't matter, just to be sure.
-		goto send_response;
-	}
-
-	// check if the lobby exists.
-	int lobby_exists = (msg->lobby_id == 0); // "0" is indicates a leave and always "exists".
-	if (lobby_exists == 0) {
-		const size_t sessions_len = stbds_arrlen(gserver.sessions);
-		for (size_t i = 0; i < sessions_len; ++i) {
-			struct session *s = gserver.sessions[i];
-			if (msg->lobby_id == s->group_id) {
-				lobby_exists = 1;
-				break;
-			}
-		}
-	}
-
-	// lobby doesnt exist? then we cant join.
-	if (lobby_exists == 0) {
-		join.join_error = 2; // INFO: lobby does not exist.
-		join.lobby_id = 0;
-		goto send_response;
-	}
-
-	if (msg->lobby_id != 0) {
-		requested_by->group_id = msg->lobby_id;
-	}
-
-	// lobby_id can be 0 to indicate a leave
-	join.join_error = 0;
-	join.lobby_id = msg->lobby_id;
-
-send_response:
-	gameserver_send_to(&gserver, &join.header, requested_by);
-
-	if (join.join_error == 0) {
-		join.is_other_user = 1;
-		messagequeue_add("Sending to group...");
-		gameserver_send_filtered(&gserver, &join.header, requested_by, filter_group_exclude);
-	}
-
-	if (msg->lobby_id == 0) {
-		requested_by->group_id = msg->lobby_id;
-	}
-}
-
-/** Sends a list of all lobbies to `requested_by`.
- * @param msg The request data.
- * @param requested_by The client who requested the list.
- */
-static void list_lobbies(struct lobby_list_request *msg, struct session *requested_by) {
-	int sessions_len = stbds_arrlen(gserver.sessions);
-	if (sessions_len > 8) sessions_len = 8;
-
-	struct lobby_list_response res;
-	message_header_init(&res.header, LOBBY_LIST_RESPONSE);
-	res.ids_of_lobbies_len = 0;
-	for (int i = 0; i < sessions_len; ++i) {
-		int lobby_id = gserver.sessions[i]->group_id;
-		
-		// check if we already added lobby_id to list.
-		for (int j = 0; j < res.ids_of_lobbies_len; ++j) {
-			if (lobby_id == res.ids_of_lobbies[j]) {
-				lobby_id = 0; // already exists
-			}
-		}
-
-		if (lobby_id > 0) {
-			res.ids_of_lobbies[res.ids_of_lobbies_len] = lobby_id;
-			++res.ids_of_lobbies_len;
-		}
-	}
-	gameserver_send_to(&gserver, &res.header, requested_by);
-}
-

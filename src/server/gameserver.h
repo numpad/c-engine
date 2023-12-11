@@ -18,9 +18,9 @@ struct gameserver;
 // typedefs
 //
 
-typedef void (*on_connect_fn)(struct session *);
-typedef void (*on_disconnect_fn)(struct session *);
-typedef void (*on_message_fn)(struct session *, struct message_header *message);
+typedef void (*on_connect_fn)   (struct gameserver *, struct session *);
+typedef void (*on_disconnect_fn)(struct gameserver *, struct session *);
+typedef void (*on_message_fn)   (struct gameserver *, struct session *, struct message_header *message);
 
 typedef int (*session_filter_fn)(struct session *master, struct session *tested);
 
@@ -53,16 +53,22 @@ struct session {
 //
 
 // init & destroy
-int  gameserver_init   (struct gameserver *, uint16_t port);
-void gameserver_destroy(struct gameserver *);
+int  gameserver_init         (struct gameserver *, uint16_t port);
+void gameserver_destroy      (struct gameserver *);
 
-// main loop
-void gameserver_listen(struct gameserver *);
+//   main                            loop
+void gameserver_listen       (struct gameserver *);
 
-// sending data
+//   sending                         data
 void gameserver_send_raw     (struct gameserver *, struct session *receiver, uint8_t *data, size_t data_len);
-void gameserver_send_to      (struct gameserver *, struct message_header *message, struct session *receiver);
+void gameserver_send_to      (struct gameserver *, struct message_header *message, struct session  *receiver);
 void gameserver_send_filtered(struct gameserver *, struct message_header *message, struct session *master, session_filter_fn filter);
+
+// filters
+int  filter_group            (struct session *o, struct session *t);
+int  filter_group_exclude    (struct session *o, struct session *t);
+int  filter_everybody        (struct session *o, struct session *t);
+int  filter_everybody_exclude(struct session *o, struct session *t);
 
 #endif
 
