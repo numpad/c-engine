@@ -17,7 +17,7 @@ ifeq ($(CC), emcc)
 	# TODO: dont add everything to cflags, some flags should be used only during linking
 	# TODO: Check if needed/better: -sASYNCIFY -sTOTAL_STACK=64MB -sINITIAL_MEMORY=128MB -sWEBSOCKET_SUBPROTOCOL="binary" -sMAX_WEBGL_VERSION=2
 	CFLAGS += -sWASM=1 \
-			  -sUSE_SDL=2 -sUSE_SDL_NET=2 -sUSE_SDL_MIXER=2 -sUSE_SDL_IMAGE=0 -sUSE_SDL_TTF= -sFULL_ES2=1 \
+			  -sUSE_SDL=2 -sUSE_SDL_NET=2 -sUSE_SDL_MIXER=2 -sUSE_SDL_IMAGE=0 -sUSE_SDL_TTF=0 -sFULL_ES2=1 \
 			  -sALLOW_MEMORY_GROWTH=1 \
 			  -sEXPORTED_RUNTIME_METHODS=cwrap \
 			  -sEXPORTED_FUNCTIONS=_main,_on_siggoback \
