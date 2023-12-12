@@ -49,6 +49,9 @@ struct engine_s {
 	// rendering globals
 	mat4 u_projection;
 	mat4 u_view;
+
+	// dumb state
+	int console_visible;
 };
 
 // init & cleanup

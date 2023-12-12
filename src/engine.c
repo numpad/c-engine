@@ -77,7 +77,7 @@ struct engine_s *engine_new(void) {
 		return NULL;
 	}
 
-	struct engine_s *engine = malloc(sizeof(struct engine_s));
+	struct engine_s *engine = calloc(1, sizeof(struct engine_s));
 	engine->window_width = 550;
 	engine->window_height = 800;
 	engine->time_elapsed = 0.0f;
@@ -89,6 +89,7 @@ struct engine_s *engine_new(void) {
 	engine->gameserver_ip.host = engine->gameserver_ip.port = 0;
 	engine->gameserver_tcp = NULL;
 	engine->gameserver_socketset = NULL;
+	engine->console_visible = 1;
 	console_init(engine->console);
 
 	if (engine->window == NULL) {
@@ -362,7 +363,9 @@ void engine_draw(struct engine_s *engine) {
 	// run scene
 	scene_draw(engine->scene, engine);
 
-	console_draw(engine->console, engine);
+	if (engine->console_visible != 0) {
+		console_draw(engine->console, engine);
+	}
 
 #ifdef DEBUG
 	// display seconds
