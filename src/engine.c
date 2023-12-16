@@ -15,7 +15,7 @@
 #include "scenes/experiments.h"
 #include "gui/console.h"
 #include "net/message.h"
-#include "util/aux.h"
+#include "util/util.h"
 
 static Uint32 USR_EVENT_RELOAD = ((Uint32)-1);
 static Uint32 USR_EVENT_NOTIFY = ((Uint32)-1);

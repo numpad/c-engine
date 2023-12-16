@@ -1,5 +1,5 @@
-#ifndef AUX_H
-#define AUX_H
+#ifndef UTIL_H
+#define UTIL_H
 
 #include <stddef.h>
 
