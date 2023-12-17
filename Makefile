@@ -6,7 +6,7 @@ CFLAGS = -std=gnu99 -fPIC -Wall -Wextra -pedantic \
 		 -DFLECS_CUSTOM_BUILD -DFLECS_SYSTEM -DFLECS_MODULE -DFLECS_PIPELINE -DFLECS_TIMER -DFLECS_HTTP -DFLECS_SNAPSHOT -DFLECS_PARSER -DFLECS_APP -DFLECS_OS_API_IMPL \
 		 -DNK_INCLUDE_DEFAULT_ALLOCATOR -DNK_INCLUDE_DEFAULT_FONT -DNK_INCLUDE_FONT_BAKING -DNK_INCLUDE_FIXED_TYPES -DNK_INCLUDE_STANDARD_IO -DNK_INCLUDE_STANDARD_VARARGS -DNK_INCLUDE_VERTEX_BUFFER_OUTPUT -DNK_NO_STB_TRUETYPE_IMPLEMENTATION -DNK_NO_STB_RECT_PACK_IMPLEMENTATION \
 		 # flecs needs gnu99
-INCLUDES = -I src/ -isystem /usr/include/SDL2 -isystem lib/nanovg/src -isystem lib/stb -isystem lib/cglm/include -isystem lib/flecs -isystem lib/cJSON -isystem lib/nuklear
+INCLUDES = -I src/ -isystem /usr/include/SDL2 -isystem lib/nanovg/src -isystem lib/stb -isystem lib/cglm/include -isystem lib/flecs -isystem lib/cJSON -isystem lib/nuklear -isystem lib/box2c/include/ -isystem lib/box2c/extern/simde/
 LIBS = -lm -lGL -lSDL2 -lSDL2_mixer -lSDL2_net # -lSDL2_ttf
 
 BIN = bin/native/
@@ -15,10 +15,11 @@ TARGET = soil_soldiers
 # when compiling with emscripten, add some specific flags
 ifeq ($(CC), emcc)
 	# TODO: dont add everything to cflags, some flags should be used only during linking
-	# TODO: Check if needed/better: -sASYNCIFY -sTOTAL_STACK=64MB -sINITIAL_MEMORY=128MB -sWEBSOCKET_SUBPROTOCOL="binary" -sMAX_WEBGL_VERSION=2
+	# TODO: Check if needed/better: -sASYNCIFY -sWEBSOCKET_SUBPROTOCOL="binary" -sMAX_WEBGL_VERSION=2
 	CFLAGS += -sWASM=1 \
 			  -sUSE_SDL=2 -sUSE_SDL_NET=2 -sUSE_SDL_MIXER=2 -sUSE_SDL_IMAGE=0 -sUSE_SDL_TTF=0 -sFULL_ES2=1 \
 			  -sALLOW_MEMORY_GROWTH=1 \
+			  -sINITIAL_MEMORY=128MB -sTOTAL_STACK=64MB \
 			  -sEXPORTED_RUNTIME_METHODS=cwrap \
 			  -sEXPORTED_FUNCTIONS=_main,_on_siggoback \
 			  -sMODULARIZE=1 -sEXPORT_NAME="MyApp" \
@@ -40,6 +41,7 @@ SRC = main.c src/engine.c src/platform.c \
 	  lib/nanovg/src/nanovg.c \
 	  lib/stb/stb_ds.c lib/stb/stb_perlin.c lib/stb/stb_image.c lib/stb/stb_rect_pack.c lib/stb/stb_truetype.c \
 	  $(wildcard lib/cglm/src/*.c) \
+	  $(wildcard lib/box2c/src/*.c) \
 	  lib/cJSON/cJSON.c \
 	  lib/flecs/flecs.c \
 	  lib/nuklear/nuklear.c \
