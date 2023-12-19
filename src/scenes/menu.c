@@ -84,7 +84,7 @@ static void menu_update(struct menu_s *menu, struct engine_s *engine, float dt) 
 
 		nk_layout_row_dynamic(nk, row_height, 1);
 		if (nk_button_symbol_label(nk, NK_SYMBOL_TRIANGLE_RIGHT, "Play Game", NK_TEXT_ALIGN_RIGHT)) {
-			platform_vibrate(50);
+			platform_vibrate(PLATFORM_VIBRATE_TAP);
 			switch_to_game_scene(engine);
 		}
 
@@ -114,14 +114,14 @@ static void menu_update(struct menu_s *menu, struct engine_s *engine, float dt) 
 		nk_layout_row_dynamic(nk, row_height, 1);
 		if (nk_button_symbol_label(nk, NK_SYMBOL_CIRCLE_OUTLINE, "Multiplayer", NK_TEXT_ALIGN_RIGHT)) {
 			multiplayer_window = 1;
-			platform_vibrate(50);
+			platform_vibrate(PLATFORM_VIBRATE_TAP);
 			nk_window_show(nk, "Multiplayer", NK_SHOWN);
 		}
 
 		// minigame
 		nk_layout_row_dynamic(nk, row_height, 1);
 		if (nk_button_symbol_label(nk, NK_SYMBOL_PLUS, "Minigame", NK_TEXT_ALIGN_RIGHT)) {
-			platform_vibrate(50);
+			platform_vibrate(PLATFORM_VIBRATE_TAP);
 			switch_to_minigame_scene(engine);
 		}
 
@@ -129,10 +129,11 @@ static void menu_update(struct menu_s *menu, struct engine_s *engine, float dt) 
 		// settings, about
 		nk_layout_row_dynamic(nk, row_height, 2);
 		if (nk_button_label(nk, "Settings")) {
-			platform_vibrate(50);
+			platform_vibrate(PLATFORM_VIBRATE_TAP);
 		}
 		if (nk_button_label(nk, "About")) {
-			platform_vibrate(50);
+			platform_vibrate(PLATFORM_VIBRATE_TAP);
+			platform_open_website("https://xn--schl-noa.com/");
 		}
 	}
 	nk_end(nk);
@@ -218,7 +219,7 @@ static void menu_update(struct menu_s *menu, struct engine_s *engine, float dt) 
 					nk_labelf(nk, NK_TEXT_ALIGN_LEFT | NK_TEXT_ALIGN_MIDDLE, "#%d", ids_of_lobbies[i]);
 
 					if (nk_button_label(nk, "Join")) {
-						platform_vibrate(150);
+						platform_vibrate(PLATFORM_VIBRATE_TAP);
 
 						struct lobby_join_request req;
 						message_header_init(&req.header, LOBBY_JOIN_REQUEST);

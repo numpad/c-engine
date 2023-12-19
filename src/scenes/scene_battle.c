@@ -21,63 +21,86 @@
 #include "ecs/components.h"
 #include "scenes/menu.h"
 
+//
+// structs & enums
+//
+
+// 
+// private functions
+//
+
+static void reload_shader(struct engine_s *engine);
+
+//
+// vars
+//
+
+// game state
+struct isoterrain_s *g_terrain;
+struct cardrenderer_s *g_cardrenderer;
+
+ecs_world_t *g_world;
+ecs_query_t *g_q_handcards;
+
+// testing
 static Mix_Chunk *sound;
 
-static void reload_shader(struct engine_s *engine) {
-	struct scene_battle_s *scene = (struct scene_battle_s *)engine->scene;
-	scene->terrain->shader = shader_new("res/shader/isoterrain/vertex.glsl", "res/shader/isoterrain/fragment.glsl");
-}
 
-static void scene_battle_load(struct scene_battle_s *scene, struct engine_s *engine) {
+//
+// scene functions
+//
+
+
+static void load(struct scene_battle_s *scene, struct engine_s *engine) {
 	// TODO: remove, debug only
 	stbds_arrput(engine->on_notify_callbacks, reload_shader);
 	
 	// ecs
-	scene->world = ecs_init();
-	ECS_COMPONENT(scene->world, c_card);
-	ECS_COMPONENT(scene->world, c_handcard);
-	ECS_COMPONENT(scene->world, c_blockpos);
+	g_world = ecs_init();
+	ECS_COMPONENT(g_world, c_card);
+	ECS_COMPONENT(g_world, c_handcard);
+	ECS_COMPONENT(g_world, c_blockpos);
 
 	// add some debug cards
 	{
-		ecs_entity_t e = ecs_new_id(scene->world);
-		ecs_set(scene->world, e, c_card, { "Move Forward", 40 });
-		ecs_set(scene->world, e, c_handcard, { 0 });
+		ecs_entity_t e = ecs_new_id(g_world);
+		ecs_set(g_world, e, c_card, { "Move Forward", 40 });
+		ecs_set(g_world, e, c_handcard, { 0 });
 	}
 	{
-		ecs_entity_t e = ecs_new_id(scene->world);
-		ecs_set(scene->world, e, c_card, { "Move Forward", 40 });
-		ecs_set(scene->world, e, c_handcard, { 0 });
+		ecs_entity_t e = ecs_new_id(g_world);
+		ecs_set(g_world, e, c_card, { "Move Forward", 40 });
+		ecs_set(g_world, e, c_handcard, { 0 });
 	}
 	{
-		ecs_entity_t e = ecs_new_id(scene->world);
-		ecs_set(scene->world, e, c_card, { "Meal", 41 });
-		ecs_set(scene->world, e, c_handcard, { 0 });
+		ecs_entity_t e = ecs_new_id(g_world);
+		ecs_set(g_world, e, c_card, { "Meal", 41 });
+		ecs_set(g_world, e, c_handcard, { 0 });
 	}
 	{
-		ecs_entity_t e = ecs_new_id(scene->world);
-		ecs_set(scene->world, e, c_card, { "Move Forward", 40 });
-		ecs_set(scene->world, e, c_handcard, { 0 });
+		ecs_entity_t e = ecs_new_id(g_world);
+		ecs_set(g_world, e, c_card, { "Move Forward", 40 });
+		ecs_set(g_world, e, c_handcard, { 0 });
 	}
 	{
-		ecs_entity_t e = ecs_new_id(scene->world);
-		ecs_set(scene->world, e, c_card, { "Meal", 41 });
-		ecs_set(scene->world, e, c_handcard, { 0 });
+		ecs_entity_t e = ecs_new_id(g_world);
+		ecs_set(g_world, e, c_card, { "Meal", 41 });
+		ecs_set(g_world, e, c_handcard, { 0 });
 	}
 	{
-		ecs_entity_t e = ecs_new_id(scene->world);
-		ecs_set(scene->world, e, c_card, { "Meal", 41 });
-		ecs_set(scene->world, e, c_handcard, { 0 });
+		ecs_entity_t e = ecs_new_id(g_world);
+		ecs_set(g_world, e, c_card, { "Meal", 41 });
+		ecs_set(g_world, e, c_handcard, { 0 });
 	}
 	
 	// add some debug entities
 	{
-		ecs_entity_t e = ecs_new_id(scene->world);
-		ecs_set(scene->world, e, c_blockpos, { 8, 4, 2 });
+		ecs_entity_t e = ecs_new_id(g_world);
+		ecs_set(g_world, e, c_blockpos, { 8, 4, 2 });
 	}
 
 	// component queries
-	scene->q_handcards = ecs_query_init(scene->world, &(ecs_query_desc_t) {
+	g_q_handcards = ecs_query_init(g_world, &(ecs_query_desc_t) {
 		.filter.terms = {
 			{ ecs_id(c_card) },
 			{ ecs_id(c_handcard) },
@@ -85,13 +108,13 @@ static void scene_battle_load(struct scene_battle_s *scene, struct engine_s *eng
 	});
 
 	// isoterrain
-	scene->terrain = malloc(sizeof(struct isoterrain_s));
-	//isoterrain_init(scene->terrain, 10, 10, 1);
-	isoterrain_init_from_file(scene->terrain, "res/data/levels/test.json");
+	g_terrain = malloc(sizeof(struct isoterrain_s));
+	//isoterrain_init(g_terrain, 10, 10, 1);
+	isoterrain_init_from_file(g_terrain, "res/data/levels/test.json");
 
 	// card renderer
-	scene->cardrenderer = malloc(sizeof(struct cardrenderer_s));
-	cardrenderer_init(scene->cardrenderer, "res/image/cards.png");
+	g_cardrenderer = malloc(sizeof(struct cardrenderer_s));
+	cardrenderer_init(g_cardrenderer, "res/image/cards.png");
 
 	// background
 	texture_init_from_image(&scene->bg_texture, "res/image/space_bg.png", NULL);
@@ -130,26 +153,26 @@ static void scene_battle_load(struct scene_battle_s *scene, struct engine_s *eng
 	Mix_PlayChannel(-1, sound, 0);
 }
 
-static void scene_battle_destroy(struct scene_battle_s *scene, struct engine_s *engine) {
+static void destroy(struct scene_battle_s *scene, struct engine_s *engine) {
 	shader_delete(scene->bg_shader);
 	vbuffer_destroy(scene->bg_vbuf);
 	free(scene->bg_vbuf);
-	isoterrain_destroy(scene->terrain);
-	free(scene->terrain);
-	cardrenderer_destroy(scene->cardrenderer);
-	free(scene->cardrenderer);
+	isoterrain_destroy(g_terrain);
+	free(g_terrain);
+	cardrenderer_destroy(g_cardrenderer);
+	free(g_cardrenderer);
 
-	ecs_fini(scene->world);
+	ecs_fini(g_world);
 }
 
-static void scene_battle_update(struct scene_battle_s *scene, struct engine_s *engine, float dt) {
+static void update(struct scene_battle_s *scene, struct engine_s *engine, float dt) {
 	int mx, my;
 	Uint32 mstate = SDL_GetMouseState(&mx, &my);
 
 	const struct input_drag_s *drag = &(engine->input_drag);
 
 	if ((drag->state == INPUT_DRAG_BEGIN && drag->begin_y > engine->window_height * 0.7f) || drag->state == INPUT_DRAG_END) {
-		ecs_iter_t it = ecs_query_iter(scene->world, scene->q_handcards);
+		ecs_iter_t it = ecs_query_iter(g_world, g_q_handcards);
 		while (ecs_query_next(&it)) {
 			c_card *cards = ecs_field(&it, c_card, 1);
 			c_handcard *handcards = ecs_field(&it, c_handcard, 2);
@@ -164,7 +187,7 @@ static void scene_battle_update(struct scene_battle_s *scene, struct engine_s *e
 						char msg[64]; // console_add_message makes a copy, so we can use a temporary buffer
 						sprintf(msg, "Played '%s'", cards[i].name);
 						console_add_message(engine->console, (struct console_msg_s) { msg });
-						ecs_delete(scene->world, it.entities[i]);
+						ecs_delete(g_world, it.entities[i]);
 						Mix_PlayChannel(-1, sound, 0);
 					}
 				}
@@ -181,7 +204,7 @@ static void scene_battle_update(struct scene_battle_s *scene, struct engine_s *e
 		}
 	}
 	if (drag->state == INPUT_DRAG_BEGIN || drag->state == INPUT_DRAG_IN_PROGRESS) {
-		ecs_iter_t it = ecs_query_iter(scene->world, scene->q_handcards);
+		ecs_iter_t it = ecs_query_iter(g_world, g_q_handcards);
 		while (ecs_query_next(&it)) {
 			c_card *cards = ecs_field(&it, c_card, 1);
 			c_handcard *handcards = ecs_field(&it, c_handcard, 2);
@@ -210,7 +233,7 @@ static void scene_battle_update(struct scene_battle_s *scene, struct engine_s *e
 
 }
 
-static void scene_battle_draw(struct scene_battle_s *scene, struct engine_s *engine) {
+static void draw(struct scene_battle_s *scene, struct engine_s *engine) {
 	// draw bg
 	glUseProgram(scene->bg_shader);
 	glActiveTexture(GL_TEXTURE0);
@@ -220,19 +243,19 @@ static void scene_battle_draw(struct scene_battle_s *scene, struct engine_s *eng
 	glUseProgram(0);
 
 	// draw terrain
-	isoterrain_draw(scene->terrain, engine->u_projection, engine->u_view);
+	isoterrain_draw(g_terrain, engine->u_projection, engine->u_view);
 
 	// draw cards
-	glUseProgram(scene->cardrenderer->shader);
-	glUniformMatrix4fv(glGetUniformLocation(scene->cardrenderer->shader, "u_projection"), 1, GL_FALSE, engine->u_projection[0]);
-	glUniformMatrix4fv(glGetUniformLocation(scene->cardrenderer->shader, "u_view"), 1, GL_FALSE, engine->u_view[0]);
+	glUseProgram(g_cardrenderer->shader);
+	glUniformMatrix4fv(glGetUniformLocation(g_cardrenderer->shader, "u_projection"), 1, GL_FALSE, engine->u_projection[0]);
+	glUniformMatrix4fv(glGetUniformLocation(g_cardrenderer->shader, "u_view"), 1, GL_FALSE, engine->u_view[0]);
 	glActiveTexture(GL_TEXTURE0);
-	glBindTexture(GL_TEXTURE_2D, scene->cardrenderer->texture_atlas.texture);
+	glBindTexture(GL_TEXTURE_2D, g_cardrenderer->texture_atlas.texture);
 
 	glEnable(GL_DEPTH_TEST);
 	glDepthFunc(GL_LEQUAL);
 	// TODO: z-sorting
-	ecs_iter_t it = ecs_query_iter(scene->world, scene->q_handcards);
+	ecs_iter_t it = ecs_query_iter(g_world, g_q_handcards);
 	while (ecs_query_next(&it)) {
 		c_card *cards = ecs_field(&it, c_card, 1);
 		c_handcard *handcards = ecs_field(&it, c_handcard, 2);
@@ -264,16 +287,16 @@ static void scene_battle_draw(struct scene_battle_s *scene, struct engine_s *eng
 				glm_translate(u_model, (vec3){ x, y * 0.6f + 0.4f + -(1.0f / card_scale) * engine->window_aspect + y_offset, card_z});
 				glm_rotate(u_model, angle * 0.2f, (vec3){0.0f, 0.0f, -1.0f});
 			}
-			glUniformMatrix4fv(glGetUniformLocation(scene->cardrenderer->shader, "u_model"), 1, GL_FALSE, u_model[0]);
+			glUniformMatrix4fv(glGetUniformLocation(g_cardrenderer->shader, "u_model"), 1, GL_FALSE, u_model[0]);
 			const float step = 1.0f / 8.0f;
 			const float tx = cards[i].image_id % 8;
 			const float ty = floorf((float)cards[i].image_id / 8.0f);
 
 			glUniform4fv(
-				glGetUniformLocation(scene->cardrenderer->shader, "u_cardwindow_offset"),
+				glGetUniformLocation(g_cardrenderer->shader, "u_cardwindow_offset"),
 				1, (vec4){tx * step, (ty + 1.0f) * step, step, -step});
 
-			vbuffer_draw(&scene->cardrenderer->vbo, 6);
+			vbuffer_draw(&g_cardrenderer->vbo, 6);
 		}
 	}
 	glDisable(GL_DEPTH_TEST);
@@ -296,10 +319,19 @@ void scene_battle_init(struct scene_battle_s *scene_battle, struct engine_s *eng
 	scene_init((struct scene_s *)scene_battle, engine);
 
 	// init function pointers
-	scene_battle->base.load = (scene_load_fn)scene_battle_load;
-	scene_battle->base.destroy = (scene_destroy_fn)scene_battle_destroy;
-	scene_battle->base.update = (scene_update_fn)scene_battle_update;
-	scene_battle->base.draw = (scene_draw_fn)scene_battle_draw;
+	scene_battle->base.load    = (scene_load_fn)load;
+	scene_battle->base.destroy = (scene_destroy_fn)destroy;
+	scene_battle->base.update  = (scene_update_fn)update;
+	scene_battle->base.draw    = (scene_draw_fn)draw;
 
+}
+
+//
+// private implementations
+//
+
+static void reload_shader(struct engine_s *engine) {
+	struct scene_battle_s *scene = (struct scene_battle_s *)engine->scene;
+	g_terrain->shader = shader_new("res/shader/isoterrain/vertex.glsl", "res/shader/isoterrain/fragment.glsl");
 }
 

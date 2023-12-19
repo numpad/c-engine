@@ -5,6 +5,7 @@
 #include <nanovg.h>
 #include <nuklear.h>
 #include <cglm/cglm.h>
+#include <box2d/box2d.h>
 #include <stb_ds.h>
 #include "engine.h"
 
@@ -66,20 +67,46 @@ static const int TILESET_TILESIZE = 256;
 static const float UI_ROW_HEIGHT = 50.0f;
 static const float BOARD_WIDTH = 185.0f * 2.0f;
 static const float BOARD_HEIGHT = 400.0f;
+static const int tiles[] = {TILE_APPLE_GREEN, TILE_MANGO, TILE_ORANGE, TILE_MELON_SLICE, TILE_STRAWBERRY, TILE_GRAPES, TILE_PEACH, -1};
 
 static int font_score;
 static int img_food;
 
 // game state
 static int game_score;
+static float game_score_anim = 0.0f;
 static struct emoji **emojis;
 static size_t emojis_len;
 
 static struct emoji *dragged_emoji;
+static float dragged_emoji_anim = 0.0f;
 static int dragging;
 static float dragging_x;
 
 static vec2 camera_pos;
+
+// physics
+static b2WorldDef world_def;
+static b2WorldId world_id;
+// ground
+static b2BodyDef ground_bodydef;
+static b2BodyId ground_bodyid;
+static b2Polygon ground_polygon;
+static b2ShapeDef ground_shapedef;
+// left wall
+static b2BodyDef leftwall_bodydef;
+static b2BodyId leftwall_bodyid;
+static b2Polygon leftwall_polygon;
+static b2ShapeDef leftwall_shapedef;
+// right wall
+static b2BodyDef rightwall_bodydef;
+static b2BodyId rightwall_bodyid;
+static b2Polygon rightwall_polygon;
+static b2ShapeDef rightwall_shapedef;
+
+static b2BodyDef  *body_defs;
+static b2BodyId   *body_ids;
+static b2ShapeDef *body_shape_defs;
 
 //
 // scene functions
@@ -95,12 +122,63 @@ static void load(struct scene_experiments_s *scene, struct engine_s *engine) {
 	img_food = nvgCreateImage(engine->vg, "res/sprites/food-emojis.png", NVG_IMAGE_GENERATE_MIPMAPS | NVG_IMAGE_FLIPY);
 
 	// init
-	game_score = 0;
-	emojis = NULL;
-	emojis_len = 0;
-	dragged_emoji = NULL;
-	dragging = 0;
-	dragging_x = 0.0f;
+	game_score      = 0;
+	game_score_anim = 0.0f;
+	emojis          = NULL;
+	emojis_len      = 0;
+	dragged_emoji   = NULL;
+	dragged_emoji_anim = 0.0f;
+	dragging        = 0;
+	dragging_x      = 0.0f;
+	body_defs       = NULL;
+	body_ids        = NULL;
+	body_shape_defs = NULL;
+
+	// init physics
+	world_def = b2DefaultWorldDef();
+	world_def.gravity = (b2Vec2){ 0.0f, 10.0f };
+	world_id = b2CreateWorld(&world_def);
+
+	{ // ground
+		ground_bodydef = b2DefaultBodyDef();
+		ground_bodydef.type = b2_staticBody;
+		ground_bodydef.position = (b2Vec2){0.0f, 267.5f};
+		ground_bodyid = b2World_CreateBody(world_id, &ground_bodydef);
+
+		ground_polygon = b2MakeBox(200.0f, 20.0f);
+
+		ground_shapedef = b2DefaultShapeDef();
+		ground_shapedef.friction = 0.7f;
+		ground_shapedef.restitution = 0.5f;
+		b2Body_CreatePolygon(ground_bodyid, &ground_shapedef, &ground_polygon);
+	}
+	{ // left
+		leftwall_bodydef = b2DefaultBodyDef();
+		leftwall_bodydef.type = b2_staticBody;
+		leftwall_bodydef.position = (b2Vec2){-200.0f, 100.0f};
+		leftwall_bodyid = b2World_CreateBody(world_id, &leftwall_bodydef);
+
+		leftwall_polygon = b2MakeBox(20.0f, 350.0f);
+
+		leftwall_shapedef = b2DefaultShapeDef();
+		leftwall_shapedef.friction = 0.7f;
+		leftwall_shapedef.restitution = 0.5f;
+		b2Body_CreatePolygon(leftwall_bodyid, &leftwall_shapedef, &leftwall_polygon);
+	}
+	{ // right
+		rightwall_bodydef = b2DefaultBodyDef();
+		rightwall_bodydef.type = b2_staticBody;
+		rightwall_bodydef.position = (b2Vec2){200.0f, 100.0f};
+		rightwall_bodyid = b2World_CreateBody(world_id, &rightwall_bodydef);
+
+		rightwall_polygon = b2MakeBox(20.0f, 350.0f);
+
+		rightwall_shapedef = b2DefaultShapeDef();
+		rightwall_shapedef.friction = 0.7f;
+		rightwall_shapedef.restitution = 0.5f;
+		b2Body_CreatePolygon(rightwall_bodyid, &rightwall_shapedef, &rightwall_polygon);
+	}
+
 
 	// setup camera
 	glm_vec2_zero(camera_pos);
@@ -111,9 +189,18 @@ static void load(struct scene_experiments_s *scene, struct engine_s *engine) {
 static void destroy(struct scene_experiments_s *scene, struct engine_s *engine) {
 	nvgDeleteImage(engine->vg, img_food);
 
+	// free physics world
+	stbds_arrfree(body_defs);
+	stbds_arrfree(body_ids);
+	stbds_arrfree(body_shape_defs);
+	b2DestroyWorld(world_id);
+
+	// free emojis
 	for (size_t i = 0; i < emojis_len; ++i) {
 		emoji_delete(emojis[i]);
 	}
+	stbds_arrfree(emojis);
+
 }
 
 static void update(struct scene_experiments_s *scene, struct engine_s *engine, float dt) {
@@ -134,10 +221,20 @@ static void update(struct scene_experiments_s *scene, struct engine_s *engine, f
 			dragged_emoji = NULL;
 
 			game_score += 10;
+			game_score_anim = 0.0f;
 
 			// set next emoji
 			dragged_emoji = emoji_new(0.0f, 0.0f);
-			dragged_emoji->tile = ((rand() & 1) == 0) ? TILE_BOBA : TILE_ORANGE;
+			dragged_emoji_anim = 0.0f;
+			// select weighted random
+			dragged_emoji->tile = 0;
+			for (size_t i = 0; tiles[i] >= 0; ++i) {
+				if ((rand() & 1) == 0) {
+					dragged_emoji->tile = tiles[i];
+					break;
+				}
+			}
+			// TODO: dragged_emoji coult be unset
 		}
 	}
 
@@ -146,10 +243,10 @@ static void update(struct scene_experiments_s *scene, struct engine_s *engine, f
 	}
 
 	// test physics
-	for (size_t i = 0; i < emojis_len; ++i) {
-		emojis[i]->pos[1] += 2.0f;
+	for (int i = 0; i < 2; ++i) {
+		b2World_Step(world_id, 1.0f / 20.0f, 8, 3);
 	}
-	
+
 	// camera
 	camera_pos[0] = engine->window_width * 0.5f;
 	camera_pos[1] = engine->window_height * 0.5f;
@@ -160,49 +257,33 @@ static void draw(struct scene_experiments_s *scene, struct engine_s *engine) {
 	const float H = engine->window_height;
 	NVGcontext *vg = engine->vg;
 
-	// draw warning banner
-	nvgFillColor(vg, palette[2]);
-	nvgBeginPath(vg);
-	nvgRect(vg, 0.0f, 0.0f, W, 22.0f);
-	nvgFill(vg);
-
-	nvgFontFaceId(vg, font_score);
-	nvgFillColor(vg, palette[1]);
-	nvgTextLetterSpacing(vg, 1.5f);
-	nvgFontSize(vg, 13.0f);
-	nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
-	nvgSave(vg);
-	static float t = 0.0f;
-	t += 1.0f / 60.0f;
-	nvgTranslate(vg, -t * 25.0f, 0.0f);
-	if (-t * 25.0f < -250.0f) {
-		t = 0.0f;
-	}
-	nvgText(vg, 0.0f,   12.0f,        "This is early alpha footage!", NULL);
-	nvgText(vg, 250.0f, 12.0f,        "This is early alpha footage!", NULL);
-	nvgText(vg, 250.0f * 2.0f, 12.0f, "This is early alpha footage!", NULL);
-	nvgRestore(vg);
-
 	// score
 	draw_score(vg, W * 0.5f, 40.0f, game_score);
 	// upcoming emoji
 	draw_box_title(vg, W - 56.0f, 40.0f, 76.0f, UI_ROW_HEIGHT, "next");
-	draw_tile(vg, TILE_APPLE, W - 56.0f, 64.0f, 0.175f, 0.0f);
+	if (dragged_emoji != NULL) {
+		dragged_emoji_anim = glm_min(dragged_emoji_anim + 0.01f, 1.0f);
+		draw_tile(vg, dragged_emoji->tile, W - 56.0f, 64.0f, 0.09f + 0.085f * glm_ease_elast_out(dragged_emoji_anim), 0.0f);
+	}
 	// cheatsheet
 	draw_emoji_cheatsheet(vg, W * 0.5f, H - 80.0f, 350.0f);
 
 	// draw game
 	draw_game_container(vg);
 
-	// emojis
+	// draw emojis
 	nvgSave(vg);
 	nvgTranslate(vg, camera_pos[0], camera_pos[1]);
 
-	for (size_t i = 0; i < emojis_len; ++i) {
-		struct emoji *e = emojis[i];
-		
-		draw_tile(vg, e->tile, e->pos[0], e->pos[1], e->scale, 0.0f);
+	// physics objects
+	const size_t bodies_len = stbds_arrlen(body_ids);
+	for (size_t i = 0; i < bodies_len; ++i) {
+		b2Vec2 p = b2Body_GetPosition(body_ids[i]);
+		float angle = b2Body_GetAngle(body_ids[i]);
+
+		draw_tile(vg, emojis[i]->tile, p.x, p.y, emojis[i]->scale, angle);
 	}
+
 	nvgRestore(vg);
 
 	// draw input
@@ -299,9 +380,11 @@ static void draw_score(NVGcontext *vg, float x, float y, int score) {
 	snprintf(score_str, score_len + 1, "%d", score);
 
 	const NVGcolor *primary = &palette[0];
-
 	const float box_w = 175.0f;
 
+	game_score_anim = glm_min(game_score_anim + 0.017f, 1.0f);
+
+	// background
 	draw_box(vg, x, y, box_w, UI_ROW_HEIGHT);
 
 	// text
@@ -309,7 +392,7 @@ static void draw_score(NVGcontext *vg, float x, float y, int score) {
 
 	nvgFontFaceId(vg, font_score);
 	nvgFillColor(vg, *primary);
-	nvgFontSize(vg, 32.0f);
+	nvgFontSize(vg, 32.0f * glm_ease_elast_out(game_score_anim));
 	nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
 	nvgText(vg, x, y + 28.0f, score_str, NULL);
 
@@ -405,8 +488,6 @@ static void draw_tile(NVGcontext *vg, enum tile tile, float x, float y, float sc
 }
 
 static void draw_emoji_cheatsheet(NVGcontext *vg, float x, float y, float w) {
-	const int tiles[] = {TILE_APPLE_GREEN, TILE_MANGO, TILE_MELON_SLICE, TILE_ORANGE, TILE_STRAWBERRY, TILE_GRAPES, TILE_PEACH, -1};
-
 	draw_box_title(vg, x, y, w, UI_ROW_HEIGHT, "emoji order");
 
 	for (size_t i = 0; tiles[i] >= 0; ++i) {
@@ -488,8 +569,31 @@ static void draw_input(NVGcontext *vg) {
 }
 
 static void emoji_spawn(struct emoji *e) {
+	// add emoji (old)
 	stbds_arrput(emojis, e);
 	emojis_len = stbds_arrlen(emojis);
+
+	// add physics body
+	b2BodyDef body_def = b2DefaultBodyDef();
+	body_def.type = b2_dynamicBody;
+	body_def.position = (b2Vec2){e->pos[0], e->pos[1]};
+	body_def.linearVelocity = (b2Vec2){0.0f, 20.0f};
+	b2BodyId body_id = b2World_CreateBody(world_id, &body_def);
+	
+	b2Circle body_circle;
+	body_circle.radius = 75.0f * e->scale;
+	body_circle.point = (b2Vec2){0.0f, 0.0f};
+
+	b2ShapeDef body_shape_def = b2DefaultShapeDef();
+	body_shape_def.density = 0.5f;
+	body_shape_def.friction = 0.7f;
+	b2Body_CreateCircle(body_id, &body_shape_def, &body_circle);
+
+	// add to world
+	body_def.userData = (void *)stbds_arrlen(body_defs);
+	stbds_arrpush(body_defs, body_def);
+	stbds_arrpush(body_ids, body_id);
+	stbds_arrpush(body_shape_defs, body_shape_def);
 }
 
 static struct emoji *emoji_new(float x, float y) {
