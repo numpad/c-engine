@@ -1,1 +1,0 @@
-gcc -std=c99 -Wall -pedantic -shared -o libtest.so -I/usr/include/SDL2 -Ilib/nanovg/src -Isrc/ -lSDL2 -fPIC test.c;
