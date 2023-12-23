@@ -5,19 +5,17 @@
 #include <stddef.h>
 
 //
-// forward declarations
+// types
 //
 
+// forward decls
 struct lws;
 struct lws_context;
 struct session;
 struct message_header;
 struct gameserver;
 
-//
-// typedefs
-//
-
+// function ptrs
 typedef void (*on_connect_fn)   (struct gameserver *, struct session *);
 typedef void (*on_disconnect_fn)(struct gameserver *, struct session *);
 typedef void (*on_message_fn)   (struct gameserver *, struct session *, struct message_header *message);
@@ -25,8 +23,14 @@ typedef void (*on_message_fn)   (struct gameserver *, struct session *, struct m
 typedef int (*session_filter_fn)(struct session *master, struct session *tested);
 
 //
-// structs
+// enums & structs
 //
+
+enum connection_type {
+	CONNECTION_TYPE_UNKNOWN,
+	CONNECTION_TYPE_WEBSOCKET,
+	CONNECTION_TYPE_TCP,
+};
 
 struct gameserver {
 	struct lws_context *lws;
@@ -42,6 +46,7 @@ struct gameserver {
 struct session {
 	struct lws *wsi;
 	char **message_queue;
+	enum connection_type connection_type;
 	
 	// client userdata
 	int id;

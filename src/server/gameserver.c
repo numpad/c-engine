@@ -154,15 +154,14 @@ static int callback_ws(struct lws *wsi, enum lws_callback_reasons reason, void *
 
 	switch ((int)reason) {
 	case LWS_CALLBACK_ESTABLISHED:
+		session->connection_type = CONNECTION_TYPE_WEBSOCKET;
 		gameserver_on_connect(server, session, wsi);
-		//messagequeue_add("WebSocket #%06d connected!", session->id);
 		break;
 	case LWS_CALLBACK_RECEIVE: {
 		gameserver_on_message(server, session, data, data_len);
 		break;
 	}
 	case LWS_CALLBACK_CLOSED:
-		//messagequeue_add("WebSocket #%06d disconnected!", session->id);
 		gameserver_on_disconnect(server, session);
 		break;
 	case LWS_CALLBACK_SERVER_WRITEABLE:
@@ -179,38 +178,31 @@ static int callback_rawtcp(struct lws *wsi, enum lws_callback_reasons reason, vo
 	struct gameserver *server = lws_context_user(lws_get_context(wsi));
 
 	switch ((int)reason) {
-	case LWS_CALLBACK_RAW_ADOPT: {
+	case LWS_CALLBACK_RAW_ADOPT:
+		session->connection_type = CONNECTION_TYPE_TCP;
 		gameserver_on_connect(server, session, wsi);
-		//messagequeue_add("TCP-Client #%06d connected!", session->id);
 		break;
-	}
-	case LWS_CALLBACK_RAW_RX: {
+
+	case LWS_CALLBACK_ESTABLISHED:
+		session->connection_type = CONNECTION_TYPE_UNKNOWN;
+		gameserver_on_connect(server, session, wsi);
+		break;
+
+	case LWS_CALLBACK_RAW_RX:
+	case LWS_CALLBACK_RECEIVE:
 		gameserver_on_message(server, session, data, data_len);
 		break;
-	}
-	case LWS_CALLBACK_RAW_CLOSE: {
-		//messagequeue_add("TCP-Client #%06d disconnected!", session->id);
+
+	case LWS_CALLBACK_RAW_CLOSE:
+	case LWS_CALLBACK_CLOSED:
 		gameserver_on_disconnect(server, session);
 		break;
-	}
+
 	case LWS_CALLBACK_SERVER_WRITEABLE:
-		gameserver_on_writable(server, session);
-		break;
 	case LWS_CALLBACK_RAW_WRITEABLE:
 		gameserver_on_writable(server, session);
 		break;
-	case LWS_CALLBACK_ESTABLISHED:
-		gameserver_on_connect(server, session, wsi);
-		//messagequeue_add("Client %06d connected!", session->id);
-		break;
-	case LWS_CALLBACK_RECEIVE: {
-		gameserver_on_message(server, session, data, data_len);
-		break;
-	}
-	case LWS_CALLBACK_CLOSED:
-		//messagequeue_add("Client %06d disconnected!", session->id);
-		gameserver_on_disconnect(server, session);
-		break;
+
 	default: break;
 	}
 

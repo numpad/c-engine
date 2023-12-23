@@ -143,7 +143,7 @@ static void menu_update(struct menu_s *menu, struct engine_s *engine, float dt) 
 		const int cy = engine->window_height / 2;
 		const int w = 280, h = 300;
 		// state
-		static const char *server_ips[] = {"-- Offline --", "schäl.com", "localhost.schäl.com", "192.168.0.17"};
+		static const char *server_ips[] = {"-- Offline --", "gameserver.xn--schl-noa.com", "localhost.schäl.com", "files.xn--schl-noa.com", "192.168.0.17"};
 		static int server_ips_i = 0;
 		const int is_connected = (engine->gameserver_tcp != NULL);
 
@@ -162,7 +162,7 @@ static void menu_update(struct menu_s *menu, struct engine_s *engine, float dt) 
 					reset_ids_of_lobbies();
 				}
 			} else {
-				const int new_server_ips_i = nk_combo(nk, server_ips, 4, server_ips_i, 30.0f, nk_vec2(200.0f, 200.0f));
+				const int new_server_ips_i = nk_combo(nk, server_ips, 5, server_ips_i, 30.0f, nk_vec2(200.0f, 200.0f));
 				if (new_server_ips_i != server_ips_i) {
 					server_ips_i = new_server_ips_i;
 
