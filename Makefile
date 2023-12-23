@@ -16,6 +16,7 @@ TARGET = soil_soldiers
 ifeq ($(CC), emcc)
 	# TODO: dont add everything to cflags, some flags should be used only during linking
 	# TODO: Check if needed/better: -sASYNCIFY -sWEBSOCKET_SUBPROTOCOL="binary" -sMAX_WEBGL_VERSION=2
+	# TODO: Add in release? -sWEBSOCKET_URL="wss://"
 	CFLAGS += -sWASM=1 \
 			  -sUSE_SDL=2 -sUSE_SDL_NET=2 -sUSE_SDL_MIXER=2 -sUSE_SDL_IMAGE=0 -sUSE_SDL_TTF=0 -sFULL_ES2=1 \
 			  -sALLOW_MEMORY_GROWTH=1 \

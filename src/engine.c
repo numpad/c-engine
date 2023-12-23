@@ -325,11 +325,9 @@ void engine_gameserver_send(struct engine_s *engine, struct message_header *msg)
 
 	// send data
 	const int result = SDLNet_TCP_Send(engine->gameserver_tcp, data, data_len);
-	assert(result == (int)data_len); // result shouldnt be negative.
-	if (result < (int)data_len) {
-		fprintf(stderr, "Failed sending tcp data, that means we disconnect...\n");
-
-		// TODO: is just disconnecting the right choice here?
+	if (result != (int)data_len) {
+		// TODO: Retry?
+		fprintf(stderr, "Only sent %d of %zu bytes, that means we disconnect...\n", result, data_len);
 		engine_gameserver_disconnect(engine);
 	}
 
