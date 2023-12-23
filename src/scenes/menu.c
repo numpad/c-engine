@@ -266,28 +266,11 @@ static void menu_update(struct menu_s *menu, struct engine_s *engine, float dt) 
 }
 
 static void menu_draw(struct menu_s *menu, struct engine_s *engine) {
-	struct input_drag_s *drag = &engine->input_drag;
-
-	static float squeeze = 0.0f;
-	if (drag->state == INPUT_DRAG_BEGIN) {
-		squeeze += 0.3f;
-	}
-	if (drag->state == INPUT_DRAG_IN_PROGRESS) {
-		squeeze += 0.4f;
-		if (squeeze > 1.0f) squeeze *= 0.7f;
-	} else {
-		squeeze *= 0.78f; 
-		if (squeeze < 0.0f) squeeze = 0.0f;
-	}
-
-	const float sq_x = (squeeze) * 0.1f;
-	const float sq_y = (-squeeze) * 0.1f;
-
 	// draw terrain
 	glm_mat4_identity(engine->u_view);
-	const float t_scale = (sinf(engine->time_elapsed) * 0.5f + 0.5f) * 0.02f + 0.25f * engine->window_aspect * 0.8f;
-	glm_translate(engine->u_view, (vec3){ -0.68f + -sq_x * 2.0f, 0.85f, 0.0f });
-	glm_scale(engine->u_view, (vec3){ t_scale + sq_x, t_scale + sq_y, t_scale });
+	const float t_scale = sinf(engine->time_elapsed * 2.5f) * 0.5f + 3.0f;
+	glm_translate(engine->u_view, (vec3){ 0.0f, 0.0f, 0.0f });
+	glm_scale(engine->u_view, (vec3){ t_scale, -t_scale, t_scale });
 	isoterrain_draw(menu->terrain, engine->u_projection, engine->u_view);
 
 	/* draw logo

@@ -110,7 +110,7 @@ static void load(struct scene_battle_s *scene, struct engine_s *engine) {
 	// isoterrain
 	g_terrain = malloc(sizeof(struct isoterrain_s));
 	//isoterrain_init(g_terrain, 10, 10, 1);
-	isoterrain_init_from_file(g_terrain, "res/data/levels/test.json");
+	isoterrain_init_from_file(g_terrain, "res/data/levels/map2.json");
 
 	// card renderer
 	g_cardrenderer = malloc(sizeof(struct cardrenderer_s));
@@ -150,7 +150,6 @@ static void load(struct scene_battle_s *scene, struct engine_s *engine) {
 	glUseProgram(0);
 
 	sound = Mix_LoadWAV("res/sounds/test.wav");
-	Mix_PlayChannel(-1, sound, 0);
 }
 
 static void destroy(struct scene_battle_s *scene, struct engine_s *engine) {
@@ -211,26 +210,18 @@ static void update(struct scene_battle_s *scene, struct engine_s *engine, float 
 
 			for (int i = 0; i < it.count; ++i) {
 				if (handcards[i].selected) {
-					handcards[i].drag_x = (drag->x / engine->window_width) * 2.0f - 1.0f;
-					handcards[i].drag_y = -(drag->y / engine->window_height) * 2.0f + 1.0f;
+					handcards[i].drag_x = drag->x;
+					handcards[i].drag_y = drag->y;
 				}
 			}
 		}
 	}
 
-
 	// map transform
+	const float mw = g_terrain->width * 16.0f;
 	glm_mat4_identity(engine->u_view);
-	if (mstate & SDL_BUTTON(1) && my < engine->window_height * (float)0.6) {
-		glm_scale(engine->u_view, (vec3){2.0f, 2.0f, 1.0f});
-		glm_translate(engine->u_view, (vec3){
-			(mx - engine->window_width / 2.0f) / -engine->window_width,
-			(my - engine->window_height / 2.0f) / engine->window_height,
-			0.0f
-		});
-	}
-	glm_scale(engine->u_view, (vec3){0.35f, 0.35f, 1.0f});
-
+	glm_translate(engine->u_view, (vec3){ 0.0f, 0.0f, 0.0f });
+	glm_scale(engine->u_view, (vec3){ engine->window_width / mw, -(engine->window_width / mw), 1.0f});
 }
 
 static void draw(struct scene_battle_s *scene, struct engine_s *engine) {
@@ -262,30 +253,29 @@ static void draw(struct scene_battle_s *scene, struct engine_s *engine) {
 
 		float card_z = 0.0f;
 		for (int i = 0; i < it.count; ++i) {
-			const float angle = ((float)i / (it.count - 1)) * glm_rad(120.0f) - glm_rad(60.0f);
-			const float x = sinf(angle) * 2.0f * glm_ease_circ_out(0.45f + fabsf((float)i / (it.count - 1) - 0.5f) * 2.0f);
-			const float y = cosf(angle) * 1.0f;
-			float y_offset = 0.0f;
+			const float p = ((float)i / glm_max(it.count - 1, 1));
+			const float angle = p * glm_rad(120.0f) - glm_rad(60.0f);
+			const float x = (engine->window_width - 140.0f) * p + 70.0f;
+			const float y = engine->window_height - 70.0f + 20.0f * fabsf(p - 0.5f) * 2.0f;
 			float z_offset = 0.0f;
 			
 			card_z += 0.01f;
 
-			float card_scale = 0.375f;
+			float card_scale = 100.0f;
 			if (handcards[i].selected) {
-				y_offset += 0.8f;
 				z_offset = 0.8f;
-				card_scale = 0.5f;
+				card_scale = 120.0f;
 			}
 
 			mat4 u_model;
 			glm_mat4_identity(u_model);
 			if (handcards[i].selected) {
-				glm_translate(u_model, (vec3){ handcards[i].drag_x, handcards[i].drag_y * engine->window_aspect, card_z + z_offset});
-				glm_scale(u_model, (vec3){ card_scale, card_scale, 1.0f });
+				glm_translate(u_model, (vec3){ handcards[i].drag_x, handcards[i].drag_y, card_z + z_offset});
+				glm_scale(u_model, (vec3){ card_scale, -card_scale, 1.0f });
 			} else {
-				glm_scale(u_model, (vec3){ card_scale, card_scale, 1.0f });
-				glm_translate(u_model, (vec3){ x, y * 0.6f + 0.4f + -(1.0f / card_scale) * engine->window_aspect + y_offset, card_z});
-				glm_rotate(u_model, angle * 0.2f, (vec3){0.0f, 0.0f, -1.0f});
+				glm_translate(u_model, (vec3){ x, y, card_z});
+				glm_rotate(u_model, angle * 0.2f, (vec3){0.0f, 0.0f, 1.0f});
+				glm_scale(u_model, (vec3){ card_scale, -card_scale, 1.0f });
 			}
 			glUniformMatrix4fv(glGetUniformLocation(g_cardrenderer->shader, "u_model"), 1, GL_FALSE, u_model[0]);
 			const float step = 1.0f / 8.0f;
@@ -300,18 +290,6 @@ static void draw(struct scene_battle_s *scene, struct engine_s *engine) {
 		}
 	}
 	glDisable(GL_DEPTH_TEST);
-
-	struct nk_context *nk = engine->nk;
-	if (nk_begin(nk, "Menubar", nk_rect(3, 3, engine->window_width - 6, 40), NK_WINDOW_NO_SCROLLBAR)) {
-		nk_layout_row_dynamic(nk, 32, 2);
-		if (nk_button_label(nk, "Menu")) {
-			struct menu_s *menu = malloc(sizeof(struct menu_s));
-			menu_init(menu, engine);
-			engine_setscene(engine, (struct scene_s *)menu);
-		}
-	}
-	nk_end(nk);
-
 }
 
 void scene_battle_init(struct scene_battle_s *scene_battle, struct engine_s *engine) {

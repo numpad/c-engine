@@ -47,12 +47,12 @@ void isoterrain_init(struct isoterrain_s *terrain, int w, int h, int layers) {
 
 	terrain->vbuf = malloc(sizeof(struct vbuffer_s));
 	GLfloat vertices[] = {
-		-0.25f, -0.25f * (17.0f/16.0f),  0.0f, 0.0f,
-		 0.25f, -0.25f * (17.0f/16.0f),  1.0f, 0.0f,
-		-0.25f,  0.25f * (17.0f/16.0f),  0.0f, 1.0f,
-		-0.25f,  0.25f * (17.0f/16.0f),  0.0f, 1.0f,
-		 0.25f, -0.25f * (17.0f/16.0f),  1.0f, 0.0f,
-		 0.25f,  0.25f * (17.0f/16.0f),  1.0f, 1.0f,
+		0.0f * (16.0f), 0.0f * (17.0f),  0.0f, 0.0f,
+		1.0f * (16.0f), 0.0f * (17.0f),  1.0f, 0.0f,
+		0.0f * (16.0f), 1.0f * (17.0f),  0.0f, 1.0f,
+		0.0f * (16.0f), 1.0f * (17.0f),  0.0f, 1.0f,
+		1.0f * (16.0f), 0.0f * (17.0f),  1.0f, 0.0f,
+		1.0f * (16.0f), 1.0f * (17.0f),  1.0f, 1.0f,
 	};
 	vbuffer_init(terrain->vbuf);
 	vbuffer_set_data(terrain->vbuf, sizeof(vertices), vertices);
@@ -135,8 +135,9 @@ void isoterrain_to_json(struct isoterrain_s *terrain, cJSON *output) {
 //
 
 void isoterrain_draw(struct isoterrain_s *terrain, const mat4 proj, const mat4 view) {
-	glUseProgram(terrain->shader);
+	const float projected_height = terrain->height * 17.0f * 0.334f + terrain->layers * 4.0f;
 
+	glUseProgram(terrain->shader);
 	glUniformMatrix4fv(glGetUniformLocation(terrain->shader, "u_projection"), 1, GL_FALSE, proj[0]);
 	glUniformMatrix4fv(glGetUniformLocation(terrain->shader, "u_view"), 1, GL_FALSE, view[0]);
 
@@ -157,12 +158,12 @@ void isoterrain_draw(struct isoterrain_s *terrain, const mat4 proj, const mat4 v
 				const float tx = *block % 16;
 				const float ty = floor(*block / 15.0f);
 
-				const float bx = (x + y) * 0.25f;
-				const float by = ((y + 2.0f * z) - x) * 0.125f;
+				const float bx = (x + y) * 8.0f;
+				const float by = ((y + 2.0f * z) - x) * 4.0f;
 				const float bz = 0.0f;
 
 				glUniform2f(glGetUniformLocation(terrain->shader, "u_tilepos"), tx, ty);
-				glUniform3f(glGetUniformLocation(terrain->shader, "u_pos"), bx, by, bz);
+				glUniform3f(glGetUniformLocation(terrain->shader, "u_pos"), bx, by - projected_height, bz);
 				vbuffer_draw(terrain->vbuf, 6);
 
 				/*

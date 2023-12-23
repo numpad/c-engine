@@ -201,7 +201,8 @@ static void on_window_resized(struct engine_s *engine, int w, int h) {
 
 	// apply changes
 	glViewport(0, 0, w * window_dpi_scale_x, h * window_dpi_scale_y);
-	glm_ortho(-1.0f, 1.0f, -1.0f * engine->window_aspect, 1.0f * engine->window_aspect, -1.0f, 1.0f, engine->u_projection);
+	glm_ortho(0.0f, w, h, 0.0f, -1.0f, 1.0f, engine->u_projection);
+	//glm_ortho(-1.0f, 1.0f, -1.0f * engine->window_aspect, 1.0f * engine->window_aspect, -1.0f, 1.0f, engine->u_projection);
 
 }
 
