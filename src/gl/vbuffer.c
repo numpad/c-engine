@@ -1,6 +1,7 @@
 #include "vbuffer.h"
 
 #include <stb_ds.h>
+#include <assert.h>
 
 struct vbuffer_attrib_s {
 	GLint location;
@@ -30,7 +31,12 @@ void vbuffer_set_data(struct vbuffer_s *vbo, size_t sizeof_vertices, float *vert
 
 void vbuffer_set_attrib(struct vbuffer_s *vbo, GLuint shader, const char *attribname, GLint size, GLenum type, GLint stride, GLvoid *offset) {
 	glBindBuffer(GL_ARRAY_BUFFER, vbo->buffer);
+
+	assert(shader != 0);
+	glUseProgram(shader);
 	
+	assert(attribname != NULL);
+
 	struct vbuffer_attrib_s attribdata;
 	attribdata.location = glGetAttribLocation(shader, attribname);
 	attribdata.size = size;

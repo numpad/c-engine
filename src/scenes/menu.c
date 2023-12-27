@@ -11,6 +11,7 @@
 #include "scenes/scene_battle.h"
 #include "scenes/experiments.h"
 #include "game/isoterrain.h"
+#include "game/background.h"
 #include "net/message.h"
 #include "platform.h"
 
@@ -58,12 +59,15 @@ static void menu_load(struct menu_s *menu, struct engine_s *engine) {
 
 	menu->terrain = malloc(sizeof(struct isoterrain_s));
 	isoterrain_init_from_file(menu->terrain, "res/data/levels/map2.json");
+	
+	background_set_image("res/image/space_bg.png");
 }
 
 static void menu_destroy(struct menu_s *menu, struct engine_s *engine) {
 	isoterrain_destroy(menu->terrain);
 	nvgDeleteImage(engine->vg, menu->vg_gamelogo);
 	free(menu->terrain);
+	background_destroy();
 }
 
 static void menu_update(struct menu_s *menu, struct engine_s *engine, float dt) {
@@ -266,6 +270,8 @@ static void menu_update(struct menu_s *menu, struct engine_s *engine, float dt) 
 }
 
 static void menu_draw(struct menu_s *menu, struct engine_s *engine) {
+	background_draw();
+
 	// draw terrain
 	glm_mat4_identity(engine->u_view);
 	const float t_scale = sinf(engine->time_elapsed * 2.5f) * 0.5f + 3.0f;

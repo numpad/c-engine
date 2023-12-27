@@ -17,6 +17,7 @@
 #include "gl/vbuffer.h"
 #include "game/isoterrain.h"
 #include "game/cards.h"
+#include "game/background.h"
 #include "gui/console.h"
 #include "ecs/components.h"
 #include "scenes/menu.h"
@@ -117,45 +118,13 @@ static void load(struct scene_battle_s *scene, struct engine_s *engine) {
 	cardrenderer_init(g_cardrenderer, "res/image/cards.png");
 
 	// background
-	texture_init_from_image(&scene->bg_texture, "res/image/space_bg.png", NULL);
-
-	// prepare background vertices
-	scene->bg_shader = shader_new("res/shader/background/vertex.glsl", "res/shader/background/fragment.glsl");
-	GLfloat vertices[] = {
-		-1.0f, -1.0f,
-		1.0f, -1.0f,
-		-1.0f, 1.0f,
-		-1.0f, 1.0f,
-		1.0f, -1.0f,
-		1.0f, 1.0f,
-	};
-
-	glUseProgram(scene->bg_shader);
-
-	scene->bg_vbuf = malloc(sizeof(struct vbuffer_s));
-	vbuffer_init(scene->bg_vbuf);
-	vbuffer_set_data(scene->bg_vbuf, sizeof(vertices), vertices);
-	vbuffer_set_attrib(scene->bg_vbuf, scene->bg_shader, "a_position", 2, GL_FLOAT, 0, 0);
-
-	GLfloat mvp[] = {
-		1.0f, 0.0f, 0.0f, 0.0f,
-		0.0f, 1.0f, 0.0f, 0.0f,
-		0.0f, 0.0f, 1.0f, 0.0f,
-		0.0f, 0.0f, 0.0f, 1.0f,
-	};
-	GLint u_mvp = glGetUniformLocation(scene->bg_shader, "u_mvp");
-	glUniform4fv(u_mvp, 4, mvp);
-
-	glBindBuffer(GL_ARRAY_BUFFER, 0);
-	glUseProgram(0);
+	background_set_image("res/image/space_bg.png");
 
 	sound = Mix_LoadWAV("res/sounds/test.wav");
 }
 
 static void destroy(struct scene_battle_s *scene, struct engine_s *engine) {
-	shader_delete(scene->bg_shader);
-	vbuffer_destroy(scene->bg_vbuf);
-	free(scene->bg_vbuf);
+	background_destroy();
 	isoterrain_destroy(g_terrain);
 	free(g_terrain);
 	cardrenderer_destroy(g_cardrenderer);
@@ -225,13 +194,7 @@ static void update(struct scene_battle_s *scene, struct engine_s *engine, float 
 }
 
 static void draw(struct scene_battle_s *scene, struct engine_s *engine) {
-	// draw bg
-	glUseProgram(scene->bg_shader);
-	glActiveTexture(GL_TEXTURE0);
-	glBindTexture(GL_TEXTURE_2D, scene->bg_texture.texture);
-	vbuffer_draw(scene->bg_vbuf, 6);
-	glBindTexture(GL_TEXTURE_2D, 0);
-	glUseProgram(0);
+	background_draw();
 
 	// draw terrain
 	isoterrain_draw(g_terrain, engine->u_projection, engine->u_view);

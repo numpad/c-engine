@@ -6,6 +6,7 @@
 
 struct vbuffer_attrib_s;
 
+typedef struct vbuffer_s vbuffer_t;
 struct vbuffer_s {
     GLuint buffer;
 
