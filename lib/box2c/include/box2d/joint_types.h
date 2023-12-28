@@ -43,6 +43,7 @@ typedef struct b2DistanceJointDef
 
 } b2DistanceJointDef;
 
+/// Use this to initialize your joint definition
 static inline b2DistanceJointDef b2DefaultDistanceJointDef(void)
 {
 	b2DistanceJointDef def = B2_ZERO_INIT;
@@ -59,13 +60,51 @@ static inline b2DistanceJointDef b2DefaultDistanceJointDef(void)
 	return def;
 }
 
+/// A motor joint is used to control the relative motion
+/// between two bodies. A typical usage is to control the movement
+/// of a dynamic body with respect to the ground.
+typedef struct b2MotorJointDef
+{
+	/// The first attached body.
+	b2BodyId bodyIdA;
+
+	/// The second attached body.
+	b2BodyId bodyIdB;
+
+	/// Position of bodyB minus the position of bodyA, in bodyA's frame, in meters.
+	b2Vec2 linearOffset;
+
+	/// The bodyB angle minus bodyA angle in radians.
+	float angularOffset;
+
+	/// The maximum motor force in N.
+	float maxForce;
+
+	/// The maximum motor torque in N-m.
+	float maxTorque;
+
+	/// Position correction factor in the range [0,1].
+	float correctionFactor;
+} b2MotorJointDef;
+
+/// Use this to initialize your joint definition
+static inline b2MotorJointDef b2DefaultMotorJointDef(void)
+{
+	b2MotorJointDef def = B2_ZERO_INIT;
+	def.bodyIdA = b2_nullBodyId;
+	def.bodyIdB = b2_nullBodyId;
+	def.linearOffset = B2_LITERAL(b2Vec2){0.0f, 0.0f};
+	def.angularOffset = 0.0f;
+	def.maxForce = 1.0f;
+	def.maxTorque = 1.0f;
+	def.correctionFactor = 0.3f;
+	return def;
+}
+
 /// A mouse joint is used to make a point on a body track a
 /// specified world point. This a soft constraint with a maximum
 /// force. This allows the constraint to stretch without
 /// applying huge forces.
-/// NOTE: this joint is not documented in the manual because it was
-/// developed to be used in samples. If you want to learn how to
-/// use the mouse joint, look at the samples app.
 typedef struct b2MouseJointDef
 {
 	/// The first attached body.
@@ -89,6 +128,7 @@ typedef struct b2MouseJointDef
 	float damping;
 } b2MouseJointDef;
 
+/// Use this to initialize your joint definition
 static inline b2MouseJointDef b2DefaultMouseJointDef(void)
 {
 	b2MouseJointDef def = B2_ZERO_INIT;
@@ -138,7 +178,7 @@ typedef struct b2PrismaticJointDef
 	/// Enable/disable the joint motor.
 	bool enableMotor;
 
-	/// The maximum motor torque, usually in N-m.
+	/// The maximum motor force, usually in N.
 	float maxMotorForce;
 
 	/// The desired motor speed in radians per second.
@@ -215,6 +255,9 @@ typedef struct b2RevoluteJointDef
 	/// Usually in N-m.
 	float maxMotorTorque;
 
+	/// Scale the debug draw
+	float drawSize;
+
 	/// Set this flag to true if the attached bodies should collide.
 	bool collideConnected;
 } b2RevoluteJointDef;
@@ -234,10 +277,14 @@ static inline b2RevoluteJointDef b2DefaultRevoluteJointDef(void)
 	def.motorSpeed = 0.0f;
 	def.enableLimit = false;
 	def.enableMotor = false;
+	def.drawSize = 0.25f;
 	def.collideConnected = false;
 	return def;
 }
 
+/// A weld joint connect to bodies together rigidly. This constraint can be made soft to mimic
+///	soft-body simulation.
+/// @warning the approximate solver in Box2D cannot hold many bodies together rigidly
 typedef struct b2WeldJointDef
 {
 	/// The first attached body.
@@ -253,15 +300,18 @@ typedef struct b2WeldJointDef
 	b2Vec2 localAnchorB;
 
 	/// The bodyB angle minus bodyA angle in the reference state (radians).
-	/// This defines the zero angle for the joint limit.
 	float referenceAngle;
 
-	/// Stiffness expressed as hertz (oscillations per second). Use zero for maximum stiffness.
+	/// Linear stiffness expressed as hertz (oscillations per second). Use zero for maximum stiffness.
 	float linearHertz;
+
+	/// Angular stiffness as hertz (oscillations per second). Use zero for maximum stiffness.
 	float angularHertz;
 
-	/// Damping ratio, non-dimensional. Use 1 for critical damping.
+	/// Linear damping ratio, non-dimensional. Use 1 for critical damping.
 	float linearDampingRatio;
+
+	/// Linear damping ratio, non-dimensional. Use 1 for critical damping.
 	float angularDampingRatio;
 
 	/// Set this flag to true if the attached bodies should collide.
@@ -285,6 +335,78 @@ static inline b2WeldJointDef b2DefaultWeldJointDef(void)
 	def.angularHertz = 0.0f;
 	def.linearDampingRatio = 1.0f;
 	def.angularDampingRatio = 1.0f;
+	def.collideConnected = false;
+	return def;
+}
+
+/// Wheel joint definition. This requires defining a line of
+/// motion using an axis and an anchor point. The definition uses local
+/// anchor points and a local axis so that the initial configuration
+/// can violate the constraint slightly. The joint translation is zero
+/// when the local anchor points coincide in world space. Using local
+/// anchors and a local axis helps when saving and loading a game.
+typedef struct b2WheelJointDef
+{
+	/// The first attached body.
+	b2BodyId bodyIdA;
+
+	/// The second attached body.
+	b2BodyId bodyIdB;
+
+	/// The local anchor point relative to bodyA's origin.
+	b2Vec2 localAnchorA;
+
+	/// The local anchor point relative to bodyB's origin.
+	b2Vec2 localAnchorB;
+
+	/// The local translation unit axis in bodyA.
+	b2Vec2 localAxisA;
+
+	/// Enable/disable the joint limit.
+	bool enableLimit;
+
+	/// The lower translation limit, usually in meters.
+	float lowerTranslation;
+
+	/// The upper translation limit, usually in meters.
+	float upperTranslation;
+
+	/// Enable/disable the joint motor.
+	bool enableMotor;
+
+	/// The maximum motor torque, usually in N-m.
+	float maxMotorTorque;
+
+	/// The desired motor speed in radians per second.
+	float motorSpeed;
+
+	/// The linear stiffness in N/m
+	float stiffness;
+
+	/// The linear damping in N*s/m
+	float damping;
+
+	/// Set this flag to true if the attached bodies should collide.
+	bool collideConnected;
+} b2WheelJointDef;
+
+/// Use this to initialize your joint definition
+static inline b2WheelJointDef b2DefaultWheelJointDef(void)
+{
+	b2WheelJointDef def = B2_ZERO_INIT;
+	def.bodyIdA = b2_nullBodyId;
+	def.bodyIdB = b2_nullBodyId;
+	def.localAnchorA = B2_LITERAL(b2Vec2){0.0f, 0.0f};
+	def.localAnchorB = B2_LITERAL(b2Vec2){0.0f, 0.0f};
+	def.localAxisA = B2_LITERAL(b2Vec2){1.0f, 0.0f};
+	def.enableLimit = false;
+	def.lowerTranslation = 0.0f;
+	def.upperTranslation = 0.0f;
+	def.enableMotor = false;
+	def.maxMotorTorque = 0.0f;
+	def.motorSpeed = 0.0f;
+	def.stiffness = 0.0f;
+	def.damping = 0.0f;
 	def.collideConnected = false;
 	return def;
 }

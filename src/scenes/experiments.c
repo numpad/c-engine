@@ -140,43 +140,43 @@ static void load(struct scene_experiments_s *scene, struct engine_s *engine) {
 	world_id = b2CreateWorld(&world_def);
 
 	{ // ground
-		ground_bodydef = b2DefaultBodyDef();
+		ground_bodydef = b2_defaultBodyDef;
 		ground_bodydef.type = b2_staticBody;
 		ground_bodydef.position = (b2Vec2){0.0f, 267.5f};
-		ground_bodyid = b2World_CreateBody(world_id, &ground_bodydef);
+		ground_bodyid = b2CreateBody(world_id, &ground_bodydef);
 
 		ground_polygon = b2MakeBox(200.0f, 20.0f);
 
-		ground_shapedef = b2DefaultShapeDef();
+		ground_shapedef = b2_defaultShapeDef;
 		ground_shapedef.friction = 0.7f;
 		ground_shapedef.restitution = 0.5f;
-		b2Body_CreatePolygon(ground_bodyid, &ground_shapedef, &ground_polygon);
+		b2CreatePolygonShape(ground_bodyid, &ground_shapedef, &ground_polygon);
 	}
 	{ // left
-		leftwall_bodydef = b2DefaultBodyDef();
+		leftwall_bodydef = b2_defaultBodyDef;
 		leftwall_bodydef.type = b2_staticBody;
 		leftwall_bodydef.position = (b2Vec2){-200.0f, 100.0f};
-		leftwall_bodyid = b2World_CreateBody(world_id, &leftwall_bodydef);
+		leftwall_bodyid = b2CreateBody(world_id, &leftwall_bodydef);
 
 		leftwall_polygon = b2MakeBox(20.0f, 350.0f);
 
-		leftwall_shapedef = b2DefaultShapeDef();
+		leftwall_shapedef = b2_defaultShapeDef;
 		leftwall_shapedef.friction = 0.7f;
 		leftwall_shapedef.restitution = 0.5f;
-		b2Body_CreatePolygon(leftwall_bodyid, &leftwall_shapedef, &leftwall_polygon);
+		b2CreatePolygonShape(leftwall_bodyid, &leftwall_shapedef, &leftwall_polygon);
 	}
 	{ // right
-		rightwall_bodydef = b2DefaultBodyDef();
+		rightwall_bodydef = b2_defaultBodyDef;
 		rightwall_bodydef.type = b2_staticBody;
 		rightwall_bodydef.position = (b2Vec2){200.0f, 100.0f};
-		rightwall_bodyid = b2World_CreateBody(world_id, &rightwall_bodydef);
+		rightwall_bodyid = b2CreateBody(world_id, &rightwall_bodydef);
 
 		rightwall_polygon = b2MakeBox(20.0f, 350.0f);
 
-		rightwall_shapedef = b2DefaultShapeDef();
+		rightwall_shapedef = b2_defaultShapeDef;
 		rightwall_shapedef.friction = 0.7f;
 		rightwall_shapedef.restitution = 0.5f;
-		b2Body_CreatePolygon(rightwall_bodyid, &rightwall_shapedef, &rightwall_polygon);
+		b2CreatePolygonShape(rightwall_bodyid, &rightwall_shapedef, &rightwall_polygon);
 	}
 
 
@@ -574,20 +574,20 @@ static void emoji_spawn(struct emoji *e) {
 	emojis_len = stbds_arrlen(emojis);
 
 	// add physics body
-	b2BodyDef body_def = b2DefaultBodyDef();
+	b2BodyDef body_def = b2_defaultBodyDef;
 	body_def.type = b2_dynamicBody;
 	body_def.position = (b2Vec2){e->pos[0], e->pos[1]};
 	body_def.linearVelocity = (b2Vec2){0.0f, 20.0f};
-	b2BodyId body_id = b2World_CreateBody(world_id, &body_def);
+	b2BodyId body_id = b2CreateBody(world_id, &body_def);
 	
 	b2Circle body_circle;
 	body_circle.radius = 75.0f * e->scale;
 	body_circle.point = (b2Vec2){0.0f, 0.0f};
 
-	b2ShapeDef body_shape_def = b2DefaultShapeDef();
+	b2ShapeDef body_shape_def = b2_defaultShapeDef;
 	body_shape_def.density = 0.5f;
 	body_shape_def.friction = 0.7f;
-	b2Body_CreateCircle(body_id, &body_shape_def, &body_circle);
+	b2CreateCircleShape(body_id, &body_shape_def, &body_circle);
 
 	// add to world
 	body_def.userData = (void *)stbds_arrlen(body_defs);

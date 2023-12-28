@@ -28,7 +28,7 @@
 // K = J * invM * JT
 //   = invMass1 + invI1 * cross(r1, u)^2 + invMass2 + invI2 * cross(r2, u)^2
 
-void b2PrepareDistance(b2Joint* base, b2StepContext* context)
+void b2PrepareDistanceJoint(b2Joint* base, b2StepContext* context)
 {
 	B2_ASSERT(base->type == b2_distanceJoint);
 
@@ -117,7 +117,7 @@ void b2PrepareDistance(b2Joint* base, b2StepContext* context)
 	}
 }
 
-void b2WarmStartDistance(b2Joint* base, b2StepContext* context)
+void b2WarmStartDistanceJoint(b2Joint* base, b2StepContext* context)
 {
 	B2_ASSERT(base->type == b2_distanceJoint);
 
@@ -149,7 +149,7 @@ void b2WarmStartDistance(b2Joint* base, b2StepContext* context)
 	bodyB->angularVelocity += iB * b2Cross(rB, P);
 }
 
-void b2SolveDistanceVelocity(b2Joint* base, b2StepContext* context, bool useBias)
+void b2SolveDistanceJoint(b2Joint* base, b2StepContext* context, bool useBias)
 {
 	B2_ASSERT(base->type == b2_distanceJoint);
 
@@ -306,23 +306,17 @@ void b2SolveDistanceVelocity(b2Joint* base, b2StepContext* context, bool useBias
 	bodyB->angularVelocity = wB;
 }
 
-float b2DistanceJoint_GetConstraintForce(b2JointId jointId, float timeStep)
+float b2DistanceJoint_GetConstraintForce(b2JointId jointId, float inverseTimeStep)
 {
-	b2Joint* base = b2GetJoint(jointId, b2_distanceJoint);
+	b2Joint* base = b2GetJointCheckType(jointId, b2_distanceJoint);
 	b2DistanceJoint* joint = &base->distanceJoint;
 
-	if (timeStep > 0.0f)
-	{
-		float F = (joint->impulse + joint->lowerImpulse - joint->upperImpulse) / timeStep;
-		return F;
-	}
-
-	return 0.0f;
+	return (joint->impulse + joint->lowerImpulse - joint->upperImpulse) * inverseTimeStep;
 }
 
 void b2DistanceJoint_SetLength(b2JointId jointId, float length, float minLength, float maxLength)
 {
-	b2Joint* base = b2GetJoint(jointId, b2_distanceJoint);
+	b2Joint* base = b2GetJointCheckType(jointId, b2_distanceJoint);
 	b2DistanceJoint* joint = &base->distanceJoint;
 
 	joint->length = B2_CLAMP(length, b2_linearSlop, b2_huge);
@@ -339,7 +333,7 @@ void b2DistanceJoint_SetLength(b2JointId jointId, float length, float minLength,
 
 float b2DistanceJoint_GetCurrentLength(b2JointId jointId)
 {
-	b2Joint* base = b2GetJoint(jointId, b2_distanceJoint);
+	b2Joint* base = b2GetJointCheckType(jointId, b2_distanceJoint);
 
 	b2World* world = b2GetWorldFromIndex(jointId.world);
 	B2_ASSERT(world->locked == false);
@@ -365,7 +359,7 @@ float b2DistanceJoint_GetCurrentLength(b2JointId jointId)
 
 void b2DistanceJoint_SetTuning(b2JointId jointId, float hertz, float dampingRatio)
 {
-	b2Joint* base = b2GetJoint(jointId, b2_distanceJoint);
+	b2Joint* base = b2GetJointCheckType(jointId, b2_distanceJoint);
 	b2DistanceJoint* joint = &base->distanceJoint;
 	joint->hertz = hertz;
 	joint->dampingRatio = dampingRatio;

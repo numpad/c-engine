@@ -3,10 +3,10 @@
 
 #include "box2d/geometry.h"
 
+#include "aabb.h"
 #include "core.h"
 #include "shape.h"
 
-#include "box2d/aabb.h"
 #include "box2d/distance.h"
 #include "box2d/hull.h"
 #include "box2d/math.h"
@@ -163,22 +163,19 @@ b2Polygon b2MakeOffsetBox(float hx, float hy, b2Vec2 center, float angle)
 	return shape;
 }
 
-b2Polygon b2MakeCapsule(b2Vec2 p1, b2Vec2 p2, float radius)
+b2Polygon b2TransformPolygon(b2Transform transform, const b2Polygon* polygon)
 {
-	b2Polygon shape = {0};
-	shape.vertices[0] = p1;
-	shape.vertices[1] = p2;
-	shape.centroid = b2Lerp(p1, p2, 0.5f);
+	b2Polygon p = *polygon;
 
-	b2Vec2 axis = b2NormalizeChecked(b2Sub(p2, p1));
-	b2Vec2 normal = b2RightPerp(axis);
+	for (int i = 0; i < p.count; ++i)
+	{
+		p.vertices[i] = b2TransformPoint(transform, p.vertices[i]);
+		p.normals[i] = b2RotateVector(transform.q, p.normals[i]);
+	}
 
-	shape.normals[0] = normal;
-	shape.normals[1] = b2Neg(normal);
-	shape.count = 2;
-	shape.radius = radius;
+	p.centroid = b2TransformPoint(transform, p.centroid);
 
-	return shape;
+	return p;
 }
 
 b2MassData b2ComputeCircleMass(const b2Circle* shape, float density)
@@ -223,8 +220,13 @@ b2MassData b2ComputeCapsuleMass(const b2Capsule* shape, float density)
 	// m * ((h + lc)^2 - lc^2) = m * (h^2 + 2 * h * lc)
 	// See: https://en.wikipedia.org/wiki/Parallel_axis_theorem
 	// I verified this formula by computing the convex hull of a 128 vertex capsule
+
+	// half circle centroid
 	float lc = 4.0f * radius / (3.0f * b2_pi);
+
+	// half length of rectangular portion of capsule
 	float h = 0.5f * length;
+
 	float circleInertia = circleMass * (0.5f * rr + h * h + 2.0f * h * lc);
 	float boxInertia = boxMass * (4.0f * rr + ll) / 12.0f;
 	massData.I = circleInertia + boxInertia;
@@ -683,7 +685,7 @@ b2RayCastOutput b2RayCastSegment(const b2RayCastInput* input, const b2Segment* s
 {
 	if (oneSided)
 	{
-		// Skip back-side collision
+		// Skip left-side collision
 		float offset = b2Cross(b2Sub(input->origin, shape->point1), b2Sub(shape->point2, shape->point1));
 		if (offset < 0.0f)
 		{
