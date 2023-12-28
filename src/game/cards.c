@@ -13,7 +13,7 @@ void cardrenderer_init(struct cardrenderer_s *renderer, const char *tileset) {
 	tconf.gen_mipmap = 1;
 
 	texture_init_from_image(&renderer->texture_atlas, tileset, &tconf);
-	renderer->shader = shader_new("res/shader/card/vertex.glsl", "res/shader/card/fragment.glsl");
+	shader_init(&renderer->shader, "res/shader/card/vertex.glsl", "res/shader/card/fragment.glsl");
 	vbuffer_init(&renderer->vbo);
 
 	GLfloat vertices[] = {
@@ -25,13 +25,13 @@ void cardrenderer_init(struct cardrenderer_s *renderer, const char *tileset) {
 		 0.5f,  1.0f,  1.0f, 2.0f,
 	};
 	vbuffer_set_data(&renderer->vbo, sizeof(vertices), vertices);
-	vbuffer_set_attrib(&renderer->vbo, renderer->shader, "a_position", 2, GL_FLOAT, 4 * sizeof(float), 0);
-	vbuffer_set_attrib(&renderer->vbo, renderer->shader, "a_texcoord", 2, GL_FLOAT, 4 * sizeof(float), (void*)(2 * sizeof(float)));
+	vbuffer_set_attrib(&renderer->vbo, &renderer->shader, "a_position", 2, GL_FLOAT, 4 * sizeof(float), 0);
+	vbuffer_set_attrib(&renderer->vbo, &renderer->shader, "a_texcoord", 2, GL_FLOAT, 4 * sizeof(float), (void*)(2 * sizeof(float)));
 }
 
 void cardrenderer_destroy(struct cardrenderer_s *renderer) {
 	texture_destroy(&renderer->texture_atlas);
-	glDeleteProgram(renderer->shader);
+	shader_destroy(&renderer->shader);
 	vbuffer_destroy(&renderer->vbo);
 }
 

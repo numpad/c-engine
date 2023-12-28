@@ -2,6 +2,7 @@
 
 #include <stdlib.h>
 #include <string.h>
+#include <assert.h>
 #include <SDL.h>
 #include <SDL_opengles2.h>
 #include "util/fs.h"
@@ -19,7 +20,14 @@ static int shader_program_new(int vertex_shader, int fragment_shader);
 
 // init & destroy
 
-int shader_from_dir(const char *dir_path) {
+void shader_init(shader_t *shader, const char *vert_path, const char *frag_path) {
+	int vs = shader_stage_new(GL_VERTEX_SHADER, vert_path);
+	int fs = shader_stage_new(GL_FRAGMENT_SHADER, frag_path);
+	
+	shader->program = shader_program_new(vs, fs);
+}
+
+void shader_init_from_dir(shader_t *program, const char *dir_path) {
 	const size_t vert_len = snprintf(NULL, 0, "%s/vertex.glsl", dir_path);
 	const size_t frag_len = snprintf(NULL, 0, "%s/fragment.glsl", dir_path);
 
@@ -29,37 +37,29 @@ int shader_from_dir(const char *dir_path) {
 	snprintf(vert_path, vert_len + 1, "%s/vertex.glsl", dir_path);
 	snprintf(frag_path, frag_len + 1, "%s/fragment.glsl", dir_path);
 
-	return shader_new(vert_path, frag_path);
+	shader_init(program, vert_path, frag_path);
 }
 
-int shader_new(const char *vert_path, const char *frag_path) {
-	int vs = shader_stage_new(GL_VERTEX_SHADER, vert_path);
-	int fs = shader_stage_new(GL_FRAGMENT_SHADER, frag_path);
-	
-	int program = shader_program_new(vs, fs);
-	return program;
-}
-
-void shader_delete(int program) {
+void shader_destroy(shader_t *shader) {
 	GLsizei count;
 	GLuint shaders[4];
-	glGetAttachedShaders(program, 4, &count, shaders);
+	glGetAttachedShaders(shader->program, 4, &count, shaders);
 
 	for (int i = 0; i < count; ++i) {
 		glDeleteShader(shaders[i]);
 	}
 
-	glDeleteProgram(program);
+	glDeleteProgram(shader->program);
+	shader->program = 0;
 }
 
 // uniform setters
 
-void shader_set_uniform_mat4(int shader, const char *attribname, float matrix[16]) {
-	if (shader != 0) {
-		glUseProgram(shader);
-	}
+void shader_set_uniform_mat4(shader_t *shader, const char *attribname, float matrix[16]) {
+	assert(shader != NULL);
+	glUseProgram(shader->program);
 
-	GLint u_location = glGetUniformLocation(shader, attribname);
+	GLint u_location = glGetUniformLocation(shader->program, attribname);
 	glUniform4fv(u_location, 4, matrix);
 }
 

@@ -29,16 +29,16 @@ void vbuffer_set_data(struct vbuffer_s *vbo, size_t sizeof_vertices, float *vert
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
 }
 
-void vbuffer_set_attrib(struct vbuffer_s *vbo, GLuint shader, const char *attribname, GLint size, GLenum type, GLint stride, GLvoid *offset) {
+void vbuffer_set_attrib(struct vbuffer_s *vbo, shader_t *shader, const char *attribname, GLint size, GLenum type, GLint stride, GLvoid *offset) {
 	glBindBuffer(GL_ARRAY_BUFFER, vbo->buffer);
 
 	assert(shader != 0);
-	glUseProgram(shader);
+	glUseProgram(shader->program);
 	
 	assert(attribname != NULL);
 
 	struct vbuffer_attrib_s attribdata;
-	attribdata.location = glGetAttribLocation(shader, attribname);
+	attribdata.location = glGetAttribLocation(shader->program, attribname);
 	attribdata.size = size;
 	attribdata.type = type;
 	attribdata.stride = stride;

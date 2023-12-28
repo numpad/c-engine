@@ -42,7 +42,7 @@ void isoterrain_init(struct isoterrain_s *terrain, int w, int h, int layers) {
 	terrain->layers = layers;
 	terrain->blocks = malloc(w * h * layers * sizeof(iso_block));
 
-	terrain->shader = shader_new("res/shader/isoterrain/vertex.glsl", "res/shader/isoterrain/fragment.glsl");
+	shader_init(&terrain->shader, "res/shader/isoterrain/vertex.glsl", "res/shader/isoterrain/fragment.glsl");
 	texture_init_from_image(&terrain->tileset_texture, "res/environment/tiles.png", NULL);
 
 	terrain->vbuf = malloc(sizeof(struct vbuffer_s));
@@ -56,12 +56,12 @@ void isoterrain_init(struct isoterrain_s *terrain, int w, int h, int layers) {
 	};
 	vbuffer_init(terrain->vbuf);
 	vbuffer_set_data(terrain->vbuf, sizeof(vertices), vertices);
-	vbuffer_set_attrib(terrain->vbuf, terrain->shader, "a_position", 2, GL_FLOAT, 4 * sizeof(float), 0);
-	vbuffer_set_attrib(terrain->vbuf, terrain->shader, "a_texcoord", 2, GL_FLOAT, 4 * sizeof(float), (void*)(2 * sizeof(float)));
+	vbuffer_set_attrib(terrain->vbuf, &terrain->shader, "a_position", 2, GL_FLOAT, 4 * sizeof(float), 0);
+	vbuffer_set_attrib(terrain->vbuf, &terrain->shader, "a_texcoord", 2, GL_FLOAT, 4 * sizeof(float), (void*)(2 * sizeof(float)));
 	
-	glUseProgram(terrain->shader);
-	glUniform1i(glGetUniformLocation(terrain->shader, "u_texture"), 0);
-	glUniform2f(glGetUniformLocation(terrain->shader, "u_tilesize"), (1.0f / terrain->tileset_texture.width) * 16.0f, (1.0f / terrain->tileset_texture.height) * 17.0f);
+	glUseProgram(terrain->shader.program);
+	glUniform1i(glGetUniformLocation(terrain->shader.program, "u_texture"), 0);
+	glUniform2f(glGetUniformLocation(terrain->shader.program, "u_tilesize"), (1.0f / terrain->tileset_texture.width) * 16.0f, (1.0f / terrain->tileset_texture.height) * 17.0f);
 }
 
 void isoterrain_init_from_file(struct isoterrain_s *terrain, const char *path_to_script) {
@@ -137,9 +137,9 @@ void isoterrain_to_json(struct isoterrain_s *terrain, cJSON *output) {
 void isoterrain_draw(struct isoterrain_s *terrain, const mat4 proj, const mat4 view) {
 	const float projected_height = terrain->height * 17.0f * 0.334f + terrain->layers * 4.0f;
 
-	glUseProgram(terrain->shader);
-	glUniformMatrix4fv(glGetUniformLocation(terrain->shader, "u_projection"), 1, GL_FALSE, proj[0]);
-	glUniformMatrix4fv(glGetUniformLocation(terrain->shader, "u_view"), 1, GL_FALSE, view[0]);
+	glUseProgram(terrain->shader.program);
+	glUniformMatrix4fv(glGetUniformLocation(terrain->shader.program, "u_projection"), 1, GL_FALSE, proj[0]);
+	glUniformMatrix4fv(glGetUniformLocation(terrain->shader.program, "u_view"), 1, GL_FALSE, view[0]);
 
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_2D, terrain->tileset_texture.texture);
@@ -162,8 +162,8 @@ void isoterrain_draw(struct isoterrain_s *terrain, const mat4 proj, const mat4 v
 				const float by = ((y + 2.0f * z) - x) * 4.0f;
 				const float bz = 0.0f;
 
-				glUniform2f(glGetUniformLocation(terrain->shader, "u_tilepos"), tx, ty);
-				glUniform3f(glGetUniformLocation(terrain->shader, "u_pos"), bx, by - projected_height, bz);
+				glUniform2f(glGetUniformLocation(terrain->shader.program, "u_tilepos"), tx, ty);
+				glUniform3f(glGetUniformLocation(terrain->shader.program, "u_pos"), bx, by - projected_height, bz);
 				vbuffer_draw(terrain->vbuf, 6);
 
 				/*

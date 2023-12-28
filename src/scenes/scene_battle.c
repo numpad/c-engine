@@ -200,9 +200,9 @@ static void draw(struct scene_battle_s *scene, struct engine_s *engine) {
 	isoterrain_draw(g_terrain, engine->u_projection, engine->u_view);
 
 	// draw cards
-	glUseProgram(g_cardrenderer->shader);
-	glUniformMatrix4fv(glGetUniformLocation(g_cardrenderer->shader, "u_projection"), 1, GL_FALSE, engine->u_projection[0]);
-	glUniformMatrix4fv(glGetUniformLocation(g_cardrenderer->shader, "u_view"), 1, GL_FALSE, engine->u_view[0]);
+	glUseProgram(g_cardrenderer->shader.program);
+	glUniformMatrix4fv(glGetUniformLocation(g_cardrenderer->shader.program, "u_projection"), 1, GL_FALSE, engine->u_projection[0]);
+	glUniformMatrix4fv(glGetUniformLocation(g_cardrenderer->shader.program, "u_view"), 1, GL_FALSE, engine->u_view[0]);
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_2D, g_cardrenderer->texture_atlas.texture);
 
@@ -240,13 +240,13 @@ static void draw(struct scene_battle_s *scene, struct engine_s *engine) {
 				glm_rotate(u_model, angle * 0.2f, (vec3){0.0f, 0.0f, 1.0f});
 				glm_scale(u_model, (vec3){ card_scale, -card_scale, 1.0f });
 			}
-			glUniformMatrix4fv(glGetUniformLocation(g_cardrenderer->shader, "u_model"), 1, GL_FALSE, u_model[0]);
+			glUniformMatrix4fv(glGetUniformLocation(g_cardrenderer->shader.program, "u_model"), 1, GL_FALSE, u_model[0]);
 			const float step = 1.0f / 8.0f;
 			const float tx = cards[i].image_id % 8;
 			const float ty = floorf((float)cards[i].image_id / 8.0f);
 
 			glUniform4fv(
-				glGetUniformLocation(g_cardrenderer->shader, "u_cardwindow_offset"),
+				glGetUniformLocation(g_cardrenderer->shader.program, "u_cardwindow_offset"),
 				1, (vec4){tx * step, (ty + 1.0f) * step, step, -step});
 
 			vbuffer_draw(&g_cardrenderer->vbo, 6);
@@ -273,6 +273,6 @@ void scene_battle_init(struct scene_battle_s *scene_battle, struct engine_s *eng
 
 static void reload_shader(struct engine_s *engine) {
 	struct scene_battle_s *scene = (struct scene_battle_s *)engine->scene;
-	g_terrain->shader = shader_new("res/shader/isoterrain/vertex.glsl", "res/shader/isoterrain/fragment.glsl");
+	shader_init(&g_terrain->shader, "res/shader/isoterrain/vertex.glsl", "res/shader/isoterrain/fragment.glsl");
 }
 

@@ -1,23 +1,29 @@
 #ifndef SHADER_H
 #define SHADER_H
 
+#include <SDL_opengles2.h>
+
 //
-// typedefs
+// typedefs & structs
 //
 
-// TODO: impl shader struct
+typedef struct shader_s shader_t;
+struct shader_s {
+	GLuint program;
+};
+
 
 //
 // public api
 //
 
 // init & destroy
-int shader_new(const char *vert_path, const char *frag_path);
-int shader_from_dir(const char *dir_path);
-void shader_delete(int program);
+void shader_init         (shader_t *, const char *vert_path, const char *frag_path);
+void shader_init_from_dir(shader_t *, const char *dir_path);
+void shader_destroy      (shader_t *);
 
 // uniform setters
-void shader_set_uniform_mat4(int shader, const char *attribname, float[16]);
+void shader_set_uniform_mat4(shader_t *, const char *attribname, float[16]);
 
 #endif
 

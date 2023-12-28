@@ -3,19 +3,20 @@
 
 #include <cglm/cglm.h>
 #include "gl/texture.h"
+#include "gl/vbuffer.h"
+#include "gl/shader.h"
 
 typedef int iso_block;
 typedef struct cJSON cJSON;
 
-struct vbuffer_s;
 
 struct isoterrain_s {
 	int width, height, layers;
 	iso_block *blocks;
 
-	unsigned int shader;
+	shader_t shader;
 	struct texture_s tileset_texture;
-	struct vbuffer_s *vbuf;
+	vbuffer_t *vbuf;
 	
 };
 

@@ -3,6 +3,7 @@
 
 #include <SDL_opengles2.h>
 
+typedef struct texture_s texture_t;
 struct texture_s {
 	GLuint texture;
 

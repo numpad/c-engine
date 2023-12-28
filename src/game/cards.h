@@ -4,11 +4,12 @@
 #include <SDL_opengles2.h>
 #include "gl/vbuffer.h"
 #include "gl/texture.h"
+#include "gl/shader.h"
 
 struct cardrenderer_s {
-	struct texture_s texture_atlas;
-	GLuint shader;
-	struct vbuffer_s vbo;
+	shader_t shader;
+	vbuffer_t vbo;
+	texture_t texture_atlas;
 };
 
 void cardrenderer_init(struct cardrenderer_s *, const char *tileset);
