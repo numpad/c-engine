@@ -75,8 +75,6 @@ static int img_food;
 // game state
 static int game_score;
 static float game_score_anim = 0.0f;
-static struct emoji **emojis;
-static size_t emojis_len;
 
 static struct emoji *dragged_emoji;
 static float dragged_emoji_anim = 0.0f;
@@ -103,7 +101,9 @@ static b2BodyDef rightwall_bodydef;
 static b2BodyId rightwall_bodyid;
 static b2Polygon rightwall_polygon;
 static b2ShapeDef rightwall_shapedef;
-
+// emojis
+static struct emoji **emojis;
+static size_t emojis_len;
 static b2BodyDef  *body_defs;
 static b2BodyId   *body_ids;
 static b2ShapeDef *body_shape_defs;
@@ -220,9 +220,6 @@ static void update(struct scene_experiments_s *scene, struct engine_s *engine, f
 			emoji_spawn(dragged_emoji);
 			dragged_emoji = NULL;
 
-			game_score += 10;
-			game_score_anim = 0.0f;
-
 			// set next emoji
 			dragged_emoji = emoji_new(0.0f, 0.0f);
 			dragged_emoji_anim = 0.0f;
@@ -245,6 +242,58 @@ static void update(struct scene_experiments_s *scene, struct engine_s *engine, f
 	// test physics
 	for (int i = 0; i < 2; ++i) {
 		b2World_Step(world_id, 1.0f / 20.0f, 8, 3);
+		
+		b2ContactEvents contacts = b2World_GetContactEvents(world_id);
+		for (int j = 0; j < contacts.beginCount; ++j) {
+			b2ContactBeginTouchEvent *event = &contacts.beginEvents[j];
+			struct emoji *emoji_a = (struct emoji *)b2Shape_GetUserData(event->shapeIdA);
+			struct emoji *emoji_b = (struct emoji *)b2Shape_GetUserData(event->shapeIdB);
+
+			// skip non emoji-emoji collision
+			if (emoji_a == NULL || emoji_b == NULL) continue;
+			
+			if (emoji_a->tile == emoji_b->tile) {
+				printf("Match!\n");
+				// b2BodyId bodyIdB = b2Shape_GetBody(event->shapeIdB);
+				// b2DestroyBody(bodyIdB);
+
+				// upgrade other emoji
+				{
+					int k;
+					for (k = 0; tiles[k] != -1; ++k) {
+						if (tiles[k] == emoji_a->tile) break;
+					}
+					assert(tiles[k] != -1);
+
+					if (tiles[k + 1] != -1) {
+						emoji_a->tile = tiles[k + 1];
+					}
+				}
+
+				
+				// TODO: improve score system
+				game_score += 10;
+				game_score_anim = 0.0f;
+
+				// remove from array
+				for (size_t k = 0; k < emojis_len; ++k) {
+					if (emojis[k] == emoji_a) {
+						b2Body_ApplyForceToCenter(body_ids[k], (b2Vec2){50000.0f, 5000.0f}, true);
+						b2Body_ApplyLinearImpulseToCenter(body_ids[k], (b2Vec2){5000.0f, 5000.0f}, true);
+					}
+
+					if (emojis[k] == emoji_b) {
+						emoji_delete(emoji_b);
+						stbds_arrdel(body_defs, k);
+						stbds_arrdel(body_ids, k);
+						stbds_arrdel(body_shape_defs, k);
+					}
+				}
+
+				b2DestroyShape(event->shapeIdB);
+				break; // TODO: remove
+			}
+		}
 	}
 
 	// camera
@@ -587,10 +636,12 @@ static void emoji_spawn(struct emoji *e) {
 	b2ShapeDef body_shape_def = b2_defaultShapeDef;
 	body_shape_def.density = 0.5f;
 	body_shape_def.friction = 0.7f;
-	b2CreateCircleShape(body_id, &body_shape_def, &body_circle);
+	body_shape_def.userData = (void *)e;
+	b2ShapeId shape_id = b2CreateCircleShape(body_id, &body_shape_def, &body_circle);
+
 
 	// add to world
-	body_def.userData = (void *)stbds_arrlen(body_defs);
+	//body_def.userData = (void *)stbds_arrlen(body_defs);
 	stbds_arrpush(body_defs, body_def);
 	stbds_arrpush(body_ids, body_id);
 	stbds_arrpush(body_shape_defs, body_shape_def);

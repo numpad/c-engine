@@ -36,8 +36,8 @@ void background_set_image(const char *filename) {
 	shader_init_from_dir(&g_shader, "res/shader/background/");
 	assert(g_shader.program != 0);
 
-	mat4 mvp = GLM_MAT4_IDENTITY_INIT;
-	shader_set_uniform_mat4(&g_shader, "u_mvp", (float *)mvp);
+	//mat4 mvp = GLM_MAT4_IDENTITY_INIT;
+	//shader_set_uniform_mat4(&g_shader, "u_mvp", (float *)mvp);
 	
 	// load vertices
 	init_vbuffer_rect(&g_vbuffer, &g_shader);

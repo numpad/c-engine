@@ -111,7 +111,7 @@ static void load(struct scene_battle_s *scene, struct engine_s *engine) {
 	// isoterrain
 	g_terrain = malloc(sizeof(struct isoterrain_s));
 	//isoterrain_init(g_terrain, 10, 10, 1);
-	isoterrain_init_from_file(g_terrain, "res/data/levels/map2.json");
+	isoterrain_init_from_file(g_terrain, "res/data/levels/test.json");
 
 	// card renderer
 	g_cardrenderer = malloc(sizeof(struct cardrenderer_s));
@@ -201,13 +201,13 @@ static void draw(struct scene_battle_s *scene, struct engine_s *engine) {
 
 	// draw cards
 	glUseProgram(g_cardrenderer->shader.program);
-	glUniformMatrix4fv(glGetUniformLocation(g_cardrenderer->shader.program, "u_projection"), 1, GL_FALSE, engine->u_projection[0]);
-	glUniformMatrix4fv(glGetUniformLocation(g_cardrenderer->shader.program, "u_view"), 1, GL_FALSE, engine->u_view[0]);
-	glActiveTexture(GL_TEXTURE0);
-	glBindTexture(GL_TEXTURE_2D, g_cardrenderer->texture_atlas.texture);
+	shader_set_uniform_mat4(&g_cardrenderer->shader, "u_projection", (float *)engine->u_projection);
+	shader_set_uniform_mat4(&g_cardrenderer->shader, "u_view", (float *)engine->u_view);
+	shader_set_uniform_texture(&g_cardrenderer->shader, "u_texture", GL_TEXTURE0, &g_cardrenderer->texture_atlas);
 
 	glEnable(GL_DEPTH_TEST);
 	glDepthFunc(GL_LEQUAL);
+	glEnable(GL_BLEND);
 	// TODO: z-sorting
 	ecs_iter_t it = ecs_query_iter(g_world, g_q_handcards);
 	while (ecs_query_next(&it)) {
@@ -240,14 +240,12 @@ static void draw(struct scene_battle_s *scene, struct engine_s *engine) {
 				glm_rotate(u_model, angle * 0.2f, (vec3){0.0f, 0.0f, 1.0f});
 				glm_scale(u_model, (vec3){ card_scale, -card_scale, 1.0f });
 			}
-			glUniformMatrix4fv(glGetUniformLocation(g_cardrenderer->shader.program, "u_model"), 1, GL_FALSE, u_model[0]);
+			shader_set_uniform_mat4(&g_cardrenderer->shader, "u_model", (float *)u_model);
+
 			const float step = 1.0f / 8.0f;
 			const float tx = cards[i].image_id % 8;
 			const float ty = floorf((float)cards[i].image_id / 8.0f);
-
-			glUniform4fv(
-				glGetUniformLocation(g_cardrenderer->shader.program, "u_cardwindow_offset"),
-				1, (vec4){tx * step, (ty + 1.0f) * step, step, -step});
+			shader_set_uniform_vec4(&g_cardrenderer->shader, "u_cardwindow_offset", (vec4){tx * step, (ty + 1.0f) * step, step, -step});
 
 			vbuffer_draw(&g_cardrenderer->vbo, 6);
 		}

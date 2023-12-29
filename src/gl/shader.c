@@ -5,6 +5,7 @@
 #include <assert.h>
 #include <SDL.h>
 #include <SDL_opengles2.h>
+#include "gl/texture.h"
 #include "util/fs.h"
 
 //
@@ -55,12 +56,42 @@ void shader_destroy(shader_t *shader) {
 
 // uniform setters
 
-void shader_set_uniform_mat4(shader_t *shader, const char *attribname, float matrix[16]) {
-	assert(shader != NULL);
-	glUseProgram(shader->program);
+void shader_set_uniform_texture(shader_t *shader, const char *uniform_name, GLenum texture_unit, texture_t *texture) {
+	assert(texture_unit >= GL_TEXTURE0 && texture_unit < GL_MAX_COMBINED_TEXTURE_IMAGE_UNITS);
+	assert(texture != NULL);
 
-	GLint u_location = glGetUniformLocation(shader->program, attribname);
-	glUniform4fv(u_location, 4, matrix);
+	// only set shader/uniform assignment
+	if (shader != NULL && uniform_name != NULL) {
+		glUseProgram(shader->program);
+		GLint u_location = glGetUniformLocation(shader->program, uniform_name);
+		assert(u_location >= 0);
+		glUniform1i(u_location, texture_unit - GL_TEXTURE0);
+	}
+
+	glActiveTexture(texture_unit);
+	glBindTexture(GL_TEXTURE_2D, texture->texture);
+	
+}
+
+void shader_set_uniform_vec4(shader_t *shader, const char *uniform_name, float vec[4]) {
+	assert(shader != NULL);
+	assert(uniform_name != NULL);
+	
+	glUseProgram(shader->program);
+	GLint u_location = glGetUniformLocation(shader->program, uniform_name);
+	assert(u_location >= 0);
+	glUniform4fv(u_location, 1, vec);
+}
+
+void shader_set_uniform_mat4(shader_t *shader, const char *uniform_name, float matrix[16]) {
+	assert(shader != NULL);
+	assert(shader->program > 0);
+	assert(uniform_name != NULL);
+
+	glUseProgram(shader->program);
+	GLint u_location = glGetUniformLocation(shader->program, uniform_name);
+	assert(u_location >= 0);
+	glUniformMatrix4fv(u_location, 1, GL_FALSE, matrix);
 }
 
 //
