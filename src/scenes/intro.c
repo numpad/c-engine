@@ -10,7 +10,7 @@
 
 static void switch_to_menu_scene(struct engine_s *engine) {
 	struct menu_s *menu = malloc(sizeof(struct menu_s));
-	menu_init(menu, engine);
+	scene_menu_init(menu, engine);
 	engine_setscene(engine, (struct scene_s *)menu);
 }
 

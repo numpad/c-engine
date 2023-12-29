@@ -209,7 +209,6 @@ static void draw(struct scene_battle_s *scene, struct engine_s *engine) {
 
 	glEnable(GL_DEPTH_TEST);
 	glDepthFunc(GL_LEQUAL);
-	glEnable(GL_BLEND);
 	// TODO: z-sorting
 	ecs_iter_t it = ecs_query_iter(g_world, g_q_handcards);
 	while (ecs_query_next(&it)) {

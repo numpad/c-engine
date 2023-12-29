@@ -65,6 +65,7 @@ void isoterrain_init(struct isoterrain_s *terrain, int w, int h, int layers) {
 		(1.0f / terrain->tileset_texture.width) * 16.0f,
 		(1.0f / terrain->tileset_texture.height) * 17.0f,
 	});
+
 }
 
 void isoterrain_init_from_file(struct isoterrain_s *terrain, const char *path_to_script) {
@@ -141,14 +142,16 @@ cJSON *isoterrain_to_json(struct isoterrain_s *terrain) {
 //
 
 void isoterrain_draw(struct isoterrain_s *terrain, const mat4 proj, const mat4 view) {
-	const float projected_height = terrain->height * 17.0f * 0.334f + terrain->layers * 4.0f;
+	int projected_height;
+	isoterrain_get_projected_size(terrain, NULL, &projected_height);
 
 	glUseProgram(terrain->shader.program);
 	shader_set_uniform_mat4(&terrain->shader, "u_projection", proj);
 	shader_set_uniform_mat4(&terrain->shader, "u_view", view);
+	shader_set_uniform_texture(&terrain->shader, "u_texture", GL_TEXTURE0, &terrain->tileset_texture);
 
-	glActiveTexture(GL_TEXTURE0);
-	glBindTexture(GL_TEXTURE_2D, terrain->tileset_texture.texture);
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 	// draw left to right, top to bottom
 	for (int iz = 0; iz < terrain->layers; ++iz) {
 		for (int ix = 0; ix < terrain->width; ++ix) {
@@ -190,6 +193,16 @@ void isoterrain_draw(struct isoterrain_s *terrain, const mat4 proj, const mat4 v
 //
 // api
 //
+
+void isoterrain_get_projected_size(struct isoterrain_s *terrain, int *width, int *height) {
+	if (width != NULL) {
+		*width = terrain->width * 16.0f;
+	}
+	if (height != NULL) {
+		// FIXME: this was determined empirically
+		*height = terrain->height * 17.0f * 0.334f + terrain->layers * 4.0f;
+	}
+}
 
 void isoterrain_set_block(struct isoterrain_s *terrain, int x, int y, int z, iso_block block) {
 	if (x < 0 || y < 0 || x >= terrain->width || y >= terrain->height || z < 0 || z >= terrain->layers) return;

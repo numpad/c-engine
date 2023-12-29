@@ -43,6 +43,8 @@ static void draw_menu(struct engine_s *, struct nk_context *nk);
 //
 
 static void menu_load(struct menu_s *menu, struct engine_s *engine) {
+	engine_set_clear_color(0.34f, 0.72f, 0.98f);
+
 	id_of_current_lobby = 0;
 	others_in_lobby = 0;
 	reset_ids_of_lobbies();
@@ -53,7 +55,7 @@ static void menu_load(struct menu_s *menu, struct engine_s *engine) {
 	menu->terrain = malloc(sizeof(struct isoterrain_s));
 	isoterrain_init_from_file(menu->terrain, "res/data/levels/winter.json");
 	
-	background_set_image("res/image/bg-glaciers-light.png");
+	background_set_parallax("res/image/bg-glaciers/%d.png", 4);
 }
 
 static void menu_destroy(struct menu_s *menu, struct engine_s *engine) {
@@ -70,9 +72,13 @@ static void menu_draw(struct menu_s *menu, struct engine_s *engine) {
 	background_draw();
 
 	// draw terrain
+	const float t_padding = 50.0f;
+	int t_width;
+	isoterrain_get_projected_size(menu->terrain, &t_width, NULL);
+	// build matrix
 	glm_mat4_identity(engine->u_view);
-	const float t_scale = sinf(engine->time_elapsed * 2.5f) * 0.5f + 3.0f;
-	glm_translate(engine->u_view, (vec3){ 0.0f, 0.0f, 0.0f });
+	const float t_scale = ((engine->window_width - t_padding) / (float)t_width);
+	glm_translate(engine->u_view, (vec3){ 25.0f, 90.0f + fabsf(sinf(engine->time_elapsed)) * -30.0f, 0.0f });
 	glm_scale(engine->u_view, (vec3){ t_scale, -t_scale, t_scale });
 	isoterrain_draw(menu->terrain, engine->u_projection, engine->u_view);
 
@@ -150,7 +156,7 @@ static void menu_on_message(struct menu_s *menu, struct engine_s *engine, struct
 	}
 }
 
-void menu_init(struct menu_s *menu, struct engine_s *engine) {
+void scene_menu_init(struct menu_s *menu, struct engine_s *engine) {
 	// init scene base
 	scene_init((struct scene_s *)menu, engine);
 

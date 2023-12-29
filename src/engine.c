@@ -246,8 +246,8 @@ void engine_setscene_dll(struct engine_s *engine, const char *filename) {
 
 	handle = dlopen(filename, RTLD_NOW | RTLD_GLOBAL | RTLD_DEEPBIND);
 
-	struct scene_battle_s *modscene = malloc(sizeof(*modscene));
-	void(*test_init)(struct scene_battle_s *scene, struct engine_s *) = dlsym(handle, "scene_battle_init");
+	struct menu_s *modscene = malloc(sizeof(*modscene));
+	void(*test_init)(struct menu_s *scene, struct engine_s *) = dlsym(handle, "scene_menu_init");
 	test_init(modscene, engine);
 
 	engine_setscene(engine, (struct scene_s *)modscene);
@@ -487,7 +487,7 @@ static void engine_poll_events(struct engine_s *engine) {
 
 			// TODO: notify current scene about this
 			struct menu_s *menu_scene = malloc(sizeof(struct menu_s));
-			menu_init(menu_scene, engine);
+			scene_menu_init(menu_scene, engine);
 			engine_setscene(engine, (struct scene_s *)menu_scene);
 		}
 	}

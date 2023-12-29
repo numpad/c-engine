@@ -15,7 +15,7 @@ struct menu_s {
 	struct isoterrain_s *terrain;
 };
 
-void menu_init(struct menu_s *menu, struct engine_s *engine);
+void scene_menu_init(struct menu_s *menu, struct engine_s *engine);
 
 #endif
 

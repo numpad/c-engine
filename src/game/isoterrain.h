@@ -15,9 +15,8 @@ struct isoterrain_s {
 	iso_block *blocks;
 
 	shader_t shader;
-	struct texture_s tileset_texture;
+	texture_t tileset_texture;
 	vbuffer_t *vbuf;
-	
 };
 
 // create & destroy
@@ -32,6 +31,7 @@ cJSON *isoterrain_to_json(struct isoterrain_s *);
 void isoterrain_draw(struct isoterrain_s *, const mat4 proj, const mat4 view);
 
 // api
+void isoterrain_get_projected_size(struct isoterrain_s *, int *width, int *height);
 iso_block *isoterrain_get_block(struct isoterrain_s *, int x, int y, int z);
 void isoterrain_set_block(struct isoterrain_s *, int x, int y, int z, iso_block block);
 void isoterrain_pos_block_to_screen(struct isoterrain_s *, int x, int y, int z, vec2 *OUT_pos);
