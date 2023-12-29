@@ -69,7 +69,7 @@ static void menu_update(struct menu_s *menu, struct engine_s *engine, float dt) 
 }
 
 static void menu_draw(struct menu_s *menu, struct engine_s *engine) {
-	background_draw();
+	background_draw(engine);
 
 	// draw terrain
 	const float t_padding = 50.0f;
@@ -95,7 +95,6 @@ static void menu_draw(struct menu_s *menu, struct engine_s *engine) {
 	nvgFillPaint(vg, paint);
 	nvgFill(vg);
 	*/
-
 }
 
 static void menu_on_message(struct menu_s *menu, struct engine_s *engine, struct message_header *msg) {

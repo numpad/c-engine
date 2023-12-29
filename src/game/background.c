@@ -3,6 +3,7 @@
 #include <assert.h>
 #include <cglm/cglm.h>
 #include <stb_ds.h>
+#include "engine.h"
 #include "gl/texture.h"
 #include "gl/shader.h"
 #include "gl/vbuffer.h"
@@ -78,16 +79,18 @@ void background_destroy(void) {
 	g_textures = NULL;
 }
 
-void background_draw(void) {
+void background_draw(struct engine_s *engine) {
+	if (g_shader.program == 0) return;
+
+	// TODO: remove
 	static float t = 0.0f;
 	t += 1.0f / 60.0f;
-
-	if (g_shader.program == 0) return;
 
 	glEnable(GL_BLEND);
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
 	glUseProgram(g_shader.program);
+	shader_set_uniform_vec2(&g_shader, "u_resolution", (vec2){ engine->window_width, engine->window_height });
 	const int g_textures_len = stbds_arrlen(g_textures);
 	for (int i = g_textures_len - 1; i >= 0; --i) {
 		shader_set_uniform_float(&g_shader, "u_parallax_offset", (t * 0.01f) * (4 - i + 1));

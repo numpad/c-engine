@@ -9,11 +9,19 @@
 #include "scenes/scene.h"
 #include "input.h"
 
+//
+// forward decls & typedefs
+//
+
 struct nk_context;
 struct engine_s;
 struct console_s;
 struct message_header;
 typedef void(*engine_callback_fn)(struct engine_s*);
+
+//
+// structs & enums
+//
 
 struct engine_s {
 	// windowing

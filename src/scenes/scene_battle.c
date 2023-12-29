@@ -196,7 +196,7 @@ static void update(struct scene_battle_s *scene, struct engine_s *engine, float 
 }
 
 static void draw(struct scene_battle_s *scene, struct engine_s *engine) {
-	background_draw();
+	background_draw(engine);
 
 	// draw terrain
 	isoterrain_draw(g_terrain, engine->u_projection, engine->u_view);
