@@ -15,6 +15,8 @@
 static int shader_stage_new(GLenum type, const char *path);
 static int shader_program_new(int vertex_shader, int fragment_shader);
 
+static GLint uniform_location(shader_t *shader, const char *uniform_name);
+
 //
 // public api
 //
@@ -63,8 +65,7 @@ void shader_set_uniform_texture(shader_t *shader, const char *uniform_name, GLen
 	// only set shader/uniform assignment
 	if (shader != NULL && uniform_name != NULL) {
 		glUseProgram(shader->program);
-		GLint u_location = glGetUniformLocation(shader->program, uniform_name);
-		assert(u_location >= 0);
+		GLint u_location = uniform_location(shader, uniform_name);
 		glUniform1i(u_location, texture_unit - GL_TEXTURE0);
 	}
 
@@ -73,13 +74,30 @@ void shader_set_uniform_texture(shader_t *shader, const char *uniform_name, GLen
 	
 }
 
+void shader_set_uniform_vec2(shader_t *shader, const char *uniform_name, float vec[2]) {
+	assert(shader != NULL);
+	assert(uniform_name != NULL);
+	
+	glUseProgram(shader->program);
+	GLint u_location = uniform_location(shader, uniform_name);
+	glUniform2fv(u_location, 1, vec);
+}
+
+void shader_set_uniform_vec3(shader_t *shader, const char *uniform_name, float vec[3]) {
+	assert(shader != NULL);
+	assert(uniform_name != NULL);
+	
+	glUseProgram(shader->program);
+	GLint u_location = uniform_location(shader, uniform_name);
+	glUniform3fv(u_location, 1, vec);
+}
+
 void shader_set_uniform_vec4(shader_t *shader, const char *uniform_name, float vec[4]) {
 	assert(shader != NULL);
 	assert(uniform_name != NULL);
 	
 	glUseProgram(shader->program);
-	GLint u_location = glGetUniformLocation(shader->program, uniform_name);
-	assert(u_location >= 0);
+	GLint u_location = uniform_location(shader, uniform_name);
 	glUniform4fv(u_location, 1, vec);
 }
 
@@ -89,10 +107,10 @@ void shader_set_uniform_mat4(shader_t *shader, const char *uniform_name, float m
 	assert(uniform_name != NULL);
 
 	glUseProgram(shader->program);
-	GLint u_location = glGetUniformLocation(shader->program, uniform_name);
-	assert(u_location >= 0);
+	GLint u_location = uniform_location(shader, uniform_name);
 	glUniformMatrix4fv(u_location, 1, GL_FALSE, matrix);
 }
+
 
 //
 // private impl
@@ -145,5 +163,28 @@ static int shader_program_new(int vertex_shader, int fragment_shader) {
 	}
 
 	return program;
+}
+
+static GLint uniform_location(shader_t *shader, const char *uniform_name) {
+#ifdef DEBUG
+	// assume correct shader is in use
+	GLint current_program;
+	glGetIntegerv(GL_CURRENT_PROGRAM, &current_program);
+	assert(current_program > 0);
+	assert((GLuint)current_program == shader->program);
+#endif
+
+	GLint u_location = glGetUniformLocation(shader->program, uniform_name);
+
+#ifdef DEBUG
+	if (u_location < 0) {
+		fprintf(stderr, "[err] no uniform \"%s\".\n", uniform_name);
+	}
+#else
+	assert(u_location >= 0);
+#endif
+
+
+	return u_location;
 }
 

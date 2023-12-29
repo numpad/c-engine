@@ -60,8 +60,11 @@ void isoterrain_init(struct isoterrain_s *terrain, int w, int h, int layers) {
 	vbuffer_set_attrib(terrain->vbuf, &terrain->shader, "a_texcoord", 2, GL_FLOAT, 4 * sizeof(float), (void*)(2 * sizeof(float)));
 	
 	glUseProgram(terrain->shader.program);
-	glUniform1i(glGetUniformLocation(terrain->shader.program, "u_texture"), 0);
-	glUniform2f(glGetUniformLocation(terrain->shader.program, "u_tilesize"), (1.0f / terrain->tileset_texture.width) * 16.0f, (1.0f / terrain->tileset_texture.height) * 17.0f);
+	shader_set_uniform_texture(&terrain->shader, "u_texture", GL_TEXTURE0, &terrain->tileset_texture);
+	shader_set_uniform_vec2(&terrain->shader, "u_tilesize", (vec2){
+		(1.0f / terrain->tileset_texture.width) * 16.0f,
+		(1.0f / terrain->tileset_texture.height) * 17.0f,
+	});
 }
 
 void isoterrain_init_from_file(struct isoterrain_s *terrain, const char *path_to_script) {
@@ -138,8 +141,8 @@ void isoterrain_draw(struct isoterrain_s *terrain, const mat4 proj, const mat4 v
 	const float projected_height = terrain->height * 17.0f * 0.334f + terrain->layers * 4.0f;
 
 	glUseProgram(terrain->shader.program);
-	glUniformMatrix4fv(glGetUniformLocation(terrain->shader.program, "u_projection"), 1, GL_FALSE, proj[0]);
-	glUniformMatrix4fv(glGetUniformLocation(terrain->shader.program, "u_view"), 1, GL_FALSE, view[0]);
+	shader_set_uniform_mat4(&terrain->shader, "u_projection", proj);
+	shader_set_uniform_mat4(&terrain->shader, "u_view", view);
 
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_2D, terrain->tileset_texture.texture);
@@ -155,15 +158,16 @@ void isoterrain_draw(struct isoterrain_s *terrain, const mat4 proj, const mat4 v
 				const float z = iz;
 
 				// blockid to texcoord
-				const float tx = *block % 16;
-				const float ty = floor(*block / 15.0f);
+				vec2 tile_uv = { *block % 16, floor(*block / 15.0f) };
+				vec3 block_pos = {
+					(x + y) * 8.0f,
+					((y + 2.0f * z) - x) * 4.0f - projected_height,
+					0.0f,
+				};
 
-				const float bx = (x + y) * 8.0f;
-				const float by = ((y + 2.0f * z) - x) * 4.0f;
-				const float bz = 0.0f;
+				shader_set_uniform_vec2(&terrain->shader, "u_tilepos", tile_uv);
+				shader_set_uniform_vec3(&terrain->shader, "u_pos", block_pos);
 
-				glUniform2f(glGetUniformLocation(terrain->shader.program, "u_tilepos"), tx, ty);
-				glUniform3f(glGetUniformLocation(terrain->shader.program, "u_pos"), bx, by - projected_height, bz);
 				vbuffer_draw(terrain->vbuf, 6);
 
 				/*

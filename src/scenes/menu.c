@@ -60,7 +60,7 @@ static void menu_load(struct menu_s *menu, struct engine_s *engine) {
 	menu->terrain = malloc(sizeof(struct isoterrain_s));
 	isoterrain_init_from_file(menu->terrain, "res/data/levels/map2.json");
 	
-	background_set_image("res/image/space_bg.png");
+	background_set_image("res/image/bg-glaciers.png");
 }
 
 static void menu_destroy(struct menu_s *menu, struct engine_s *engine) {

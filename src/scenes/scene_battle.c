@@ -202,7 +202,7 @@ static void draw(struct scene_battle_s *scene, struct engine_s *engine) {
 	// draw cards
 	glUseProgram(g_cardrenderer->shader.program);
 	shader_set_uniform_mat4(&g_cardrenderer->shader, "u_projection", (float *)engine->u_projection);
-	shader_set_uniform_mat4(&g_cardrenderer->shader, "u_view", (float *)engine->u_view);
+	//shader_set_uniform_mat4(&g_cardrenderer->shader, "u_view", (float *)engine->u_view);
 	shader_set_uniform_texture(&g_cardrenderer->shader, "u_texture", GL_TEXTURE0, &g_cardrenderer->texture_atlas);
 
 	glEnable(GL_DEPTH_TEST);

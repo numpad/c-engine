@@ -29,6 +29,8 @@ void shader_destroy      (shader_t *);
 
 // uniform setters
 void shader_set_uniform_texture(shader_t *, const char *uniform_name, GLenum texture_unit, texture_t *texture);
+void shader_set_uniform_vec2   (shader_t *, const char *uniform_name, float[2]);
+void shader_set_uniform_vec3   (shader_t *, const char *uniform_name, float[3]);
 void shader_set_uniform_vec4   (shader_t *, const char *uniform_name, float[4]);
 void shader_set_uniform_mat4   (shader_t *, const char *uniform_name, float[16]);
 
