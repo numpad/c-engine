@@ -26,7 +26,7 @@ void isoterrain_init_from_file(struct isoterrain_s *, const char *path_to_script
 void isoterrain_destroy(struct isoterrain_s *);
 
 // de-/serialization
-void isoterrain_to_json(struct isoterrain_s *, cJSON *output);
+cJSON *isoterrain_to_json(struct isoterrain_s *);
 
 // logic
 void isoterrain_draw(struct isoterrain_s *, const mat4 proj, const mat4 view);

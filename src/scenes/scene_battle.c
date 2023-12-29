@@ -53,6 +53,8 @@ static Mix_Chunk *sound;
 
 
 static void load(struct scene_battle_s *scene, struct engine_s *engine) {
+	engine_set_clear_color(0.34f, 0.72f, 0.98f);
+
 	// TODO: remove, debug only
 	stbds_arrput(engine->on_notify_callbacks, reload_shader);
 	
@@ -110,15 +112,15 @@ static void load(struct scene_battle_s *scene, struct engine_s *engine) {
 
 	// isoterrain
 	g_terrain = malloc(sizeof(struct isoterrain_s));
-	//isoterrain_init(g_terrain, 10, 10, 1);
-	isoterrain_init_from_file(g_terrain, "res/data/levels/test.json");
+	//isoterrain_init(g_terrain, 10, 10, 2);
+	isoterrain_init_from_file(g_terrain, "res/data/levels/winter.json");
 
 	// card renderer
 	g_cardrenderer = malloc(sizeof(struct cardrenderer_s));
 	cardrenderer_init(g_cardrenderer, "res/image/cards.png");
 
 	// background
-	background_set_image("res/image/space_bg.png");
+	background_set_image("res/image/bg-glaciers-light.png");
 
 	sound = Mix_LoadWAV("res/sounds/test.wav");
 }

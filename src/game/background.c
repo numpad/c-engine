@@ -2,6 +2,7 @@
 
 #include <assert.h>
 #include <cglm/cglm.h>
+#include <stb_ds.h>
 #include "gl/texture.h"
 #include "gl/shader.h"
 #include "gl/vbuffer.h"
@@ -53,8 +54,7 @@ void background_draw(void) {
 	if (g_shader.program == 0) return;
 
 	glUseProgram(g_shader.program);
-	glActiveTexture(GL_TEXTURE0);
-	glBindTexture(GL_TEXTURE_2D, g_texture.texture);
+	shader_set_uniform_texture(&g_shader, "u_texture", GL_TEXTURE0, &g_texture);
 	vbuffer_draw(&g_vbuffer, 6);
 	glBindTexture(GL_TEXTURE_2D, 0);
 	glUseProgram(0);

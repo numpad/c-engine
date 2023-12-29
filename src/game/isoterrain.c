@@ -116,21 +116,24 @@ void isoterrain_destroy(struct isoterrain_s *terrain) {
 // de-/serialization
 //
 
-void isoterrain_to_json(struct isoterrain_s *terrain, cJSON *output) {
+cJSON *isoterrain_to_json(struct isoterrain_s *terrain) {
 	cJSON *width = cJSON_CreateNumber(terrain->width);
 	cJSON *height = cJSON_CreateNumber(terrain->height);
 	cJSON *layers = cJSON_CreateNumber(terrain->layers);
 	cJSON *blocks = cJSON_CreateArray();
 	
+	cJSON *output = cJSON_CreateObject();
 	cJSON_AddItemToObject(output, "width", width);
 	cJSON_AddItemToObject(output, "height", height);
 	cJSON_AddItemToObject(output, "layers", layers);
 	cJSON_AddItemToObject(output, "blocks", blocks);
 
-	for (size_t i = 0; i < terrain->width * terrain->height * terrain->layers; ++i) {
+	for (ssize_t i = 0; i < terrain->width * terrain->height * terrain->layers; ++i) {
 		cJSON *block_id = cJSON_CreateNumber(terrain->blocks[i]);
 		cJSON_AddItemToArray(blocks, block_id);
 	}
+
+	return output;
 }
 
 //

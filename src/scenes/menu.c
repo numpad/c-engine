@@ -16,8 +16,9 @@
 #include "platform.h"
 
 //
-// state
+// vars
 //
+
 static int others_in_lobby = 0;
 static int id_of_current_lobby = 0;
 static int *ids_of_lobbies = NULL;
@@ -29,7 +30,141 @@ void reset_ids_of_lobbies(void) {
 }
 
 //
-// util
+// private functions
+//
+
+static void switch_to_game_scene(struct engine_s *engine);
+static void switch_to_minigame_scene(struct engine_s *engine);
+
+static void draw_menu(struct engine_s *, struct nk_context *nk);
+
+//
+// scene callbacks
+//
+
+static void menu_load(struct menu_s *menu, struct engine_s *engine) {
+	id_of_current_lobby = 0;
+	others_in_lobby = 0;
+	reset_ids_of_lobbies();
+
+	menu->vg_font = nvgCreateFont(engine->vg, "PlaypenSans", "res/font/PlaypenSans-Medium.ttf");
+	menu->vg_gamelogo = nvgCreateImage(engine->vg, "res/image/logo_placeholder.png", 0);
+
+	menu->terrain = malloc(sizeof(struct isoterrain_s));
+	isoterrain_init_from_file(menu->terrain, "res/data/levels/winter.json");
+	
+	background_set_image("res/image/bg-glaciers-light.png");
+}
+
+static void menu_destroy(struct menu_s *menu, struct engine_s *engine) {
+	isoterrain_destroy(menu->terrain);
+	nvgDeleteImage(engine->vg, menu->vg_gamelogo);
+	free(menu->terrain);
+	background_destroy();
+}
+
+static void menu_update(struct menu_s *menu, struct engine_s *engine, float dt) {
+}
+
+static void menu_draw(struct menu_s *menu, struct engine_s *engine) {
+	background_draw();
+
+	// draw terrain
+	glm_mat4_identity(engine->u_view);
+	const float t_scale = sinf(engine->time_elapsed * 2.5f) * 0.5f + 3.0f;
+	glm_translate(engine->u_view, (vec3){ 0.0f, 0.0f, 0.0f });
+	glm_scale(engine->u_view, (vec3){ t_scale, -t_scale, t_scale });
+	isoterrain_draw(menu->terrain, engine->u_projection, engine->u_view);
+
+	draw_menu(engine, engine->nk);
+
+	/* draw logo
+	const float xcenter = engine->window_width * 0.5f;
+	const float ystart = 50.0f;
+	const float width_title = engine->window_width * 0.8f;
+	const float height_title = width_title * 0.5f;
+	nvgBeginPath(vg);
+	nvgRect(vg, xcenter - width_title * 0.5f, ystart, width_title, height_title);
+	NVGpaint paint = nvgImagePattern(vg, xcenter - width_title * 0.5f, ystart, width_title, height_title, 0.0f, menu->vg_gamelogo, 1.0f);
+	nvgFillPaint(vg, paint);
+	nvgFill(vg);
+	*/
+
+}
+
+static void menu_on_message(struct menu_s *menu, struct engine_s *engine, struct message_header *msg) {
+	switch (msg->type) {
+		case LOBBY_CREATE_RESPONSE: {
+			struct lobby_create_response *response = (struct lobby_create_response *)msg;
+			if (response->create_error) {
+				break;
+			}
+			int exists = 0;
+			const int lobbies_len = stbds_arrlen(ids_of_lobbies);
+			for (int i = 0; i < lobbies_len; ++i) {
+				if (ids_of_lobbies[i] == response->lobby_id) {
+					exists = 1;
+					break;
+				}
+			}
+			if (!exists) {
+				stbds_arrpush(ids_of_lobbies, response->lobby_id);
+			}
+			break;
+		}
+		case LOBBY_JOIN_RESPONSE: {
+			struct lobby_join_response *response = (struct lobby_join_response *)msg;
+			if (response->join_error) {
+				printf("Failed joining into lobby #%d...\n", response->lobby_id);
+				break;
+			}
+
+			if (response->is_other_user == 0) {
+				printf("Joined lobby #%d!\n", response->lobby_id);
+				id_of_current_lobby = response->lobby_id;
+				break;
+			}
+
+			if (response->is_other_user) {
+				printf("Other user joined/left\n");
+				others_in_lobby += (response->lobby_id > 0 ? 1 : -1);
+			}
+			break;
+		}
+		case LOBBY_LIST_RESPONSE: {
+			reset_ids_of_lobbies();
+
+			struct lobby_list_response *response = (struct lobby_list_response *)msg;
+			for (int i = 0; i < response->ids_of_lobbies_len; ++i) {
+				stbds_arrpush(ids_of_lobbies, response->ids_of_lobbies[i]);
+			}
+			break;
+		}
+		case MSG_TYPE_UNKNOWN:
+		case MSG_TYPE_MAX:
+		case LOBBY_CREATE_REQUEST:
+		case LOBBY_JOIN_REQUEST:
+		case LOBBY_LIST_REQUEST:
+			fprintf(stderr, "Can't handle message %s...\n", message_type_to_name(msg->type));
+			break;
+	}
+}
+
+void menu_init(struct menu_s *menu, struct engine_s *engine) {
+	// init scene base
+	scene_init((struct scene_s *)menu, engine);
+
+	// init function pointers
+	menu->base.load       = (scene_load_fn)menu_load;
+	menu->base.destroy    = (scene_destroy_fn)menu_destroy;
+	menu->base.update     = (scene_update_fn)menu_update;
+	menu->base.draw       = (scene_draw_fn)menu_draw;
+	menu->base.on_message = (scene_on_message_fn)menu_on_message;
+}
+
+
+//
+// private impls
 //
 
 static void switch_to_game_scene(struct engine_s *engine) {
@@ -44,38 +179,9 @@ static void switch_to_minigame_scene(struct engine_s *engine) {
 	engine_setscene(engine, (struct scene_s *)game_scene_experiments);
 }
 
-
-//
-// scene callbacks
-//
-
-static void menu_load(struct menu_s *menu, struct engine_s *engine) {
-	id_of_current_lobby = 0;
-	others_in_lobby = 0;
-	reset_ids_of_lobbies();
-
-	menu->vg_font = nvgCreateFont(engine->vg, "PermanentMarker Regular", "res/font/PermanentMarker-Regular.ttf");
-	menu->vg_gamelogo = nvgCreateImage(engine->vg, "res/image/logo_placeholder.png", 0);
-
-	menu->terrain = malloc(sizeof(struct isoterrain_s));
-	isoterrain_init_from_file(menu->terrain, "res/data/levels/map2.json");
-	
-	background_set_image("res/image/bg-glaciers.png");
-}
-
-static void menu_destroy(struct menu_s *menu, struct engine_s *engine) {
-	isoterrain_destroy(menu->terrain);
-	nvgDeleteImage(engine->vg, menu->vg_gamelogo);
-	free(menu->terrain);
-	background_destroy();
-}
-
-static void menu_update(struct menu_s *menu, struct engine_s *engine, float dt) {
-
-	// gui
-	struct nk_context *nk = engine->nk;
+static void draw_menu(struct engine_s *engine, struct nk_context *nk) {
 	const float padding_bottom = 30.0f;
-	const float padding_x = 30.0f;
+	const float padding_x = 100.0f;
 	const float menu_height = 330.0f;
 	const int row_height = 55;
 
@@ -267,102 +373,5 @@ static void menu_update(struct menu_s *menu, struct engine_s *engine, float dt) 
 		}
 		nk_end(nk);
 	}
-}
-
-static void menu_draw(struct menu_s *menu, struct engine_s *engine) {
-	background_draw();
-
-	// draw terrain
-	glm_mat4_identity(engine->u_view);
-	const float t_scale = sinf(engine->time_elapsed * 2.5f) * 0.5f + 3.0f;
-	glm_translate(engine->u_view, (vec3){ 0.0f, 0.0f, 0.0f });
-	glm_scale(engine->u_view, (vec3){ t_scale, -t_scale, t_scale });
-	isoterrain_draw(menu->terrain, engine->u_projection, engine->u_view);
-
-	/* draw logo
-	const float xcenter = engine->window_width * 0.5f;
-	const float ystart = 50.0f;
-	const float width_title = engine->window_width * 0.8f;
-	const float height_title = width_title * 0.5f;
-	nvgBeginPath(vg);
-	nvgRect(vg, xcenter - width_title * 0.5f, ystart, width_title, height_title);
-	NVGpaint paint = nvgImagePattern(vg, xcenter - width_title * 0.5f, ystart, width_title, height_title, 0.0f, menu->vg_gamelogo, 1.0f);
-	nvgFillPaint(vg, paint);
-	nvgFill(vg);
-	*/
-
-}
-
-static void menu_on_message(struct menu_s *menu, struct engine_s *engine, struct message_header *msg) {
-	switch (msg->type) {
-		case LOBBY_CREATE_RESPONSE: {
-			struct lobby_create_response *response = (struct lobby_create_response *)msg;
-			if (response->create_error) {
-				break;
-			}
-			int exists = 0;
-			const int lobbies_len = stbds_arrlen(ids_of_lobbies);
-			for (int i = 0; i < lobbies_len; ++i) {
-				if (ids_of_lobbies[i] == response->lobby_id) {
-					exists = 1;
-					break;
-				}
-			}
-			if (!exists) {
-				stbds_arrpush(ids_of_lobbies, response->lobby_id);
-			}
-			break;
-		}
-		case LOBBY_JOIN_RESPONSE: {
-			struct lobby_join_response *response = (struct lobby_join_response *)msg;
-			if (response->join_error) {
-				printf("Failed joining into lobby #%d...\n", response->lobby_id);
-				break;
-			}
-
-			if (response->is_other_user == 0) {
-				printf("Joined lobby #%d!\n", response->lobby_id);
-				id_of_current_lobby = response->lobby_id;
-				break;
-			}
-
-			if (response->is_other_user) {
-				printf("Other user joined/left\n");
-				others_in_lobby += (response->lobby_id > 0 ? 1 : -1);
-			}
-			break;
-		}
-		case LOBBY_LIST_RESPONSE: {
-			reset_ids_of_lobbies();
-
-			struct lobby_list_response *response = (struct lobby_list_response *)msg;
-			for (int i = 0; i < response->ids_of_lobbies_len; ++i) {
-				stbds_arrpush(ids_of_lobbies, response->ids_of_lobbies[i]);
-			}
-			break;
-		}
-		case MSG_TYPE_UNKNOWN:
-		case MSG_TYPE_MAX:
-		case LOBBY_CREATE_REQUEST:
-		case LOBBY_JOIN_REQUEST:
-		case LOBBY_LIST_REQUEST:
-			fprintf(stderr, "Can't handle message %s...\n", message_type_to_name(msg->type));
-			break;
-	}
-}
-
-void menu_init(struct menu_s *menu, struct engine_s *engine) {
-	// init scene base
-	scene_init((struct scene_s *)menu, engine);
-
-	// init function pointers
-	menu->base.load       = (scene_load_fn)menu_load;
-	menu->base.destroy    = (scene_destroy_fn)menu_destroy;
-	menu->base.update     = (scene_update_fn)menu_update;
-	menu->base.draw       = (scene_draw_fn)menu_draw;
-	menu->base.on_message = (scene_on_message_fn)menu_on_message;
-
-	// init gui
-	menu->gui = NULL;
 }
 
