@@ -1,11 +1,11 @@
- <!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
     <head>
         <meta charset="utf-8">
 		<meta name="viewport" content="width=device-width, initial-scale=1.0">
         <meta http-equiv="X-UA-Compatible" content="chrome=1, IE=edge">
 		<link rel="manifest" href="/src/web/pwa/manifest.json">
-        <title>Soil Soldiers</title>
+        <title>Demo – c-engine</title>
         <style>
             .fullwindow {
                 position: absolute;
@@ -24,6 +24,7 @@
         </style>
     </head>
     <body>
+		<progress value="0"></progress>
 		<button onclick="onRunApp()">Run Game</button>
 		<label>
 			<input type="checkbox" value="" id="start-with-fullscreen" />
@@ -50,6 +51,16 @@
 				MyApp({
 					canvas,
 					arguments: window.location.search.substr(1).split('&'),
+					setStatus: (text) => {
+						// Show download progress.
+						const matchProgress = text.match(/Downloading data... \((\d+)\/(\d+)\)/);
+						if (matchProgress) {
+							const loaded = parseInt(matchProgress[1]);
+							const loaded_max = parseInt(matchProgress[2]);
+							const percentage_loaded = (loaded / loaded_max);
+							document.querySelector('progress').value = percentage_loaded;
+						}
+					},
 				}).then((Module) => {
 					reload_sig = Module.cwrap('on_siggoback', 'number', []);
 
