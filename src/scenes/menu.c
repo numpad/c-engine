@@ -12,12 +12,18 @@
 #include "scenes/experiments.h"
 #include "game/isoterrain.h"
 #include "game/background.h"
+#include "gui/ugui.h"
 #include "net/message.h"
 #include "platform.h"
 
 //
 // vars
 //
+
+static int g_font = -1;
+static int g_menuicon_play = -1;
+static int g_menuicon_cards = -1;
+static int g_menuicon_social = -1;
 
 static int others_in_lobby = 0;
 static int id_of_current_lobby = 0;
@@ -49,8 +55,10 @@ static void menu_load(struct menu_s *menu, struct engine_s *engine) {
 	others_in_lobby = 0;
 	reset_ids_of_lobbies();
 
-	menu->vg_font = nvgCreateFont(engine->vg, "PlaypenSans", "res/font/PlaypenSans-Medium.ttf");
-	menu->vg_gamelogo = nvgCreateImage(engine->vg, "res/image/logo_placeholder.png", 0);
+	g_font = nvgCreateFont(engine->vg, "ConcertOne", "res/font/ConcertOne-Regular.ttf");
+	g_menuicon_play = nvgCreateImage(engine->vg, "res/sprites/menuicon-dice.png", NVG_IMAGE_GENERATE_MIPMAPS | NVG_IMAGE_FLIPY);
+	g_menuicon_cards = nvgCreateImage(engine->vg, "res/sprites/menuicon-cards.png", NVG_IMAGE_GENERATE_MIPMAPS | NVG_IMAGE_FLIPY);
+	g_menuicon_social = nvgCreateImage(engine->vg, "res/sprites/menuicon-camp.png", NVG_IMAGE_GENERATE_MIPMAPS | NVG_IMAGE_FLIPY);
 
 	menu->terrain = malloc(sizeof(struct isoterrain_s));
 	isoterrain_init_from_file(menu->terrain, "res/data/levels/winter.json");
@@ -60,7 +68,6 @@ static void menu_load(struct menu_s *menu, struct engine_s *engine) {
 
 static void menu_destroy(struct menu_s *menu, struct engine_s *engine) {
 	isoterrain_destroy(menu->terrain);
-	nvgDeleteImage(engine->vg, menu->vg_gamelogo);
 	free(menu->terrain);
 	background_destroy();
 }
@@ -78,23 +85,28 @@ static void menu_draw(struct menu_s *menu, struct engine_s *engine) {
 	// build matrix
 	glm_mat4_identity(engine->u_view);
 	const float t_scale = ((engine->window_width - t_padding) / (float)t_width);
-	glm_translate(engine->u_view, (vec3){ 25.0f, 90.0f + fabsf(sinf(engine->time_elapsed)) * -30.0f, 0.0f });
+	glm_translate(engine->u_view, (vec3){ 25.0f, 160.0f + fabsf(sinf(engine->time_elapsed)) * -30.0f, 0.0f });
 	glm_scale(engine->u_view, (vec3){ t_scale, -t_scale, t_scale });
 	isoterrain_draw(menu->terrain, engine->u_projection, engine->u_view);
 
 	draw_menu(engine, engine->nk);
 
-	/* draw logo
-	const float xcenter = engine->window_width * 0.5f;
-	const float ystart = 50.0f;
-	const float width_title = engine->window_width * 0.8f;
-	const float height_title = width_title * 0.5f;
-	nvgBeginPath(vg);
-	nvgRect(vg, xcenter - width_title * 0.5f, ystart, width_title, height_title);
-	NVGpaint paint = nvgImagePattern(vg, xcenter - width_title * 0.5f, ystart, width_title, height_title, 0.0f, menu->vg_gamelogo, 1.0f);
-	nvgFillPaint(vg, paint);
-	nvgFill(vg);
-	*/
+	// draw gui
+	{
+		NVGcontext *vg = engine->vg;
+		const float W2 = engine->window_width * 0.5f;
+
+		const float bar_height = 60.0f;
+		const float menu_width = 110.0f;
+		const float menu_pointyness = 30.0f;
+
+		ugui_mainmenu_bar(engine);
+		ugui_mainmenu_bookmark(engine, W2);
+		ugui_mainmenu_icon(engine, W2, "Play", g_menuicon_play, g_font, 1);
+		ugui_mainmenu_icon(engine, W2 - 128.0f, "Cards", g_menuicon_cards, g_font, 0);
+		ugui_mainmenu_icon(engine, W2 + 128.0f, "Social", g_menuicon_social, g_font, 0);
+	}
+
 }
 
 static void menu_on_message(struct menu_s *menu, struct engine_s *engine, struct message_header *msg) {
@@ -185,9 +197,9 @@ static void switch_to_minigame_scene(struct engine_s *engine) {
 }
 
 static void draw_menu(struct engine_s *engine, struct nk_context *nk) {
-	const float padding_bottom = 30.0f;
-	const float padding_x = 100.0f;
-	const float menu_height = 330.0f;
+	const float padding_bottom = 80.0f;
+	const float padding_x = 40.0f;
+	const float menu_height = 270.0f;
 	const int row_height = 55;
 
 	static int multiplayer_window = 0;
@@ -203,25 +215,6 @@ static void draw_menu(struct engine_s *engine, struct nk_context *nk) {
 			switch_to_game_scene(engine);
 		}
 
-		nk_style_pop_color(nk);
-		nk_style_pop_color(nk);
-
-		// continue
-		nk_style_push_style_item(nk, &nk->style.button.normal, nk_style_item_color(nk_rgb(66, 66, 66)));
-		nk_style_push_style_item(nk, &nk->style.button.active, nk->style.button.normal);
-		nk_style_push_style_item(nk, &nk->style.button.hover, nk->style.button.normal);
-		nk_style_push_color(nk, &nk->style.button.text_normal, nk_rgb(120, 120, 120));
-		nk_style_push_color(nk, &nk->style.button.text_active, nk->style.button.text_normal);
-		nk_style_push_color(nk, &nk->style.button.text_hover, nk->style.button.text_normal);
-
-		nk_layout_row_dynamic(nk, row_height, 1);
-		if (nk_button_symbol_label(nk, NK_SYMBOL_TRIANGLE_RIGHT, "Continue", NK_TEXT_ALIGN_RIGHT)) {
-		}
-
-		nk_style_pop_style_item(nk);
-		nk_style_pop_style_item(nk);
-		nk_style_pop_style_item(nk);
-		nk_style_pop_color(nk);
 		nk_style_pop_color(nk);
 		nk_style_pop_color(nk);
 

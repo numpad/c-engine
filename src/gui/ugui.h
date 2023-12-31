@@ -1,19 +1,11 @@
 #ifndef UGUI_H
 #define UGUI_H
 
-#include <nanovg.h>
+typedef struct engine_s engine_t;
 
-struct ugui_element_s;
-
-typedef void(*ugui_element_draw_fn)(NVGcontext *, struct ugui_element_s element);
-
-struct ugui_element_s {
-	float x, y, width, height;
-
-	float press;
-
-	ugui_element_draw_fn *draw;
-};
+void ugui_mainmenu_bar(engine_t *);
+void ugui_mainmenu_bookmark(engine_t *, float x);
+void ugui_mainmenu_icon(engine_t *, float x, const char *label, int icon, int font, int active);
 
 #endif
 

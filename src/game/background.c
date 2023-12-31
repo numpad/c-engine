@@ -90,7 +90,7 @@ void background_draw(struct engine_s *engine) {
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
 	glUseProgram(g_shader.program);
-	shader_set_uniform_vec2(&g_shader, "u_resolution", (vec2){ engine->window_width, engine->window_height });
+	shader_set_uniform_vec2(&g_shader, "u_resolution", (vec2){ engine->window_width * engine->window_pixel_ratio, engine->window_height * engine->window_pixel_ratio });
 	const int g_textures_len = stbds_arrlen(g_textures);
 	for (int i = g_textures_len - 1; i >= 0; --i) {
 		shader_set_uniform_float(&g_shader, "u_parallax_offset", (t * 0.01f) * (4 - i + 1));

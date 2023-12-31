@@ -8,10 +8,6 @@ struct isoterrain_s;
 
 struct menu_s {
 	struct scene_s base;
-
-	int vg_font;
-	int vg_gamelogo;
-
 	struct isoterrain_s *terrain;
 };
 
