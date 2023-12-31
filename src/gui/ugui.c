@@ -119,3 +119,81 @@ void ugui_mainmenu_icon(engine_t *engine, float x, const char *label, int icon, 
 	nvgText(vg, x, label_y, label, NULL);
 }
 
+void ugui_mainmenu_button(engine_t *engine, float x, float y, float w, float h, const char *text1, const char *text2, const char *subtext, int font, NVGcolor color_bg, NVGcolor color_bg_darker, NVGcolor color_text_outline) {
+	NVGcontext *vg = engine->vg;
+	const float height_3d = 10.0f;
+
+	// shadow
+	nvgBeginPath(vg);
+	nvgRoundedRect(vg, x + 5.5f, y + 5.5f, w, h, 10.0f);
+	nvgFillColor(vg, nvgRGBAf(0.0f, 0.0f, 0.0f, 0.4f));
+	nvgFill(vg);
+
+	// bg 3d
+	nvgBeginPath(vg);
+	nvgRoundedRect(vg, x, y + h - 20.0f - height_3d, w, 30.0f, 10.0f);
+	nvgFillColor(vg, color_bg_darker);
+	nvgFill(vg);
+
+	// bg
+	nvgBeginPath(vg);
+	nvgRoundedRect(vg, x, y, w, h - height_3d, 10.0f);
+	const NVGpaint p = nvgRadialGradient(vg, x + w * 0.15f, y + 25.0f, 30.0f, 30.0f + h * 0.8f, color_bg_darker, color_bg);
+	nvgFillPaint(vg, p);
+	nvgFill(vg);
+
+	// outline inner light
+	const float inset = 3.0f;
+	nvgBeginPath(vg);
+	nvgRoundedRect(vg, x + inset, y + inset, w - inset * 2.0f, h - inset * 1.5f - height_3d, 10.0f);
+	nvgStrokeColor(vg, color_bg);
+	nvgStrokeWidth(vg, 5.0f);
+	nvgStroke(vg);
+
+	// outline dark
+	nvgBeginPath(vg);
+	nvgRoundedRect(vg, x, y, w, h, 10.0f);
+	nvgStrokeColor(vg, color_text_outline);
+	nvgStrokeWidth(vg, 2.5f);
+	nvgStroke(vg);
+
+	// main text
+	nvgFontFaceId(vg, font);
+	nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+	nvgFontSize(vg, 42.0f);
+	nvgFontBlur(vg, 0.0f);
+
+	// outline
+	const float outline_width = 3.0f;
+	nvgFillColor(vg, color_text_outline);
+	if (text1) nvgText(vg, x + w * 0.5f - outline_width, y + h * 0.2f,                         text1, NULL);
+	if (text2) nvgText(vg, x + w * 0.5f - outline_width, y + h * 0.2f + 30.0f,                 text2,  NULL);
+	if (text1) nvgText(vg, x + w * 0.5f + outline_width, y + h * 0.2f,                         text1, NULL);
+	if (text2) nvgText(vg, x + w * 0.5f + outline_width, y + h * 0.2f + 30.0f,                 text2,  NULL);
+	if (text1) nvgText(vg, x + w * 0.5f,                 y + h * 0.2f         - outline_width, text1, NULL);
+	if (text2) nvgText(vg, x + w * 0.5f,                 y + h * 0.2f + 30.0f - outline_width, text2,  NULL);
+	if (text1) nvgText(vg, x + w * 0.5f,                 y + h * 0.2f         + outline_width, text1, NULL);
+	if (text2) nvgText(vg, x + w * 0.5f,                 y + h * 0.2f + 30.0f + outline_width, text2,  NULL);
+	// diag
+	if (text1) nvgText(vg, x + w * 0.5f - outline_width * 0.75f, y + h * 0.2f         - outline_width * 0.75f, text1, NULL);
+	if (text2) nvgText(vg, x + w * 0.5f - outline_width * 0.75f, y + h * 0.2f + 30.0f - outline_width * 0.75f, text2,  NULL);
+	if (text1) nvgText(vg, x + w * 0.5f + outline_width * 0.75f, y + h * 0.2f         + outline_width * 0.75f, text1, NULL);
+	if (text2) nvgText(vg, x + w * 0.5f + outline_width * 0.75f, y + h * 0.2f + 30.0f + outline_width * 0.75f, text2,  NULL);
+	if (text1) nvgText(vg, x + w * 0.5f + outline_width * 0.75f, y + h * 0.2f         - outline_width * 0.75f, text1, NULL);
+	if (text2) nvgText(vg, x + w * 0.5f + outline_width * 0.75f, y + h * 0.2f + 30.0f - outline_width * 0.75f, text2,  NULL);
+	if (text1) nvgText(vg, x + w * 0.5f - outline_width * 0.75f, y + h * 0.2f         + outline_width * 0.75f, text1, NULL);
+	if (text2) nvgText(vg, x + w * 0.5f - outline_width * 0.75f, y + h * 0.2f + 30.0f + outline_width * 0.75f, text2,  NULL);
+
+	// foreground
+	nvgFontBlur(vg, 0.0f);
+	nvgFillColor(vg, nvgRGBf(0.94f, 0.94f, 0.94f));
+	nvgText(vg, x + w * 0.5f, y + h * 0.2f - 1.0f, text1, NULL);
+	nvgText(vg, x + w * 0.5f, y + h * 0.2f + 29.0f, text2, NULL);
+
+	// info
+	nvgFontBlur(vg, 0.0f);
+	nvgFontSize(vg, 14.0f);
+	nvgFillColor(vg, nvgRGBAf(0.13f, 0.38f, 0.13f, 0.6f));
+	nvgText(vg, x + w * 0.5f, y + h * 0.2f + 58.0f, subtext, NULL);
+}
+

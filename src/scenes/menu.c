@@ -95,7 +95,7 @@ static void menu_draw(struct menu_s *menu, struct engine_s *engine) {
 	glm_scale(engine->u_view, (vec3){ t_scale, -t_scale, t_scale });
 	isoterrain_draw(menu->terrain, engine->u_projection, engine->u_view);
 
-	draw_menu(engine, engine->nk);
+	//draw_menu(engine, engine->nk);
 
 	NVGcontext *vg = engine->vg;
 	const float W2 = engine->window_width * 0.5f;
@@ -122,6 +122,16 @@ static void menu_draw(struct menu_s *menu, struct engine_s *engine) {
 		ugui_mainmenu_icon(engine, W2 - 128.0f, "Cards", g_menuicon_cards, g_font, menuitem_active(W2 - 128.0f, bookmark_x, bookmark_tx));
 		ugui_mainmenu_icon(engine, W2 + 128.0f, "Social", g_menuicon_social, g_font, menuitem_active(W2 + 128.0f, bookmark_x, bookmark_tx));
 
+		const NVGcolor green = nvgRGBf(0.80f, 1.0f, 0.42f);
+		const NVGcolor green_dark = nvgRGBf(0.39f, 0.82f, 0.20f);
+		const NVGcolor red = nvgRGBf(1.0f, 0.5f, 0.35f);
+		const NVGcolor red_dark = nvgRGBf(0.79f, 0.3f, 0.16f);
+		const NVGcolor yellow = nvgRGBf(1.0f, 0.8f, 0.35f);
+		const NVGcolor yellow_dark = nvgRGBf(0.79f, 0.59f, 0.16f);
+		ugui_mainmenu_button(engine, 20.0f, H2,             W2 - 40.0f, H2 * 0.5f - 20.0f, "",      "Settings", "",               g_font, red,    red_dark,    nvgRGBf(0.2f, 0.0f, 0.0f));
+		ugui_mainmenu_button(engine, 20.0f, H2 + H2 * 0.5f, W2 - 40.0f, H2 * 0.5f - 20.0f, "",      "Shop",     "",               g_font, yellow, yellow_dark, nvgRGBf(0.2f, 0.2f, 0.0f));
+		ugui_mainmenu_button(engine, W2,    H2,             W2 - 20.0f, H2 - 20.0f,        "Start", "Game",     "(Singleplayer)", g_font, green,  green_dark,  nvgRGBf(0.0f, 0.2f, 0.0f));
+
 		// logic
 		struct input_drag_s *drag = &engine->input_drag;
 		if (drag->state == INPUT_DRAG_END && drag->begin_y <= bar_height && drag->end_y <= bar_height) {
@@ -130,86 +140,6 @@ static void menu_draw(struct menu_s *menu, struct engine_s *engine) {
 			else if (p < 0.667f) bookmark_tx = W2;
 			else  bookmark_tx = W2 + 128.0f;
 		}
-	}
-
-	// draw buttons
-	{
-		const float area_center = W2 - 50.0f;
-		const float area_width_main = W2 + 20.0f;
-		const float area_height = 360.0f;
-		const float pad = 5.0f; // button padding
-
-		const NVGcolor color_bg = nvgRGBf(0.80f, 1.00f, 0.42f);
-		const NVGcolor color_bg_darker = nvgRGBf(0.39f, 0.82f, 0.20f);
-		
-		// bg 3d
-		nvgBeginPath(vg);
-		nvgRoundedRect(vg, area_center + pad, H2 + area_height - 21.0f, area_width_main, 30.0f, 10.0f);
-		nvgFillColor(vg, color_bg_darker);
-		nvgFill(vg);
-
-		// bg
-		nvgBeginPath(vg);
-		nvgRoundedRect(vg, area_center + pad, H2, area_width_main, area_height, 10.0f);
-		//const NVGpaint p = nvgLinearGradient(vg, W2 + pad, H2 - 45.0f, W2 + pad, H2 + area_height, color_bg_darker, color_bg);
-		const NVGpaint p = nvgRadialGradient(vg, W2 + pad - 20.0, H2 + 25.0f, 30.0f, 320.0f, color_bg_darker, color_bg);
-		nvgFillPaint(vg, p);
-		nvgFill(vg);
-
-		// outline inner light
-		const float inset = 3.0f;
-		nvgBeginPath(vg);
-		nvgRoundedRect(vg, area_center + pad + inset, H2 + inset, area_width_main - inset * 2.0f, area_height - inset * 1.5f, 10.0f);
-		nvgStrokeColor(vg, color_bg);
-		nvgStrokeWidth(vg, 5.0f);
-		nvgStroke(vg);
-
-		// outline dark
-		nvgBeginPath(vg);
-		nvgRoundedRect(vg, area_center + pad, H2, area_width_main, area_height + 10.0f, 10.0f);
-		nvgStrokeColor(vg, nvgRGBf(0.0f, 0.0f, 0.0f));
-		nvgStrokeWidth(vg, 2.5f);
-		nvgStroke(vg);
-
-		// main text
-		nvgFontFaceId(vg, g_font);
-		nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
-		nvgFontSize(vg, 42.0f);
-		nvgFontBlur(vg, 0.0f);
-
-		// outline
-		const float outline_width = 3.0f;
-		nvgFillColor(vg, nvgRGBf(0.0f, 0.3f, 0.0f));
-		nvgText(vg, area_center + area_width_main * 0.5f - outline_width, H2 + area_height * 0.2f,                         "Start", NULL);
-		nvgText(vg, area_center + area_width_main * 0.5f - outline_width, H2 + area_height * 0.2f + 30.0f,                 "Game",  NULL);
-		nvgText(vg, area_center + area_width_main * 0.5f + outline_width, H2 + area_height * 0.2f,                         "Start", NULL);
-		nvgText(vg, area_center + area_width_main * 0.5f + outline_width, H2 + area_height * 0.2f + 30.0f,                 "Game",  NULL);
-		nvgText(vg, area_center + area_width_main * 0.5f,                 H2 + area_height * 0.2f         - outline_width, "Start", NULL);
-		nvgText(vg, area_center + area_width_main * 0.5f,                 H2 + area_height * 0.2f + 30.0f - outline_width, "Game",  NULL);
-		nvgText(vg, area_center + area_width_main * 0.5f,                 H2 + area_height * 0.2f         + outline_width, "Start", NULL);
-		nvgText(vg, area_center + area_width_main * 0.5f,                 H2 + area_height * 0.2f + 30.0f + outline_width, "Game",  NULL);
-		// diag
-		nvgText(vg, area_center + area_width_main * 0.5f - outline_width * 0.75f, H2 + area_height * 0.2f         - outline_width * 0.75f, "Start", NULL);
-		nvgText(vg, area_center + area_width_main * 0.5f - outline_width * 0.75f, H2 + area_height * 0.2f + 30.0f - outline_width * 0.75f, "Game",  NULL);
-		nvgText(vg, area_center + area_width_main * 0.5f + outline_width * 0.75f, H2 + area_height * 0.2f         + outline_width * 0.75f, "Start", NULL);
-		nvgText(vg, area_center + area_width_main * 0.5f + outline_width * 0.75f, H2 + area_height * 0.2f + 30.0f + outline_width * 0.75f, "Game",  NULL);
-		nvgText(vg, area_center + area_width_main * 0.5f + outline_width * 0.75f, H2 + area_height * 0.2f         - outline_width * 0.75f, "Start", NULL);
-		nvgText(vg, area_center + area_width_main * 0.5f + outline_width * 0.75f, H2 + area_height * 0.2f + 30.0f - outline_width * 0.75f, "Game",  NULL);
-		nvgText(vg, area_center + area_width_main * 0.5f - outline_width * 0.75f, H2 + area_height * 0.2f         + outline_width * 0.75f, "Start", NULL);
-		nvgText(vg, area_center + area_width_main * 0.5f - outline_width * 0.75f, H2 + area_height * 0.2f + 30.0f + outline_width * 0.75f, "Game",  NULL);
-
-		// foreground
-		nvgFontBlur(vg, 0.0f);
-		nvgFillColor(vg, nvgRGBf(0.94f, 0.94f, 0.94f));
-		nvgText(vg, area_center + area_width_main * 0.5f, H2 + area_height * 0.2f - 1.0f, "Start", NULL);
-		nvgText(vg, area_center + area_width_main * 0.5f, H2 + area_height * 0.2f + 29.0f, "Game", NULL);
-
-		// info
-		nvgFontBlur(vg, 0.0f);
-		nvgFontSize(vg, 14.0f);
-		nvgFillColor(vg, nvgRGBAf(0.13f, 0.38f, 0.13f, 0.6f));
-		nvgText(vg, area_center + area_width_main * 0.5f, H2 + area_height * 0.2f + 58.0f, "(Singleplayer Run)", NULL);
-
 	}
 
 }
