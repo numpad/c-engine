@@ -52,15 +52,16 @@ static float menuitem_active(float menu_x, float bookmark_x, float bookmark_tx);
 
 static void menu_load(struct menu_s *menu, struct engine_s *engine) {
 	engine_set_clear_color(0.34f, 0.72f, 0.98f);
+	engine->console_visible = 0;
 
 	id_of_current_lobby = 0;
 	others_in_lobby = 0;
 	reset_ids_of_lobbies();
 
-	g_font = nvgCreateFont(engine->vg, "ConcertOne", "res/font/ConcertOne-Regular.ttf");
-	g_menuicon_play = nvgCreateImage(engine->vg, "res/sprites/menuicon-dice.png", NVG_IMAGE_GENERATE_MIPMAPS | NVG_IMAGE_FLIPY);
-	g_menuicon_cards = nvgCreateImage(engine->vg, "res/sprites/menuicon-cards.png", NVG_IMAGE_GENERATE_MIPMAPS | NVG_IMAGE_FLIPY);
-	g_menuicon_social = nvgCreateImage(engine->vg, "res/sprites/menuicon-camp.png", NVG_IMAGE_GENERATE_MIPMAPS | NVG_IMAGE_FLIPY);
+	if (g_font == -1) g_font = nvgCreateFont(engine->vg, "Baloo", "res/font/Baloo-Regular.ttf");
+	if (g_menuicon_play == -1) g_menuicon_play = nvgCreateImage(engine->vg, "res/sprites/menuicon-dice.png", NVG_IMAGE_GENERATE_MIPMAPS);
+	if (g_menuicon_cards == -1) g_menuicon_cards = nvgCreateImage(engine->vg, "res/sprites/menuicon-cards.png", NVG_IMAGE_GENERATE_MIPMAPS);
+	if (g_menuicon_social == -1) g_menuicon_social = nvgCreateImage(engine->vg, "res/sprites/menuicon-camp.png", NVG_IMAGE_GENERATE_MIPMAPS);
 
 	menu->terrain = malloc(sizeof(struct isoterrain_s));
 	isoterrain_init_from_file(menu->terrain, "res/data/levels/winter.json");
@@ -72,6 +73,9 @@ static void menu_destroy(struct menu_s *menu, struct engine_s *engine) {
 	isoterrain_destroy(menu->terrain);
 	free(menu->terrain);
 	background_destroy();
+	nvgDeleteImage(engine->vg, g_menuicon_play); g_menuicon_play = -1;
+	nvgDeleteImage(engine->vg, g_menuicon_cards); g_menuicon_cards = -1;
+	nvgDeleteImage(engine->vg, g_menuicon_social); g_menuicon_social = -1;
 }
 
 static void menu_update(struct menu_s *menu, struct engine_s *engine, float dt) {
@@ -93,11 +97,12 @@ static void menu_draw(struct menu_s *menu, struct engine_s *engine) {
 
 	draw_menu(engine, engine->nk);
 
-	// draw gui
-	{
-		NVGcontext *vg = engine->vg;
-		const float W2 = engine->window_width * 0.5f;
+	NVGcontext *vg = engine->vg;
+	const float W2 = engine->window_width * 0.5f;
+	const float H2 = engine->window_height * 0.5f;
 
+	// draw navbar
+	{
 		const float bar_height = 60.0f;
 		const float menu_width = 110.0f;
 		const float menu_pointyness = 30.0f;
@@ -107,12 +112,12 @@ static void menu_draw(struct menu_s *menu, struct engine_s *engine) {
 		if (bookmark_x == -1.0f) {
 			bookmark_x = bookmark_tx = W2;
 		}
-		if (fabsf(bookmark_tx - bookmark_x) > 2.0f) {
-			bookmark_x = glm_lerp(bookmark_x, bookmark_tx, 0.3f);
+		if (fabsf(bookmark_tx - bookmark_x) > 1.0f) {
+			bookmark_x = glm_lerp(bookmark_x, bookmark_tx, 0.2f);
 		}
 
 		ugui_mainmenu_bar(engine);
-		ugui_mainmenu_bookmark(engine, glm_lerp(bookmark_x, bookmark_tx, 0.3f));
+		ugui_mainmenu_bookmark(engine, glm_lerp(bookmark_x, bookmark_tx, 0.5f));
 		ugui_mainmenu_icon(engine, W2, "Play", g_menuicon_play, g_font, menuitem_active(W2, bookmark_x, bookmark_tx));
 		ugui_mainmenu_icon(engine, W2 - 128.0f, "Cards", g_menuicon_cards, g_font, menuitem_active(W2 - 128.0f, bookmark_x, bookmark_tx));
 		ugui_mainmenu_icon(engine, W2 + 128.0f, "Social", g_menuicon_social, g_font, menuitem_active(W2 + 128.0f, bookmark_x, bookmark_tx));
@@ -125,6 +130,86 @@ static void menu_draw(struct menu_s *menu, struct engine_s *engine) {
 			else if (p < 0.667f) bookmark_tx = W2;
 			else  bookmark_tx = W2 + 128.0f;
 		}
+	}
+
+	// draw buttons
+	{
+		const float area_center = W2 - 50.0f;
+		const float area_width_main = W2 + 20.0f;
+		const float area_height = 360.0f;
+		const float pad = 5.0f; // button padding
+
+		const NVGcolor color_bg = nvgRGBf(0.80f, 1.00f, 0.42f);
+		const NVGcolor color_bg_darker = nvgRGBf(0.39f, 0.82f, 0.20f);
+		
+		// bg 3d
+		nvgBeginPath(vg);
+		nvgRoundedRect(vg, area_center + pad, H2 + area_height - 21.0f, area_width_main, 30.0f, 10.0f);
+		nvgFillColor(vg, color_bg_darker);
+		nvgFill(vg);
+
+		// bg
+		nvgBeginPath(vg);
+		nvgRoundedRect(vg, area_center + pad, H2, area_width_main, area_height, 10.0f);
+		//const NVGpaint p = nvgLinearGradient(vg, W2 + pad, H2 - 45.0f, W2 + pad, H2 + area_height, color_bg_darker, color_bg);
+		const NVGpaint p = nvgRadialGradient(vg, W2 + pad - 20.0, H2 + 25.0f, 30.0f, 320.0f, color_bg_darker, color_bg);
+		nvgFillPaint(vg, p);
+		nvgFill(vg);
+
+		// outline inner light
+		const float inset = 3.0f;
+		nvgBeginPath(vg);
+		nvgRoundedRect(vg, area_center + pad + inset, H2 + inset, area_width_main - inset * 2.0f, area_height - inset * 1.5f, 10.0f);
+		nvgStrokeColor(vg, color_bg);
+		nvgStrokeWidth(vg, 5.0f);
+		nvgStroke(vg);
+
+		// outline dark
+		nvgBeginPath(vg);
+		nvgRoundedRect(vg, area_center + pad, H2, area_width_main, area_height + 10.0f, 10.0f);
+		nvgStrokeColor(vg, nvgRGBf(0.0f, 0.0f, 0.0f));
+		nvgStrokeWidth(vg, 2.5f);
+		nvgStroke(vg);
+
+		// main text
+		nvgFontFaceId(vg, g_font);
+		nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+		nvgFontSize(vg, 42.0f);
+		nvgFontBlur(vg, 0.0f);
+
+		// outline
+		const float outline_width = 3.0f;
+		nvgFillColor(vg, nvgRGBf(0.0f, 0.3f, 0.0f));
+		nvgText(vg, area_center + area_width_main * 0.5f - outline_width, H2 + area_height * 0.2f,                         "Start", NULL);
+		nvgText(vg, area_center + area_width_main * 0.5f - outline_width, H2 + area_height * 0.2f + 30.0f,                 "Game",  NULL);
+		nvgText(vg, area_center + area_width_main * 0.5f + outline_width, H2 + area_height * 0.2f,                         "Start", NULL);
+		nvgText(vg, area_center + area_width_main * 0.5f + outline_width, H2 + area_height * 0.2f + 30.0f,                 "Game",  NULL);
+		nvgText(vg, area_center + area_width_main * 0.5f,                 H2 + area_height * 0.2f         - outline_width, "Start", NULL);
+		nvgText(vg, area_center + area_width_main * 0.5f,                 H2 + area_height * 0.2f + 30.0f - outline_width, "Game",  NULL);
+		nvgText(vg, area_center + area_width_main * 0.5f,                 H2 + area_height * 0.2f         + outline_width, "Start", NULL);
+		nvgText(vg, area_center + area_width_main * 0.5f,                 H2 + area_height * 0.2f + 30.0f + outline_width, "Game",  NULL);
+		// diag
+		nvgText(vg, area_center + area_width_main * 0.5f - outline_width * 0.75f, H2 + area_height * 0.2f         - outline_width * 0.75f, "Start", NULL);
+		nvgText(vg, area_center + area_width_main * 0.5f - outline_width * 0.75f, H2 + area_height * 0.2f + 30.0f - outline_width * 0.75f, "Game",  NULL);
+		nvgText(vg, area_center + area_width_main * 0.5f + outline_width * 0.75f, H2 + area_height * 0.2f         + outline_width * 0.75f, "Start", NULL);
+		nvgText(vg, area_center + area_width_main * 0.5f + outline_width * 0.75f, H2 + area_height * 0.2f + 30.0f + outline_width * 0.75f, "Game",  NULL);
+		nvgText(vg, area_center + area_width_main * 0.5f + outline_width * 0.75f, H2 + area_height * 0.2f         - outline_width * 0.75f, "Start", NULL);
+		nvgText(vg, area_center + area_width_main * 0.5f + outline_width * 0.75f, H2 + area_height * 0.2f + 30.0f - outline_width * 0.75f, "Game",  NULL);
+		nvgText(vg, area_center + area_width_main * 0.5f - outline_width * 0.75f, H2 + area_height * 0.2f         + outline_width * 0.75f, "Start", NULL);
+		nvgText(vg, area_center + area_width_main * 0.5f - outline_width * 0.75f, H2 + area_height * 0.2f + 30.0f + outline_width * 0.75f, "Game",  NULL);
+
+		// foreground
+		nvgFontBlur(vg, 0.0f);
+		nvgFillColor(vg, nvgRGBf(0.94f, 0.94f, 0.94f));
+		nvgText(vg, area_center + area_width_main * 0.5f, H2 + area_height * 0.2f - 1.0f, "Start", NULL);
+		nvgText(vg, area_center + area_width_main * 0.5f, H2 + area_height * 0.2f + 29.0f, "Game", NULL);
+
+		// info
+		nvgFontBlur(vg, 0.0f);
+		nvgFontSize(vg, 14.0f);
+		nvgFillColor(vg, nvgRGBAf(0.13f, 0.38f, 0.13f, 0.6f));
+		nvgText(vg, area_center + area_width_main * 0.5f, H2 + area_height * 0.2f + 58.0f, "(Singleplayer Run)", NULL);
+
 	}
 
 }

@@ -91,19 +91,19 @@ void ugui_mainmenu_icon(engine_t *engine, float x, const char *label, int icon, 
 
 	// icon
 	if (active > 0.0f) {
-		const float icon_size = g_icon_size * glm_ease_exp_out(active);
+		const float icon_size = g_icon_size * glm_ease_exp_inout(active);
 		const NVGpaint ipaint = nvgImagePattern(vg, x - icon_size * 0.5f, g_bar_height * 0.5f - icon_size * 0.6f, icon_size, icon_size, 0.0f, icon, 1.0f);
 		nvgBeginPath(vg);
 		nvgRect(vg, x - icon_size * 0.5f, g_bar_height * 0.5f - icon_size * 0.6f, icon_size, icon_size);
 		nvgFillPaint(vg, ipaint);
 		nvgFill(vg);
-		label_y = glm_lerp(label_y, g_bar_height + 2.0f, glm_ease_exp_out(active));
+		label_y = glm_lerp(label_y, g_bar_height + 2.0f, glm_ease_exp_inout(active));
 	}
 
 	// text
 	nvgFontFaceId(vg, font);
-	nvgTextLetterSpacing(vg, 3.0f);
-	nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_BOTTOM);
+	nvgTextLetterSpacing(vg, 2.0f);
+	nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
 	nvgFontSize(vg, 23.0f);
 
 	nvgFontBlur(vg, 5.0f);
