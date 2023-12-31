@@ -44,6 +44,8 @@ static void switch_to_minigame_scene(struct engine_s *engine);
 
 static void draw_menu(struct engine_s *, struct nk_context *nk);
 
+static float menuitem_active(float menu_x, float bookmark_x, float bookmark_tx);
+
 //
 // scene callbacks
 //
@@ -100,11 +102,29 @@ static void menu_draw(struct menu_s *menu, struct engine_s *engine) {
 		const float menu_width = 110.0f;
 		const float menu_pointyness = 30.0f;
 
+		static float bookmark_x = -1.0f;
+		static float bookmark_tx = -1.0f;
+		if (bookmark_x == -1.0f) {
+			bookmark_x = bookmark_tx = W2;
+		}
+		if (fabsf(bookmark_tx - bookmark_x) > 2.0f) {
+			bookmark_x = glm_lerp(bookmark_x, bookmark_tx, 0.3f);
+		}
+
 		ugui_mainmenu_bar(engine);
-		ugui_mainmenu_bookmark(engine, W2);
-		ugui_mainmenu_icon(engine, W2, "Play", g_menuicon_play, g_font, 1);
-		ugui_mainmenu_icon(engine, W2 - 128.0f, "Cards", g_menuicon_cards, g_font, 0);
-		ugui_mainmenu_icon(engine, W2 + 128.0f, "Social", g_menuicon_social, g_font, 0);
+		ugui_mainmenu_bookmark(engine, glm_lerp(bookmark_x, bookmark_tx, 0.3f));
+		ugui_mainmenu_icon(engine, W2, "Play", g_menuicon_play, g_font, menuitem_active(W2, bookmark_x, bookmark_tx));
+		ugui_mainmenu_icon(engine, W2 - 128.0f, "Cards", g_menuicon_cards, g_font, menuitem_active(W2 - 128.0f, bookmark_x, bookmark_tx));
+		ugui_mainmenu_icon(engine, W2 + 128.0f, "Social", g_menuicon_social, g_font, menuitem_active(W2 + 128.0f, bookmark_x, bookmark_tx));
+
+		// logic
+		struct input_drag_s *drag = &engine->input_drag;
+		if (drag->state == INPUT_DRAG_END && drag->begin_y <= bar_height && drag->end_y <= bar_height) {
+			const float p = (drag->end_x / engine->window_width);
+			if (p < 0.334f) bookmark_tx = W2 - 128.0f;
+			else if (p < 0.667f) bookmark_tx = W2;
+			else  bookmark_tx = W2 + 128.0f;
+		}
 	}
 
 }
@@ -371,5 +391,12 @@ static void draw_menu(struct engine_s *engine, struct nk_context *nk) {
 		}
 		nk_end(nk);
 	}
+}
+
+static float menuitem_active(float menu_x, float bookmark_x, float bookmark_tx) {
+	const float d = fabsf(menu_x - bookmark_x);
+	const float max_d = 110.0f;
+	if (d > max_d || fabs(bookmark_tx - menu_x) > 4.0f) return 0.0f;
+	return 1.0f - (d / max_d);
 }
 

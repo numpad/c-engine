@@ -84,19 +84,20 @@ void ugui_mainmenu_bookmark(engine_t *engine, float x) {
 	nvgStroke(vg);
 }
 
-void ugui_mainmenu_icon(engine_t *engine, float x, const char *label, int icon, int font, int active) {
+void ugui_mainmenu_icon(engine_t *engine, float x, const char *label, int icon, int font, float active) {
 	NVGcontext *vg = engine->vg;
 
 	float label_y = g_bar_height * 0.5f + 4.0f;
 
 	// icon
-	if (active) {
-		const NVGpaint ipaint = nvgImagePattern(vg, x - g_icon_size * 0.5f, g_bar_height * 0.5f - g_icon_size * 0.6f, g_icon_size, g_icon_size, 0.0f, icon, 1.0f);
+	if (active > 0.0f) {
+		const float icon_size = g_icon_size * glm_ease_exp_out(active);
+		const NVGpaint ipaint = nvgImagePattern(vg, x - icon_size * 0.5f, g_bar_height * 0.5f - icon_size * 0.6f, icon_size, icon_size, 0.0f, icon, 1.0f);
 		nvgBeginPath(vg);
-		nvgRect(vg, x - g_icon_size * 0.5f, g_bar_height * 0.5f - g_icon_size * 0.6f, g_icon_size, g_icon_size);
+		nvgRect(vg, x - icon_size * 0.5f, g_bar_height * 0.5f - icon_size * 0.6f, icon_size, icon_size);
 		nvgFillPaint(vg, ipaint);
 		nvgFill(vg);
-		label_y = g_bar_height + 2.0f;
+		label_y = glm_lerp(label_y, g_bar_height + 2.0f, glm_ease_exp_out(active));
 	}
 
 	// text
@@ -106,7 +107,7 @@ void ugui_mainmenu_icon(engine_t *engine, float x, const char *label, int icon, 
 	nvgFontSize(vg, 23.0f);
 
 	nvgFontBlur(vg, 5.0f);
-	if (active) {
+	if (active > 0.0f) {
 		nvgFillColor(vg, nvgRGBf(0.0f, 0.0f, 0.7f));
 	} else {
 		nvgFillColor(vg, nvgRGBf(0.0f, 0.0f, 0.0f));
