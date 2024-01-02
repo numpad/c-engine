@@ -1,5 +1,6 @@
 #include "ugui.h"
 
+#include <assert.h>
 #include <nanovg.h>
 #include "engine.h"
 
@@ -119,44 +120,62 @@ void ugui_mainmenu_icon(engine_t *engine, float x, const char *label, int icon, 
 	nvgText(vg, x, label_y, label, NULL);
 }
 
-void ugui_mainmenu_button(engine_t *engine, float x, float y, float w, float h, const char *text1, const char *text2, const char *subtext, int font, NVGcolor color_bg, NVGcolor color_bg_darker, NVGcolor color_text_outline) {
+void ugui_mainmenu_button(engine_t *engine, float x, float y, float w, float h, const char *text1, const char *text2, const char *subtext, int font, NVGcolor color_bg, NVGcolor color_bg_darker, NVGcolor color_text_outline, float is_pressed) {
+	assert(text1 != NULL);
 	NVGcontext *vg = engine->vg;
 	const float height_3d = 10.0f;
+	const float hp = glm_ease_elast_out(is_pressed) * 0.5f;
+	const float hpI = 1.0f - hp;
+
+	const float radius = 10.0f;
+	const float active_outline_width = 11.5f * hp;
+
+	x = x - 7.0f * hp * 2.0f;
+	w = w + 14.0f * hp * 2.0f;
 
 	// shadow
 	nvgBeginPath(vg);
-	nvgRoundedRect(vg, x + 5.5f, y + 5.5f, w, h, 10.0f);
+	nvgRoundedRect(vg, x + 5.5f - 3.0f * hp, y + 5.5f, w, h, radius);
 	nvgFillColor(vg, nvgRGBAf(0.0f, 0.0f, 0.0f, 0.4f));
 	nvgFill(vg);
 
+	// active outline
+	nvgBeginPath(vg);
+	nvgRoundedRect(vg, x - active_outline_width * 0.5f, y - active_outline_width * 0.5f + height_3d * hp, w + active_outline_width, h + active_outline_width - height_3d * hp, radius);
+	nvgStrokeColor(vg, nvgRGBAf(1.0f, 1.0f, 1.0f, hp));
+	nvgStrokeWidth(vg, active_outline_width);
+	nvgStroke(vg);
+
 	// bg 3d
 	nvgBeginPath(vg);
-	nvgRoundedRect(vg, x, y + h - 20.0f - height_3d, w, 30.0f, 10.0f);
+	nvgRoundedRect(vg, x, y + h - 20.0f - height_3d, w, 30.0f, radius);
 	nvgFillColor(vg, color_bg_darker);
 	nvgFill(vg);
 
 	// bg
 	nvgBeginPath(vg);
-	nvgRoundedRect(vg, x, y, w, h - height_3d, 10.0f);
-	const NVGpaint p = nvgRadialGradient(vg, x + w * 0.15f, y + 25.0f, 30.0f, 30.0f + h * 0.8f, color_bg_darker, color_bg);
+	nvgRoundedRect(vg, x, y + height_3d * hp, w, h - height_3d, radius);
+	const NVGpaint p = nvgRadialGradient(vg, x + w * 0.15f, y + 25.0f + height_3d * hp, 30.0f, 30.0f + h * 0.8f, color_bg_darker, color_bg);
 	nvgFillPaint(vg, p);
 	nvgFill(vg);
 
 	// outline inner light
 	const float inset = 3.0f;
 	nvgBeginPath(vg);
-	nvgRoundedRect(vg, x + inset, y + inset, w - inset * 2.0f, h - inset * 1.5f - height_3d, 10.0f);
+	nvgRoundedRect(vg, x + inset, y + inset + height_3d * hp, w - inset * 2.0f, h - inset * 1.5f - height_3d, radius);
 	nvgStrokeColor(vg, color_bg);
 	nvgStrokeWidth(vg, 5.0f);
 	nvgStroke(vg);
 
 	// outline dark
 	nvgBeginPath(vg);
-	nvgRoundedRect(vg, x, y, w, h, 10.0f);
+	nvgRoundedRect(vg, x, y + height_3d * hp, w, h - height_3d * hp, radius);
 	nvgStrokeColor(vg, color_text_outline);
 	nvgStrokeWidth(vg, 2.5f);
 	nvgStroke(vg);
 
+	nvgSave(vg);
+	nvgTranslate(vg, 0.0f, height_3d * hp);
 	// main text
 	nvgFontFaceId(vg, font);
 	nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
@@ -188,12 +207,14 @@ void ugui_mainmenu_button(engine_t *engine, float x, float y, float w, float h, 
 	nvgFontBlur(vg, 0.0f);
 	nvgFillColor(vg, nvgRGBf(0.94f, 0.94f, 0.94f));
 	nvgText(vg, x + w * 0.5f, y + h * 0.2f - 1.0f, text1, NULL);
-	nvgText(vg, x + w * 0.5f, y + h * 0.2f + 29.0f, text2, NULL);
+	if (text2) nvgText(vg, x + w * 0.5f, y + h * 0.2f + 29.0f, text2, NULL);
 
 	// info
 	nvgFontBlur(vg, 0.0f);
 	nvgFontSize(vg, 14.0f);
 	nvgFillColor(vg, nvgRGBAf(0.13f, 0.38f, 0.13f, 0.6f));
-	nvgText(vg, x + w * 0.5f, y + h * 0.2f + 58.0f, subtext, NULL);
+	if (subtext) nvgText(vg, x + w * 0.5f, y + h * 0.2f + 58.0f, subtext, NULL);
+
+	nvgRestore(vg);
 }
 

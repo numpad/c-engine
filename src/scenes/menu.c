@@ -14,7 +14,21 @@
 #include "game/background.h"
 #include "gui/ugui.h"
 #include "net/message.h"
+#include "util/util.h"
 #include "platform.h"
+
+//
+// structs & enums
+//
+
+typedef void(*btn_callback_fn)(struct engine_s *engine);
+typedef struct {
+	float x, y, w, h;
+	const char *text1, *text2, *subtext;
+	NVGcolor bg1, bg2, outline;
+	
+	btn_callback_fn on_click;
+} mainbutton_t;
 
 //
 // vars
@@ -103,6 +117,7 @@ static void menu_draw(struct menu_s *menu, struct engine_s *engine) {
 
 	// draw navbar
 	{
+		struct input_drag_s *drag = &engine->input_drag;
 		const float bar_height = 60.0f;
 		const float menu_width = 110.0f;
 		const float menu_pointyness = 30.0f;
@@ -116,24 +131,71 @@ static void menu_draw(struct menu_s *menu, struct engine_s *engine) {
 			bookmark_x = glm_lerp(bookmark_x, bookmark_tx, 0.2f);
 		}
 
+		// buttons
+		mainbutton_t buttons[] = {
+			{
+				20.0f, H2, W2 - 40.0f, H2 * 0.5f - 20.0f,
+				.text1 = "Settings",
+				.bg1 = nvgRGBf(1.0f, 0.5f, 0.35f),
+				.bg2 = nvgRGBf(0.79f, 0.3f, 0.16f),
+				.outline = nvgRGBf(0.2f, 0.0f, 0.0f),
+			},
+			{
+				20.0f, H2 + H2 * 0.5f, W2 - 40.0f, H2 * 0.5f - 20.0f,
+				.text1 = "Mini",
+				.text2 = "Game",
+				.bg1 = nvgRGBf(1.0f, 0.8f, 0.35f),
+				.bg2 = nvgRGBf(0.79f, 0.59f, 0.16f),
+				.outline = nvgRGBf(0.2f, 0.2f, 0.0f),
+				.on_click = &switch_to_minigame_scene,
+			},
+			{
+				W2, H2, W2 - 20.0f, H2 - 20.0f,
+				.text1 = "Start",
+				.text2 = "Game",
+				.subtext = "(Singleplayer)",
+				.bg1 = nvgRGBf(0.80f, 1.0f, 0.42f),
+				.bg2 = nvgRGBf(0.39f, 0.82f, 0.20f),
+				.outline = nvgRGBf(0.0f, 0.2f, 0.0f),
+				.on_click = &switch_to_game_scene,
+			},
+			{ .text1 = NULL } // "null" elem
+		};
+
 		ugui_mainmenu_bar(engine);
 		ugui_mainmenu_bookmark(engine, glm_lerp(bookmark_x, bookmark_tx, 0.5f));
 		ugui_mainmenu_icon(engine, W2, "Play", g_menuicon_play, g_font, menuitem_active(W2, bookmark_x, bookmark_tx));
 		ugui_mainmenu_icon(engine, W2 - 128.0f, "Cards", g_menuicon_cards, g_font, menuitem_active(W2 - 128.0f, bookmark_x, bookmark_tx));
 		ugui_mainmenu_icon(engine, W2 + 128.0f, "Social", g_menuicon_social, g_font, menuitem_active(W2 + 128.0f, bookmark_x, bookmark_tx));
 
-		const NVGcolor green = nvgRGBf(0.80f, 1.0f, 0.42f);
-		const NVGcolor green_dark = nvgRGBf(0.39f, 0.82f, 0.20f);
-		const NVGcolor red = nvgRGBf(1.0f, 0.5f, 0.35f);
-		const NVGcolor red_dark = nvgRGBf(0.79f, 0.3f, 0.16f);
-		const NVGcolor yellow = nvgRGBf(1.0f, 0.8f, 0.35f);
-		const NVGcolor yellow_dark = nvgRGBf(0.79f, 0.59f, 0.16f);
-		ugui_mainmenu_button(engine, 20.0f, H2,             W2 - 40.0f, H2 * 0.5f - 20.0f, "",      "Settings", "",               g_font, red,    red_dark,    nvgRGBf(0.2f, 0.0f, 0.0f));
-		ugui_mainmenu_button(engine, 20.0f, H2 + H2 * 0.5f, W2 - 40.0f, H2 * 0.5f - 20.0f, "",      "Shop",     "",               g_font, yellow, yellow_dark, nvgRGBf(0.2f, 0.2f, 0.0f));
-		ugui_mainmenu_button(engine, W2,    H2,             W2 - 20.0f, H2 - 20.0f,        "Start", "Game",     "(Singleplayer)", g_font, green,  green_dark,  nvgRGBf(0.0f, 0.2f, 0.0f));
+		static mainbutton_t *active_button = NULL;
+		static float active_button_progress = 0.0f;
+
+		for (mainbutton_t *b = &buttons[0]; b->text1 != NULL; ++b) {
+			if (drag->state == INPUT_DRAG_BEGIN && point_in_rect(drag->begin_x, drag->begin_y, b->x, b->y, b->w, b->h)) {
+				active_button = b;
+				active_button_progress = 0.0f;
+
+			}
+			if (drag->state == INPUT_DRAG_IN_PROGRESS) {
+				active_button_progress += 1.0f / 90.0f; // FIXME: framerate independent
+				active_button_progress = fminf(active_button_progress, 1.0f);
+			} else if (active_button != NULL && drag->state != INPUT_DRAG_BEGIN) {
+				active_button_progress *= 0.8f;
+				if (active_button_progress < 0.01f) {
+					active_button_progress = 0.0f;
+					active_button = NULL;
+				}
+			}
+			if (drag->state == INPUT_DRAG_END && point_in_rect(drag->end_x, drag->end_y, b->x, b->y, b->w, b->h)) {
+				if (b->on_click != NULL && point_in_rect(drag->end_x, drag->end_y, b->x, b->y, b->w, b->h)) {
+					b->on_click(engine);
+				}
+			}
+			ugui_mainmenu_button(engine, b->x, b->y, b->w, b->h, b->text1, b->text2, b->subtext, g_font, b->bg1, b->bg2, b->outline, (b == active_button) ? active_button_progress: 0.0f);
+		}
 
 		// logic
-		struct input_drag_s *drag = &engine->input_drag;
 		if (drag->state == INPUT_DRAG_END && drag->begin_y <= bar_height && drag->end_y <= bar_height) {
 			const float p = (drag->end_x / engine->window_width);
 			if (p < 0.334f) bookmark_tx = W2 - 128.0f;
