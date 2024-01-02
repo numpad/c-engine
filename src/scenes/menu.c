@@ -234,12 +234,12 @@ static void menu_draw(struct menu_s *menu, struct engine_s *engine) {
 		{
 			for (mainbutton_t *b = &buttons[0]; b->text1 != NULL; ++b) {
 				if (drag->state == INPUT_DRAG_BEGIN && point_in_rect(drag->begin_x - menu_camera_x, drag->begin_y, b->x, b->y, b->w, b->h)) {
+					Mix_PlayChannel(-1, g_sound_click, 0);
 					active_button = b;
 					active_button_progress = 0.0f;
 					if (b->on_press_begin != NULL) {
 						b->on_press_begin(engine);
 					}
-					Mix_PlayChannel(-1, g_sound_click, 0);
 				}
 				if (drag->state == INPUT_DRAG_IN_PROGRESS) {
 					active_button_progress += 1.0f / 90.0f; // FIXME: framerate independent
@@ -252,7 +252,7 @@ static void menu_draw(struct menu_s *menu, struct engine_s *engine) {
 					if (b->on_press_end != NULL) {
 						b->on_press_end(engine);
 					}
-					Mix_PlayChannel(-1, g_sound_clickend, 0);
+					Mix_PlayChannel(-1, g_sound_clickend, 0); // TODO: this gets deleted in menu_destroy and wont play
 				}
 				if (active_button != NULL && drag->state == INPUT_DRAG_NONE) {
 					active_button_progress *= 0.83f;

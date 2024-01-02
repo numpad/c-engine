@@ -119,7 +119,7 @@ static void load(struct scene_experiments_s *scene, struct engine_s *engine) {
 	
 	// assets
 	font_score = nvgCreateFont(engine->vg, "PlaypenSans", "res/font/PlaypenSans-Medium.ttf");
-	img_food = nvgCreateImage(engine->vg, "res/sprites/food-emojis.png", NVG_IMAGE_GENERATE_MIPMAPS | NVG_IMAGE_FLIPY);
+	img_food = nvgCreateImage(engine->vg, "res/sprites/food-emojis.png", NVG_IMAGE_GENERATE_MIPMAPS);
 
 	// init
 	game_score      = 0;

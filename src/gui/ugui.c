@@ -141,7 +141,7 @@ void ugui_mainmenu_button(engine_t *engine, float x, float y, float w, float h, 
 
 	// shadow
 	nvgBeginPath(vg);
-	nvgRoundedRect(vg, x + 5.5f - 2.5f * hp, y + 5.5f, w - 2.0f * hp, h - 2.0f * hp, radius);
+	nvgRoundedRect(vg, x + 5.5f - 2.5f * hp, y + 5.5f - 2.5f * hp, w - 2.0f * hp, h - 2.0f * hp, radius + 1.5f);
 	nvgFillColor(vg, nvgRGBAf(0.0f, 0.0f, 0.0f, 0.4f));
 	nvgFill(vg);
 

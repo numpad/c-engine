@@ -16,6 +16,7 @@ void texture_init_from_image(struct texture_s *texture, const char *source_path,
 	int tw, th, tn;
 	stbi_set_flip_vertically_on_load(1);
 	unsigned char *tpixels = stbi_load(source_path, &tw, &th, &tn, 0);
+	stbi_set_flip_vertically_on_load(0);
 	if (tpixels != NULL) {
 		texture->width = tw;
 		texture->height = th;
