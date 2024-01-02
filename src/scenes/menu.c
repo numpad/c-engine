@@ -3,6 +3,7 @@
 #include <math.h>
 #include <SDL.h>
 #include <SDL_net.h>
+#include <SDL_mixer.h>
 #include <nanovg.h>
 #include <cglm/cglm.h>
 #include <stb_ds.h>
@@ -27,6 +28,8 @@ typedef struct {
 	const char *text1, *text2, *subtext;
 	NVGcolor bg1, bg2, outline;
 	
+	btn_callback_fn on_press_begin;
+	btn_callback_fn on_press_end;
 	btn_callback_fn on_click;
 } mainbutton_t;
 
@@ -40,10 +43,17 @@ typedef struct {
 // vars
 //
 
+// gui
 static int g_font = -1;
 static int g_menuicon_play = -1;
 static int g_menuicon_cards = -1;
 static int g_menuicon_social = -1;
+static const char *g_search_friends_texts[] = {"(Both Users Hold Button)", "Searching..."};
+static const char *g_search_friends_text = NULL;
+
+// sfx
+static Mix_Chunk *g_sound_click = NULL;
+static Mix_Chunk *g_sound_clickend = NULL;
 
 static int others_in_lobby = 0;
 static int id_of_current_lobby = 0;
@@ -59,12 +69,19 @@ void reset_ids_of_lobbies(void) {
 // private functions
 //
 
+// helper
+static float menuitem_active(float menu_x, float bookmark_x, float bookmark_tx);
+
+// switch scenes
 static void switch_to_game_scene(struct engine_s *engine);
 static void switch_to_minigame_scene(struct engine_s *engine);
 
-static void draw_menu(struct engine_s *, struct nk_context *nk);
+// button callbacks
+void on_begin_search_friends(struct engine_s *);
+void on_end_search_friends(struct engine_s *);
 
-static float menuitem_active(float menu_x, float bookmark_x, float bookmark_tx);
+// deprecated
+static void draw_menu(struct engine_s *, struct nk_context *nk);
 
 //
 // scene callbacks
@@ -74,6 +91,7 @@ static void menu_load(struct menu_s *menu, struct engine_s *engine) {
 	engine_set_clear_color(0.34f, 0.72f, 0.98f);
 	engine->console_visible = 0;
 
+	g_search_friends_text = g_search_friends_texts[0];
 	id_of_current_lobby = 0;
 	others_in_lobby = 0;
 	reset_ids_of_lobbies();
@@ -83,6 +101,9 @@ static void menu_load(struct menu_s *menu, struct engine_s *engine) {
 	if (g_menuicon_cards == -1) g_menuicon_cards = nvgCreateImage(engine->vg, "res/sprites/menuicon-cards.png", NVG_IMAGE_GENERATE_MIPMAPS);
 	if (g_menuicon_social == -1) g_menuicon_social = nvgCreateImage(engine->vg, "res/sprites/menuicon-camp.png", NVG_IMAGE_GENERATE_MIPMAPS);
 
+	if (g_sound_click == NULL) g_sound_click = Mix_LoadWAV("res/sounds/click_002.ogg");
+	if (g_sound_clickend == NULL) g_sound_clickend = Mix_LoadWAV("res/sounds/click_005.ogg");
+
 	menu->terrain = malloc(sizeof(struct isoterrain_s));
 	isoterrain_init_from_file(menu->terrain, "res/data/levels/winter.json");
 	
@@ -90,6 +111,8 @@ static void menu_load(struct menu_s *menu, struct engine_s *engine) {
 }
 
 static void menu_destroy(struct menu_s *menu, struct engine_s *engine) {
+	Mix_FreeChunk(g_sound_click); g_sound_click = NULL;
+	Mix_FreeChunk(g_sound_clickend); g_sound_clickend = NULL;
 	isoterrain_destroy(menu->terrain);
 	free(menu->terrain);
 	background_destroy();
@@ -171,13 +194,15 @@ static void menu_draw(struct menu_s *menu, struct engine_s *engine) {
 			},
 			// "social"
 			{
-				W2 + engine->window_width, H2, W2 - 20.0f, H2 - 20.0f,
-				.text1 = "Add",
-				.text2 = "Friend",
-				.subtext = "(Hold Button)",
+				W2 - 120.0f + engine->window_width, engine->window_height - 210.0f, 240.0f, 190.0f,
+				.text1 = "Search",
+				.text2 = "Friends",
+				.subtext = g_search_friends_text,
 				.bg1 = nvgRGBf(0.80f, 1.0f, 0.42f),
 				.bg2 = nvgRGBf(0.39f, 0.82f, 0.20f),
 				.outline = nvgRGBf(0.0f, 0.2f, 0.0f),
+				.on_press_begin = &on_begin_search_friends,
+				.on_press_end = &on_end_search_friends,
 			},
 			{ .text1 = NULL } // "null" elem
 		};
@@ -211,16 +236,23 @@ static void menu_draw(struct menu_s *menu, struct engine_s *engine) {
 				if (drag->state == INPUT_DRAG_BEGIN && point_in_rect(drag->begin_x - menu_camera_x, drag->begin_y, b->x, b->y, b->w, b->h)) {
 					active_button = b;
 					active_button_progress = 0.0f;
-
+					if (b->on_press_begin != NULL) {
+						b->on_press_begin(engine);
+					}
+					Mix_PlayChannel(-1, g_sound_click, 0);
 				}
 				if (drag->state == INPUT_DRAG_IN_PROGRESS) {
 					active_button_progress += 1.0f / 90.0f; // FIXME: framerate independent
 					active_button_progress = fminf(active_button_progress, 1.0f);
 				}
-				if (drag->state == INPUT_DRAG_END && b == active_button && point_in_rect(drag->end_x - menu_camera_x, drag->end_y, b->x, b->y, b->w, b->h)) {
+				if (drag->state == INPUT_DRAG_END && b == active_button) {
 					if (b->on_click != NULL && point_in_rect(drag->end_x - menu_camera_x, drag->end_y, b->x, b->y, b->w, b->h)) {
 						b->on_click(engine);
 					}
+					if (b->on_press_end != NULL) {
+						b->on_press_end(engine);
+					}
+					Mix_PlayChannel(-1, g_sound_clickend, 0);
 				}
 				if (active_button != NULL && drag->state == INPUT_DRAG_NONE) {
 					active_button_progress *= 0.83f;
@@ -252,6 +284,9 @@ static void menu_draw(struct menu_s *menu, struct engine_s *engine) {
 			size_t index = 0;
 			for (navitem_t *i = &navitems[0]; i->text != NULL; ++i) {
 				if (fabsf(drag->end_x - i->x) < 68.0f) {
+					if (index != active_navitem) {
+						Mix_PlayChannel(-1, g_sound_click, 0);
+					}
 					active_navitem = index;
 					break;
 				}
@@ -531,5 +566,13 @@ static float menuitem_active(float menu_x, float bookmark_x, float bookmark_tx) 
 	const float max_d = 110.0f;
 	if (d > max_d || fabs(bookmark_tx - menu_x) > 4.0f) return 0.0f;
 	return 1.0f - (d / max_d);
+}
+
+void on_begin_search_friends(struct engine_s *engine) {
+	g_search_friends_text = g_search_friends_texts[1];
+}
+
+void on_end_search_friends(struct engine_s *engine) {
+	g_search_friends_text = g_search_friends_texts[0];
 }
 

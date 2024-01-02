@@ -125,26 +125,25 @@ void ugui_mainmenu_button(engine_t *engine, float x, float y, float w, float h, 
 	NVGcontext *vg = engine->vg;
 	const float height_3d = 10.0f;
 	const float hp = glm_ease_elast_out(is_pressed) * 0.5f;
-	const float hpI = 1.0f - hp;
 
-	const float radius = 10.0f;
-	const float active_outline_width = 11.5f * hp;
+	const float radius = 10.0f - 6.0f * hp;
+	const float active_outline_width = 13.5f * hp;
 
 	x = x - 7.0f * hp * 2.0f;
 	w = w + 14.0f * hp * 2.0f;
 
-	// shadow
-	nvgBeginPath(vg);
-	nvgRoundedRect(vg, x + 5.5f - 3.0f * hp, y + 5.5f, w, h, radius);
-	nvgFillColor(vg, nvgRGBAf(0.0f, 0.0f, 0.0f, 0.4f));
-	nvgFill(vg);
-
 	// active outline
 	nvgBeginPath(vg);
 	nvgRoundedRect(vg, x - active_outline_width * 0.5f, y - active_outline_width * 0.5f + height_3d * hp, w + active_outline_width, h + active_outline_width - height_3d * hp, radius + 1.5f);
-	nvgStrokeColor(vg, nvgRGBAf(1.0f, 1.0f, 1.0f, hp));
+	nvgStrokeColor(vg, nvgRGBAf(1.0f, 1.0f, 1.0f, hp * 1.5f));
 	nvgStrokeWidth(vg, active_outline_width);
 	nvgStroke(vg);
+
+	// shadow
+	nvgBeginPath(vg);
+	nvgRoundedRect(vg, x + 5.5f - 2.5f * hp, y + 5.5f, w - 2.0f * hp, h - 2.0f * hp, radius);
+	nvgFillColor(vg, nvgRGBAf(0.0f, 0.0f, 0.0f, 0.4f));
+	nvgFill(vg);
 
 	// bg 3d
 	nvgBeginPath(vg);
