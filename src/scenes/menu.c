@@ -30,6 +30,12 @@ typedef struct {
 	btn_callback_fn on_click;
 } mainbutton_t;
 
+typedef struct {
+	float x;
+	const char *text;
+	int icon;
+} navitem_t;
+
 //
 // vars
 //
@@ -115,24 +121,28 @@ static void menu_draw(struct menu_s *menu, struct engine_s *engine) {
 	const float W2 = engine->window_width * 0.5f;
 	const float H2 = engine->window_height * 0.5f;
 
-	// draw navbar
+	// draw menu
 	{
 		struct input_drag_s *drag = &engine->input_drag;
 		const float bar_height = 60.0f;
-		const float menu_width = 110.0f;
-		const float menu_pointyness = 30.0f;
 
 		static float bookmark_x = -1.0f;
-		static float bookmark_tx = -1.0f;
+		static size_t active_navitem = 1;
 		if (bookmark_x == -1.0f) {
-			bookmark_x = bookmark_tx = W2;
+			bookmark_x = W2;
 		}
-		if (fabsf(bookmark_tx - bookmark_x) > 1.0f) {
-			bookmark_x = glm_lerp(bookmark_x, bookmark_tx, 0.2f);
-		}
+
+		// icons
+		navitem_t navitems[] = {
+			{ .x = W2 - 128.0f, .text = "Cards", .icon = g_menuicon_cards },
+			{ .x = W2         , .text = "Play", .icon = g_menuicon_play },
+			{ .x = W2 + 128.0f, .text = "Social", .icon = g_menuicon_social },
+			{ .text = NULL }, // "null" item
+		};
 
 		// buttons
 		mainbutton_t buttons[] = {
+			// "play"
 			{
 				20.0f, H2, W2 - 40.0f, H2 * 0.5f - 20.0f,
 				.text1 = "Settings",
@@ -159,48 +169,94 @@ static void menu_draw(struct menu_s *menu, struct engine_s *engine) {
 				.outline = nvgRGBf(0.0f, 0.2f, 0.0f),
 				.on_click = &switch_to_game_scene,
 			},
+			// "social"
+			{
+				W2 + engine->window_width, H2, W2 - 20.0f, H2 - 20.0f,
+				.text1 = "Add",
+				.text2 = "Friend",
+				.subtext = "(Hold Button)",
+				.bg1 = nvgRGBf(0.80f, 1.0f, 0.42f),
+				.bg2 = nvgRGBf(0.39f, 0.82f, 0.20f),
+				.outline = nvgRGBf(0.0f, 0.2f, 0.0f),
+			},
 			{ .text1 = NULL } // "null" elem
 		};
 
+		// draw navbar
 		ugui_mainmenu_bar(engine);
-		ugui_mainmenu_bookmark(engine, glm_lerp(bookmark_x, bookmark_tx, 0.5f));
-		ugui_mainmenu_icon(engine, W2, "Play", g_menuicon_play, g_font, menuitem_active(W2, bookmark_x, bookmark_tx));
-		ugui_mainmenu_icon(engine, W2 - 128.0f, "Cards", g_menuicon_cards, g_font, menuitem_active(W2 - 128.0f, bookmark_x, bookmark_tx));
-		ugui_mainmenu_icon(engine, W2 + 128.0f, "Social", g_menuicon_social, g_font, menuitem_active(W2 + 128.0f, bookmark_x, bookmark_tx));
+		ugui_mainmenu_bookmark(engine, glm_lerp(bookmark_x, navitems[active_navitem].x, 0.5f));
+		for (navitem_t *i = &navitems[0]; i->text != NULL; ++i) {
+			ugui_mainmenu_icon(engine, i->x, i->text, i->icon, g_font, menuitem_active(i->x, bookmark_x, navitems[active_navitem].x));
+		}
 
 		static mainbutton_t *active_button = NULL;
 		static float active_button_progress = 0.0f;
 
-		for (mainbutton_t *b = &buttons[0]; b->text1 != NULL; ++b) {
-			if (drag->state == INPUT_DRAG_BEGIN && point_in_rect(drag->begin_x, drag->begin_y, b->x, b->y, b->w, b->h)) {
-				active_button = b;
-				active_button_progress = 0.0f;
+		// draw menu tabs/screens
+		const float menu_camera_x = ((bookmark_x - W2) / 128.0f) * -engine->window_width;
+		nvgSave(vg);
+		nvgTranslate(vg, menu_camera_x, 0.0f);
 
-			}
-			if (drag->state == INPUT_DRAG_IN_PROGRESS) {
-				active_button_progress += 1.0f / 90.0f; // FIXME: framerate independent
-				active_button_progress = fminf(active_button_progress, 1.0f);
-			} else if (active_button != NULL && drag->state != INPUT_DRAG_BEGIN) {
-				active_button_progress *= 0.8f;
-				if (active_button_progress < 0.01f) {
-					active_button_progress = 0.0f;
-					active_button = NULL;
-				}
-			}
-			if (drag->state == INPUT_DRAG_END && point_in_rect(drag->end_x, drag->end_y, b->x, b->y, b->w, b->h)) {
-				if (b->on_click != NULL && point_in_rect(drag->end_x, drag->end_y, b->x, b->y, b->w, b->h)) {
-					b->on_click(engine);
-				}
-			}
-			ugui_mainmenu_button(engine, b->x, b->y, b->w, b->h, b->text1, b->text2, b->subtext, g_font, b->bg1, b->bg2, b->outline, (b == active_button) ? active_button_progress: 0.0f);
+		// "cards" menu
+		{
+			nvgSave(vg);
+			nvgTranslate(vg, -engine->window_width, 0.0f);
+			ugui_mainmenu_button(engine, 10.0f, 300.0f, engine->window_width - 20.0f, 200.0f, "Card", "Screen", "Noch in arbeit :)", g_font, buttons[0].bg1, buttons[0].bg2, buttons[0].outline, 0.0f);
+			nvgRestore(vg);
 		}
 
+		// "play" menu
+		{
+			for (mainbutton_t *b = &buttons[0]; b->text1 != NULL; ++b) {
+				if (drag->state == INPUT_DRAG_BEGIN && point_in_rect(drag->begin_x - menu_camera_x, drag->begin_y, b->x, b->y, b->w, b->h)) {
+					active_button = b;
+					active_button_progress = 0.0f;
+
+				}
+				if (drag->state == INPUT_DRAG_IN_PROGRESS) {
+					active_button_progress += 1.0f / 90.0f; // FIXME: framerate independent
+					active_button_progress = fminf(active_button_progress, 1.0f);
+				}
+				if (drag->state == INPUT_DRAG_END && b == active_button && point_in_rect(drag->end_x - menu_camera_x, drag->end_y, b->x, b->y, b->w, b->h)) {
+					if (b->on_click != NULL && point_in_rect(drag->end_x - menu_camera_x, drag->end_y, b->x, b->y, b->w, b->h)) {
+						b->on_click(engine);
+					}
+				}
+				if (active_button != NULL && drag->state == INPUT_DRAG_NONE) {
+					active_button_progress *= 0.83f;
+					if (active_button_progress < 0.01f) {
+						active_button_progress = 0.0f;
+						active_button = NULL;
+					}
+				}
+
+				ugui_mainmenu_button(engine, b->x, b->y, b->w, b->h, b->text1, b->text2, b->subtext, g_font, b->bg1, b->bg2, b->outline, (b == active_button) ? active_button_progress: 0.0f);
+			}
+		}
+
+		// "social" menu
+		{
+			nvgSave(vg);
+			nvgTranslate(vg, engine->window_width, 0.0f);
+			// draw here...
+			nvgRestore(vg);
+		}
+
+		nvgRestore(vg);
+
 		// logic
+		if (fabsf(navitems[active_navitem].x - bookmark_x) > 0.001f) {
+			bookmark_x = glm_lerp(bookmark_x, navitems[active_navitem].x, 0.2f);
+		}
 		if (drag->state == INPUT_DRAG_END && drag->begin_y <= bar_height && drag->end_y <= bar_height) {
-			const float p = (drag->end_x / engine->window_width);
-			if (p < 0.334f) bookmark_tx = W2 - 128.0f;
-			else if (p < 0.667f) bookmark_tx = W2;
-			else  bookmark_tx = W2 + 128.0f;
+			size_t index = 0;
+			for (navitem_t *i = &navitems[0]; i->text != NULL; ++i) {
+				if (fabsf(drag->end_x - i->x) < 68.0f) {
+					active_navitem = index;
+					break;
+				}
+				++index;
+			}
 		}
 	}
 
