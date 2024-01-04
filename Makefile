@@ -1,6 +1,7 @@
 
 CC = gcc
 CFLAGS = -std=gnu99 -fPIC -Wall -Wextra -pedantic \
+		 -D_GNU_SOURCE \
 		 -Wfloat-equal -Wshadow -Wno-unused-parameter -Wl,--export-dynamic \
 		 -Wswitch-enum -Wcast-qual -Wnull-dereference -Wunused-result \
 		 -DFLECS_CUSTOM_BUILD -DFLECS_SYSTEM -DFLECS_MODULE -DFLECS_PIPELINE -DFLECS_TIMER -DFLECS_HTTP -DFLECS_SNAPSHOT -DFLECS_PARSER -DFLECS_APP -DFLECS_OS_API_IMPL \
