@@ -54,6 +54,7 @@ static const char *g_search_friends_text = NULL;
 // sfx
 static Mix_Chunk *g_sound_click = NULL;
 static Mix_Chunk *g_sound_clickend = NULL;
+static Mix_Music *g_music = NULL;
 
 static int others_in_lobby = 0;
 static int id_of_current_lobby = 0;
@@ -96,29 +97,36 @@ static void menu_load(struct menu_s *menu, struct engine_s *engine) {
 	others_in_lobby = 0;
 	reset_ids_of_lobbies();
 
+	// load font & icons
 	if (g_font == -1) g_font = nvgCreateFont(engine->vg, "Baloo", "res/font/Baloo-Regular.ttf");
 	if (g_menuicon_play == -1) g_menuicon_play = nvgCreateImage(engine->vg, "res/sprites/menuicon-dice.png", NVG_IMAGE_GENERATE_MIPMAPS);
 	if (g_menuicon_cards == -1) g_menuicon_cards = nvgCreateImage(engine->vg, "res/sprites/menuicon-cards.png", NVG_IMAGE_GENERATE_MIPMAPS);
 	if (g_menuicon_social == -1) g_menuicon_social = nvgCreateImage(engine->vg, "res/sprites/menuicon-camp.png", NVG_IMAGE_GENERATE_MIPMAPS);
-
+	// load sfx & music
 	if (g_sound_click == NULL) g_sound_click = Mix_LoadWAV("res/sounds/click_002.ogg");
 	if (g_sound_clickend == NULL) g_sound_clickend = Mix_LoadWAV("res/sounds/click_005.ogg");
+	if (g_music == NULL) g_music = Mix_LoadMUS("res/music/menu-song.ogg");
+
 
 	menu->terrain = malloc(sizeof(struct isoterrain_s));
 	isoterrain_init_from_file(menu->terrain, "res/data/levels/winter.json");
 	
 	background_set_parallax("res/image/bg-glaciers/%d.png", 4);
+
+	Mix_VolumeMusic(MIX_MAX_VOLUME * 0.2f);
+	Mix_PlayMusic(g_music, -1);
 }
 
 static void menu_destroy(struct menu_s *menu, struct engine_s *engine) {
-	Mix_FreeChunk(g_sound_click); g_sound_click = NULL;
-	Mix_FreeChunk(g_sound_clickend); g_sound_clickend = NULL;
 	isoterrain_destroy(menu->terrain);
 	free(menu->terrain);
 	background_destroy();
 	nvgDeleteImage(engine->vg, g_menuicon_play); g_menuicon_play = -1;
 	nvgDeleteImage(engine->vg, g_menuicon_cards); g_menuicon_cards = -1;
 	nvgDeleteImage(engine->vg, g_menuicon_social); g_menuicon_social = -1;
+	Mix_FreeChunk(g_sound_click); g_sound_click = NULL;
+	Mix_FreeChunk(g_sound_clickend); g_sound_clickend = NULL;
+	Mix_FreeMusic(g_music); g_music = NULL;
 }
 
 static void menu_update(struct menu_s *menu, struct engine_s *engine, float dt) {
@@ -224,10 +232,10 @@ static void menu_draw(struct menu_s *menu, struct engine_s *engine) {
 
 		// "cards" menu
 		{
-			nvgSave(vg);
-			nvgTranslate(vg, -engine->window_width, 0.0f);
-			ugui_mainmenu_button(engine, 10.0f, 300.0f, engine->window_width - 20.0f, 200.0f, "Card", "Screen", "Noch in arbeit :)", g_font, buttons[0].bg1, buttons[0].bg2, buttons[0].outline, 0.0f);
-			nvgRestore(vg);
+			// nvgSave(vg);
+			// nvgTranslate(vg, -engine->window_width, 0.0f);
+			// ugui_mainmenu_button(engine, 10.0f, 300.0f, engine->window_width - 20.0f, 200.0f, "Card", "Screen", "Noch in arbeit :)", g_font, buttons[0].bg1, buttons[0].bg2, buttons[0].outline, 0.0f);
+			// nvgRestore(vg);
 		}
 
 		// "play" menu
