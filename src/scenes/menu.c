@@ -48,6 +48,7 @@ static int g_font = -1;
 static int g_menuicon_play = -1;
 static int g_menuicon_cards = -1;
 static int g_menuicon_social = -1;
+static int g_entity_texture = -1;
 static const char *g_search_friends_texts[] = {"(Both Users Hold Button)", "Searching..."};
 static const char *g_search_friends_text = NULL;
 
@@ -102,6 +103,7 @@ static void menu_load(struct menu_s *menu, struct engine_s *engine) {
 	if (g_menuicon_play == -1) g_menuicon_play = nvgCreateImage(engine->vg, "res/sprites/menuicon-dice.png", NVG_IMAGE_GENERATE_MIPMAPS);
 	if (g_menuicon_cards == -1) g_menuicon_cards = nvgCreateImage(engine->vg, "res/sprites/menuicon-cards.png", NVG_IMAGE_GENERATE_MIPMAPS);
 	if (g_menuicon_social == -1) g_menuicon_social = nvgCreateImage(engine->vg, "res/sprites/menuicon-camp.png", NVG_IMAGE_GENERATE_MIPMAPS);
+	if (g_entity_texture == -1) g_entity_texture = nvgCreateImage(engine->vg, "res/sprites/entities.png", NVG_IMAGE_NEAREST);
 	// load sfx & music
 	if (g_sound_click == NULL) g_sound_click = Mix_LoadWAV("res/sounds/click_002.ogg");
 	if (g_sound_clickend == NULL) g_sound_clickend = Mix_LoadWAV("res/sounds/click_005.ogg");
@@ -124,6 +126,7 @@ static void menu_destroy(struct menu_s *menu, struct engine_s *engine) {
 	nvgDeleteImage(engine->vg, g_menuicon_play); g_menuicon_play = -1;
 	nvgDeleteImage(engine->vg, g_menuicon_cards); g_menuicon_cards = -1;
 	nvgDeleteImage(engine->vg, g_menuicon_social); g_menuicon_social = -1;
+	nvgDeleteImage(engine->vg, g_entity_texture); g_entity_texture = -1;
 	Mix_FreeChunk(g_sound_click); g_sound_click = NULL;
 	Mix_FreeChunk(g_sound_clickend); g_sound_clickend = NULL;
 	Mix_FreeMusic(g_music); g_music = NULL;
@@ -294,14 +297,29 @@ static void menu_draw(struct menu_s *menu, struct engine_s *engine) {
 				if (fabsf(drag->end_x - i->x) < 68.0f) {
 					if (index != active_navitem) {
 						Mix_PlayChannel(-1, g_sound_click, 0);
+						active_navitem = index;
 					}
-					active_navitem = index;
 					break;
 				}
 				++index;
 			}
 		}
 	}
+
+	vec2 bp = GLM_VEC2_ZERO_INIT;
+	isoterrain_pos_block_to_screen(menu->terrain, 0, 0, 0, bp);
+
+	nvgSave(vg);
+	nvgTranslate(vg, 25.0f, 160.0f + fabsf(sinf(engine->time_elapsed)) * -30.0f);
+	nvgScale(vg, t_scale, t_scale);
+
+	NVGpaint p = nvgImagePattern(vg, -16.0f * 0.0f, -17.0f * 7.0f, 256.0f, 256.0f, 0.0f, g_entity_texture, 1.0f);
+	nvgBeginPath(vg);
+	nvgRect(vg, 0.0f, 0.0f, 16.0f, 17.0f);
+	nvgFillPaint(vg, p);
+	nvgFill(vg);
+
+	nvgRestore(vg);
 
 }
 
