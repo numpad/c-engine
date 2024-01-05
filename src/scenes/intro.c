@@ -45,11 +45,11 @@ static inline float ease_out_expo(float n) {
 }
 
 static void intro_draw(struct intro_s *scene, struct engine_s *engine) {
-	glClearColor(0.24f, 0.58f, 1.0f, 1.0f);
+	engine_set_clear_color(0.24f, 0.58f, 1.0f);
 	int mx, my;
 	const Uint32 buttons = SDL_GetMouseState(&mx, &my);
 	if (buttons & SDL_BUTTON(1)) {
-		scene->timer += 0.015f;
+		scene->timer += engine->dt;
 		if (scene->timer >= 1.0f) {
 			switch_to_menu_scene(engine);
 		}

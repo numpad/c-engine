@@ -14,6 +14,9 @@ struct isoterrain_s {
 	int width, height, layers;
 	iso_block *blocks;
 
+	// screen size in pixels
+	int projected_height;
+
 	shader_t shader;
 	texture_t tileset_texture;
 	vbuffer_t *vbuf;
@@ -34,7 +37,7 @@ void isoterrain_draw(struct isoterrain_s *, const mat4 proj, const mat4 view);
 void isoterrain_get_projected_size(struct isoterrain_s *, int *width, int *height);
 iso_block *isoterrain_get_block(struct isoterrain_s *, int x, int y, int z);
 void isoterrain_set_block(struct isoterrain_s *, int x, int y, int z, iso_block block);
-void isoterrain_pos_block_to_screen(struct isoterrain_s *, int x, int y, int z, vec2 *OUT_pos);
+void isoterrain_pos_block_to_screen(struct isoterrain_s *, int x, int y, int z, vec2 OUT_pos);
 void isoterrain_pos_screen_to_block(struct isoterrain_s *, vec2 pos, int *OUT_x, int *OUT_y, int *OUT_z);
 
 #endif
