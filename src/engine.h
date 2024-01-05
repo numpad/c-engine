@@ -38,6 +38,7 @@ struct engine_s {
 
 	// timing
 	double time_elapsed;
+	double dt;
 
 	// scene management
 	struct scene_s *scene;
@@ -60,6 +61,7 @@ struct engine_s {
 
 	// dumb state
 	int console_visible;
+	int font_monospace;
 };
 
 // init & cleanup

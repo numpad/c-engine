@@ -81,7 +81,8 @@ struct engine_s *engine_new(void) {
 	engine->window_width = 550;
 	engine->window_height = 800;
 	engine->time_elapsed = 0.0f;
-	engine->window = SDL_CreateWindow("Soil Soldiers", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, engine->window_width, engine->window_height, SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_SHOWN | SDL_WINDOW_ALLOW_HIGHDPI);
+	engine->dt = 0.0f;
+	engine->window = SDL_CreateWindow("Demo - c-engine", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, engine->window_width, engine->window_height, SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_SHOWN | SDL_WINDOW_ALLOW_HIGHDPI);
 	engine->window_id = SDL_GetWindowID(engine->window);
 	engine->on_notify_callbacks = NULL;
 	engine->scene = NULL;
@@ -118,6 +119,7 @@ struct engine_s *engine_new(void) {
 	
 	// libs
 	engine->vg = nvgCreateGLES2(NVG_ANTIALIAS | NVG_STENCIL_STROKES);
+	engine->font_monospace = nvgCreateFont(engine->vg, "NotoSansMono", "res/font/NotoSansMono-Regular.ttf");
 
 	// custom events
 	USR_EVENT_RELOAD = SDL_RegisterEvents(1);
@@ -366,13 +368,16 @@ void engine_draw(struct engine_s *engine) {
 #ifdef DEBUG
 	// display debug_info
 	char debug_info[128];
-	snprintf(debug_info, 128, "elapsed:%.2fs", engine->time_elapsed);
+	snprintf(debug_info, 128, "dt=%.4fms / FPS=%.0f [%.2fs total]", engine->dt, 1.0 / engine->dt, engine->time_elapsed);
 	//printf("dt = %.5fms / %.0f (Total: %.2f)\n", dt, 1.0 / dt, engine->time_elapsed);
 
 	vec4 bounds;
 	nvgTextAlign(engine->vg, NVG_ALIGN_TOP | NVG_ALIGN_LEFT);
+	nvgFontFaceId(engine->vg, engine->font_monospace);
 	nvgFontBlur(engine->vg, 0.0f);
-	nvgFontSize(engine->vg, 14.0f);
+	nvgFontSize(engine->vg, 12.0f);
+	nvgTextLetterSpacing(engine->vg, 1.0f);
+	nvgTextLineHeight(engine->vg, 1.0f);
 	nvgTextBounds(engine->vg, 0.0f, 0.0f, debug_info, NULL, bounds);
 	
 	// bg
@@ -383,10 +388,7 @@ void engine_draw(struct engine_s *engine) {
 
 	// text
 	nvgBeginPath(engine->vg);
-	nvgFillColor(engine->vg, nvgRGBf(0.8f, 0.8f, 0.0f));
-	nvgTextAlign(engine->vg, NVG_ALIGN_TOP | NVG_ALIGN_LEFT);
-	nvgFontBlur(engine->vg, 0.0f);
-	nvgFontSize(engine->vg, 14.0f);
+	nvgFillColor(engine->vg, nvgRGBf(1.0f, 1.0f, 0.0f));
 	nvgText(engine->vg, 0.0f, 0.0f, debug_info, NULL);
 #endif
 
@@ -402,17 +404,20 @@ void engine_enter_mainloop(struct engine_s *engine) {
 		const Uint64 new_time = SDL_GetPerformanceCounter();
 
 		const Uint64 elapsed_time = new_time - current_time;
-		const double dt = elapsed_time / (double)SDL_GetPerformanceFrequency();
+		engine->dt = elapsed_time / (double)SDL_GetPerformanceFrequency();
 		current_time = new_time;
 		
-		engine_update(engine, dt);
-		engine->time_elapsed += dt;
+		engine_update(engine, engine->dt);
+		engine->time_elapsed += engine->dt;
 
 		engine_draw(engine);
 	}
 }
 
-void engine_mainloop_emcc(void *engine) {
+// TODO: merge with engine_enter_mainloop
+void engine_mainloop_emcc(void *engine_ptr) {
+	struct engine_s *engine = engine_ptr;
+
 	static Uint64 current_time = -1;
 	if (current_time == (Uint64)-1) {
 		current_time = SDL_GetPerformanceCounter();
@@ -420,11 +425,11 @@ void engine_mainloop_emcc(void *engine) {
 	const Uint64 new_time = SDL_GetPerformanceCounter();
 
 	const Uint64 elapsed_time = new_time - current_time;
-	const double dt = elapsed_time / (double)SDL_GetPerformanceFrequency();
+	engine->dt = elapsed_time / (double)SDL_GetPerformanceFrequency();
 	current_time = new_time;
 
-	engine_update(engine, dt);
-	((struct engine_s *)engine)->time_elapsed += dt;
+	engine_update(engine, engine->dt);
+	engine->time_elapsed += engine->dt;
 
 	engine_draw(engine);
 }
@@ -463,9 +468,10 @@ static void engine_poll_events(struct engine_s *engine) {
 			case SDL_KEYUP:
 			{
 				SDL_KeyboardEvent *key_event = (SDL_KeyboardEvent *)&event;
-				// pop scene stack
+				// TODO: pop scene stack, or other data structure?
 				if (key_event->type == SDL_KEYUP && key_event->keysym.sym == SDLK_ESCAPE) {
-					// TODO
+					// TODO: open menu first / send event to scene?
+					on_siggoback();
 				}
 				break;
 			}

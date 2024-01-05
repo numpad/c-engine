@@ -1,5 +1,5 @@
 
-CC = gcc
+CC = clang
 CFLAGS = -std=gnu99 -fPIC -Wall -Wextra -pedantic \
 		 -D_GNU_SOURCE \
 		 -Wfloat-equal -Wshadow -Wno-unused-parameter -Wl,--export-dynamic \
