@@ -335,7 +335,7 @@ void engine_gameserver_send(struct engine_s *engine, struct message_header *msg)
 }
 
 // main loop
-void engine_update(struct engine_s *engine) {
+void engine_update(struct engine_s *engine, double dt) {
 	// poll server
 	if (engine->gameserver_tcp != NULL) {
 		engine_gameserver_receive(engine);
@@ -347,9 +347,6 @@ void engine_update(struct engine_s *engine) {
 	nk_input_end(engine->nk);
 
 	// update
-	const float dt = 1.0f / 60.0f;
-	engine->time_elapsed += dt;
-
 	console_update(engine->console, engine, dt);
 	scene_update(engine->scene, engine, dt);
 }
@@ -367,23 +364,30 @@ void engine_draw(struct engine_s *engine) {
 	}
 
 #ifdef DEBUG
-	// display seconds
-	char seconds[32];
-	sprintf(seconds, "%.2fs", engine->time_elapsed);
+	// display debug_info
+	char debug_info[128];
+	snprintf(debug_info, 128, "elapsed:%.2fs", engine->time_elapsed);
+	//printf("dt = %.5fms / %.0f (Total: %.2f)\n", dt, 1.0 / dt, engine->time_elapsed);
 
-	nvgBeginPath(engine->vg);
+	vec4 bounds;
 	nvgTextAlign(engine->vg, NVG_ALIGN_TOP | NVG_ALIGN_LEFT);
-	nvgFillColor(engine->vg, nvgRGBf(0.0f, 0.0f, 0.0f));
-	nvgFontBlur(engine->vg, 2.0f);
-	nvgFontSize(engine->vg, 14.0f);
-	nvgText(engine->vg, 4.0f, 4.0f, seconds, NULL);
-
-	nvgBeginPath(engine->vg);
-	nvgTextAlign(engine->vg, NVG_ALIGN_TOP | NVG_ALIGN_LEFT);
-	nvgFillColor(engine->vg, nvgRGBf(1.0f, 1.0f, 0.6f));
 	nvgFontBlur(engine->vg, 0.0f);
 	nvgFontSize(engine->vg, 14.0f);
-	nvgText(engine->vg, 3.0f, 3.0f, seconds, NULL);
+	nvgTextBounds(engine->vg, 0.0f, 0.0f, debug_info, NULL, bounds);
+	
+	// bg
+	nvgBeginPath(engine->vg);
+	nvgRect(engine->vg, bounds[0], bounds[1], bounds[2], bounds[3]);
+	nvgFillColor(engine->vg, nvgRGBAf(0, 0, 0, 0.65f));
+	nvgFill(engine->vg);
+
+	// text
+	nvgBeginPath(engine->vg);
+	nvgFillColor(engine->vg, nvgRGBf(0.8f, 0.8f, 0.0f));
+	nvgTextAlign(engine->vg, NVG_ALIGN_TOP | NVG_ALIGN_LEFT);
+	nvgFontBlur(engine->vg, 0.0f);
+	nvgFontSize(engine->vg, 14.0f);
+	nvgText(engine->vg, 0.0f, 0.0f, debug_info, NULL);
 #endif
 
 	nk_sdl_render(NK_ANTI_ALIASING_ON, 512 * 1024, 128 * 1024);
@@ -392,13 +396,37 @@ void engine_draw(struct engine_s *engine) {
 	SDL_GL_SwapWindow(engine->window);
 }
 
-void engine_mainloop(struct engine_s *engine) {
-	engine_update(engine);
-	engine_draw(engine);
+void engine_enter_mainloop(struct engine_s *engine) {
+	Uint64 current_time = SDL_GetPerformanceCounter();
+	while (engine->scene != NULL) {
+		const Uint64 new_time = SDL_GetPerformanceCounter();
+
+		const Uint64 elapsed_time = new_time - current_time;
+		const double dt = elapsed_time / (double)SDL_GetPerformanceFrequency();
+		current_time = new_time;
+		
+		engine_update(engine, dt);
+		engine->time_elapsed += dt;
+
+		engine_draw(engine);
+	}
 }
 
 void engine_mainloop_emcc(void *engine) {
-	engine_mainloop((struct engine_s *)engine);
+	static Uint64 current_time = -1;
+	if (current_time == (Uint64)-1) {
+		current_time = SDL_GetPerformanceCounter();
+	}
+	const Uint64 new_time = SDL_GetPerformanceCounter();
+
+	const Uint64 elapsed_time = new_time - current_time;
+	const double dt = elapsed_time / (double)SDL_GetPerformanceFrequency();
+	current_time = new_time;
+
+	engine_update(engine, dt);
+	((struct engine_s *)engine)->time_elapsed += dt;
+
+	engine_draw(engine);
 }
 
 // event polling

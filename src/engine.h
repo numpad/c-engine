@@ -79,9 +79,9 @@ void engine_gameserver_disconnect(struct engine_s *);
 void engine_gameserver_send(struct engine_s *, struct message_header *msg);
 
 // main loop
-void engine_update(struct engine_s *engine);
+void engine_update(struct engine_s *engine, double dt);
 void engine_draw(struct engine_s *engine);
-void engine_mainloop(struct engine_s *engine);
+void engine_enter_mainloop(struct engine_s *engine);
 void engine_mainloop_emcc(void *engine);
 
 #endif
