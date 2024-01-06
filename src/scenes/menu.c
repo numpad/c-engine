@@ -39,6 +39,11 @@ typedef struct {
 	int icon;
 } navitem_t;
 
+typedef struct {
+	ivec3 pos;
+	ivec2 tile;
+} entity_t;
+
 //
 // vars
 //
@@ -57,6 +62,10 @@ static Mix_Chunk *g_sound_click = NULL;
 static Mix_Chunk *g_sound_clickend = NULL;
 static Mix_Music *g_music = NULL;
 
+static size_t g_entities_len = 3;
+static entity_t g_entities[3];
+
+// multiplayer
 static int others_in_lobby = 0;
 static int id_of_current_lobby = 0;
 static int *ids_of_lobbies = NULL;
@@ -116,7 +125,26 @@ static void menu_load(struct menu_s *menu, struct engine_s *engine) {
 	background_set_parallax("res/image/bg-glaciers/%d.png", 4);
 
 	Mix_VolumeMusic(MIX_MAX_VOLUME * 0.2f);
-	Mix_PlayMusic(g_music, -1);
+	//Mix_PlayMusic(g_music, -1);
+
+	// setup entities
+	g_entities[0].pos[0] = 4;
+	g_entities[0].pos[1] = 4;
+	g_entities[0].pos[2] = 0;
+	g_entities[0].tile[0] = 0;
+	g_entities[0].tile[1] = 10;
+
+	g_entities[1].pos[0] = 1;
+	g_entities[1].pos[1] = 8;
+	g_entities[1].pos[2] = 1;
+	g_entities[1].tile[0] = 0;
+	g_entities[1].tile[1] = 7;
+
+	g_entities[2].pos[0] = 6;
+	g_entities[2].pos[1] = 8;
+	g_entities[2].pos[2] = 0;
+	g_entities[2].tile[0] = 4;
+	g_entities[2].tile[1] = 7;
 }
 
 static void menu_destroy(struct menu_s *menu, struct engine_s *engine) {
@@ -253,7 +281,7 @@ static void menu_draw(struct menu_s *menu, struct engine_s *engine) {
 					}
 				}
 				if (drag->state == INPUT_DRAG_IN_PROGRESS) {
-					active_button_progress += 1.0f / 90.0f; // FIXME: framerate independent
+					active_button_progress += engine->dt;
 					active_button_progress = fminf(active_button_progress, 1.0f);
 				}
 				if (drag->state == INPUT_DRAG_END && b == active_button) {
@@ -266,7 +294,7 @@ static void menu_draw(struct menu_s *menu, struct engine_s *engine) {
 					Mix_PlayChannel(-1, g_sound_clickend, 0); // TODO: this gets deleted in menu_destroy and wont play
 				}
 				if (active_button != NULL && drag->state == INPUT_DRAG_NONE) {
-					active_button_progress *= 0.83f;
+					active_button_progress *= 0.83f; // FIXME: framerate independent
 					if (active_button_progress < 0.01f) {
 						active_button_progress = 0.0f;
 						active_button = NULL;
@@ -306,20 +334,33 @@ static void menu_draw(struct menu_s *menu, struct engine_s *engine) {
 		}
 	}
 
-	vec2 bp = GLM_VEC2_ZERO_INIT;
-	isoterrain_pos_block_to_screen(menu->terrain, 0, 0, 0, bp);
+	// test entity rendering
+	for (size_t i = 0; i < g_entities_len; ++i) {
+		entity_t *e = &g_entities[i];
+		vec2 bp = GLM_VEC2_ZERO_INIT;
+		isoterrain_pos_block_to_screen(menu->terrain, e->pos[0], e->pos[1], e->pos[2], bp);
 
-	nvgSave(vg);
-	nvgTranslate(vg, 25.0f, 160.0f + fabsf(sinf(engine->time_elapsed)) * -30.0f);
-	nvgScale(vg, t_scale, t_scale);
+		nvgSave(vg);
+		nvgTranslate(vg, 25.0f, 160.0f + fabsf(sinf(engine->time_elapsed)) * -30.0f);
+		nvgScale(vg, t_scale, t_scale);
+		nvgTranslate(vg, bp[0], -bp[1] - 25.0f);
 
-	NVGpaint p = nvgImagePattern(vg, -16.0f * 0.0f, -17.0f * 7.0f, 256.0f, 256.0f, 0.0f, g_entity_texture, 1.0f);
-	nvgBeginPath(vg);
-	nvgRect(vg, 0.0f, 0.0f, 16.0f, 17.0f);
-	nvgFillPaint(vg, p);
-	nvgFill(vg);
+		// draw shadow
+		nvgBeginPath(vg);
+		nvgEllipse(vg, 8.0f, 15.0f, 5.0f, 2.0f);
+		nvgFillColor(vg, nvgRGBAf(0.0f, 0.0f, 0.0f, 0.325f));
+		nvgFill(vg);
 
-	nvgRestore(vg);
+		// draw sprite
+		const int anim = fmodf(engine->time_elapsed, 1.0f) < 0.5f;
+		NVGpaint p = nvgImagePattern(vg, -16.0f * (e->tile[0] + anim), -17.0f * e->tile[1], 256.0f, 256.0f, 0.0f, g_entity_texture, 1.0f);
+		nvgBeginPath(vg);
+		nvgRect(vg, 0.0f, 0.0f, 16.0f, 17.0f);
+		nvgFillPaint(vg, p);
+		nvgFill(vg);
+
+		nvgRestore(vg);
+	}
 
 }
 

@@ -382,14 +382,14 @@ void engine_draw(struct engine_s *engine) {
 	
 	// bg
 	nvgBeginPath(engine->vg);
-	nvgRect(engine->vg, bounds[0], bounds[1], bounds[2], bounds[3]);
+	nvgRect(engine->vg, engine->window_width - bounds[2], bounds[1], bounds[2], bounds[3]);
 	nvgFillColor(engine->vg, nvgRGBAf(0, 0, 0, 0.65f));
 	nvgFill(engine->vg);
 
 	// text
 	nvgBeginPath(engine->vg);
 	nvgFillColor(engine->vg, nvgRGBf(1.0f, 1.0f, 0.0f));
-	nvgText(engine->vg, 0.0f, 0.0f, debug_info, NULL);
+	nvgText(engine->vg, engine->window_width - bounds[2], 0.0f, debug_info, NULL);
 #endif
 
 	nk_sdl_render(NK_ANTI_ALIASING_ON, 512 * 1024, 128 * 1024);
