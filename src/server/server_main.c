@@ -258,9 +258,8 @@ static void *thread_run_gameserver(void *data) {
 	gserver.callback_on_disconnect = server_on_disconnect;
 	gserver.callback_on_message = server_on_message;
 
-	console_log("Starting Websocket server on :%d...", port);
-	
 	// run
+	console_log("Starting Websocket server on :%d...", port);
 	gameserver_listen(&gserver);
 
 	// destroy

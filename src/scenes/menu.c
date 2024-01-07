@@ -65,6 +65,8 @@ static Mix_Music *g_music = NULL;
 static size_t g_entities_len = 3;
 static entity_t g_entities[3];
 
+struct scene_s *g_next_scene = NULL;
+
 // multiplayer
 static int others_in_lobby = 0;
 static int id_of_current_lobby = 0;
@@ -161,9 +163,26 @@ static void menu_destroy(struct menu_s *menu, struct engine_s *engine) {
 }
 
 static void menu_update(struct menu_s *menu, struct engine_s *engine, float dt) {
+	if (g_next_scene != NULL) {
+		engine_setscene(engine, g_next_scene);
+		g_next_scene = NULL;
+	}
 }
 
 static void menu_draw(struct menu_s *menu, struct engine_s *engine) {
+	NVGcontext *vg = engine->vg;
+	const float W2 = engine->window_width * 0.5f;
+	const float H2 = engine->window_height * 0.5f;
+
+	// TODO: fix background
+	nvgBeginPath(vg);
+	nvgRect(vg, 0, engine->window_height * 0.6f - 4.0f, engine->window_width, H2);
+	nvgFillColor(vg, nvgRGBf(0.75f, 0.93f, 0.99f));
+	nvgFill(vg);
+
+	nvgEndFrame(vg);
+	nvgBeginFrame(engine->vg, engine->window_width, engine->window_height, engine->window_pixel_ratio);
+
 	background_draw(engine);
 
 	// draw terrain
@@ -178,10 +197,6 @@ static void menu_draw(struct menu_s *menu, struct engine_s *engine) {
 	isoterrain_draw(menu->terrain, engine->u_projection, engine->u_view);
 
 	//draw_menu(engine, engine->nk);
-
-	NVGcontext *vg = engine->vg;
-	const float W2 = engine->window_width * 0.5f;
-	const float H2 = engine->window_height * 0.5f;
 
 	// draw menu
 	{
@@ -204,16 +219,15 @@ static void menu_draw(struct menu_s *menu, struct engine_s *engine) {
 
 		// buttons
 		mainbutton_t buttons[] = {
-			// "play"
 			{
-				20.0f, H2, W2 - 40.0f, H2 * 0.5f - 20.0f,
+				20.0f, H2 + 60.0f, W2 - 40.0f, H2 * 0.5f - 50.0f,
 				.text1 = "Settings",
 				.bg1 = nvgRGBf(1.0f, 0.5f, 0.35f),
 				.bg2 = nvgRGBf(0.79f, 0.3f, 0.16f),
 				.outline = nvgRGBf(0.2f, 0.0f, 0.0f),
 			},
 			{
-				20.0f, H2 + H2 * 0.5f, W2 - 40.0f, H2 * 0.5f - 20.0f,
+				20.0f, H2 + H2 * 0.5f + 30.0f, W2 - 40.0f, H2 * 0.5f - 50.0f,
 				.text1 = "Mini",
 				.text2 = "Game",
 				.bg1 = nvgRGBf(1.0f, 0.8f, 0.35f),
@@ -222,7 +236,7 @@ static void menu_draw(struct menu_s *menu, struct engine_s *engine) {
 				.on_click = &switch_to_minigame_scene,
 			},
 			{
-				W2, H2, W2 - 20.0f, H2 - 20.0f,
+				W2, H2 + 60.0f, W2 - 20.0f, H2 - 20.0f - 60.0f,
 				.text1 = "Start",
 				.text2 = "Game",
 				.subtext = "(Singleplayer)",
@@ -233,7 +247,7 @@ static void menu_draw(struct menu_s *menu, struct engine_s *engine) {
 			},
 			// "social"
 			{
-				W2 - 120.0f + engine->window_width, engine->window_height - 210.0f, 240.0f, 190.0f,
+				W2 - 120.0f + engine->window_width, engine->window_height - 240.0f, 240.0f, 190.0f,
 				.text1 = "Search",
 				.text2 = "Friends",
 				.subtext = g_search_friends_text,
@@ -442,13 +456,19 @@ void scene_menu_init(struct menu_s *menu, struct engine_s *engine) {
 static void switch_to_game_scene(struct engine_s *engine) {
 	struct scene_battle_s *game_scene_battle = malloc(sizeof(struct scene_battle_s));
 	scene_battle_init(game_scene_battle, engine);
-	engine_setscene(engine, (struct scene_s *)game_scene_battle);
+	//engine_setscene(engine, (struct scene_s *)game_scene_battle);
+	g_next_scene = (struct scene_s *)game_scene_battle;
+
+	platform_vibrate(PLATFORM_VIBRATE_TAP);
 }
 
 static void switch_to_minigame_scene(struct engine_s *engine) {
 	struct scene_experiments_s *game_scene_experiments = malloc(sizeof(struct scene_experiments_s));
 	scene_experiments_init(game_scene_experiments, engine);
-	engine_setscene(engine, (struct scene_s *)game_scene_experiments);
+	//engine_setscene(engine, (struct scene_s *)game_scene_experiments);
+	g_next_scene = (struct scene_s *)game_scene_experiments;
+
+	platform_vibrate(PLATFORM_VIBRATE_TAP);
 }
 
 static void draw_menu(struct engine_s *engine, struct nk_context *nk) {

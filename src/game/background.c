@@ -61,7 +61,6 @@ void background_set_parallax(const char *filename_fmt, int layers_count) {
 	for (int i = 0; i < layers_count; ++i) {
 		char filename[512] = {0};
 		snprintf(filename, 512, filename_fmt, i);
-
 		texture_init_from_image(&g_textures[i], filename, NULL);
 	}
 }

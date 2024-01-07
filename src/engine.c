@@ -517,8 +517,9 @@ static void engine_poll_events(struct engine_s *engine) {
 				engine->on_notify_callbacks[i](engine);
 			}
 		} else if (event.type == USR_EVENT_GOBACK) {
-			console_add_message(engine->console, (struct console_msg_s) { .message = "← Back" });
+			console_log(engine->console, "← Back");
 
+			// TODO: only switch if we're not in menu? need to be able to check scene type
 			// TODO: notify current scene about this
 			struct menu_s *menu_scene = malloc(sizeof(struct menu_s));
 			scene_menu_init(menu_scene, engine);
