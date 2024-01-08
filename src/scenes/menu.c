@@ -123,7 +123,8 @@ static void menu_load(struct menu_s *menu, struct engine_s *engine) {
 
 	menu->terrain = malloc(sizeof(struct isoterrain_s));
 	isoterrain_init_from_file(menu->terrain, "res/data/levels/winter.json");
-	
+
+
 	background_set_parallax("res/image/bg-glaciers/%d.png", 4);
 
 	Mix_VolumeMusic(MIX_MAX_VOLUME * 0.2f);
@@ -173,15 +174,6 @@ static void menu_draw(struct menu_s *menu, struct engine_s *engine) {
 	NVGcontext *vg = engine->vg;
 	const float W2 = engine->window_width * 0.5f;
 	const float H2 = engine->window_height * 0.5f;
-
-	// TODO: fix background
-	nvgBeginPath(vg);
-	nvgRect(vg, 0, engine->window_height * 0.6f - 4.0f, engine->window_width, H2);
-	nvgFillColor(vg, nvgRGBf(0.75f, 0.93f, 0.99f));
-	nvgFill(vg);
-
-	nvgEndFrame(vg);
-	nvgBeginFrame(engine->vg, engine->window_width, engine->window_height, engine->window_pixel_ratio);
 
 	background_draw(engine);
 
@@ -323,6 +315,9 @@ static void menu_draw(struct menu_s *menu, struct engine_s *engine) {
 		{
 			nvgSave(vg);
 			nvgTranslate(vg, engine->window_width, 0.0f);
+
+			ugui_mainmenu_checkbox(engine, 50.0f, 110.0f, 90.0f, 45.0f, g_font, "Multiplayer", sinf(engine->time_elapsed * 3.0f) * 0.5f + 0.5f);
+
 			// draw here...
 			nvgRestore(vg);
 		}

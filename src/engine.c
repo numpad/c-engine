@@ -368,7 +368,7 @@ void engine_draw(struct engine_s *engine) {
 #ifdef DEBUG
 	// display debug_info
 	char debug_info[128];
-	snprintf(debug_info, 128, "dt=%.4fms / FPS=%.0f [%.2fs total]", engine->dt, 1.0 / engine->dt, engine->time_elapsed);
+	snprintf(debug_info, 128, "dt=%.1fms / FPS=%.0f [%.1fs total]", engine->dt * 1000.0f, 1.0 / engine->dt, engine->time_elapsed);
 	//printf("dt = %.5fms / %.0f (Total: %.2f)\n", dt, 1.0 / dt, engine->time_elapsed);
 
 	vec4 bounds;
@@ -382,14 +382,14 @@ void engine_draw(struct engine_s *engine) {
 	
 	// bg
 	nvgBeginPath(engine->vg);
-	nvgRect(engine->vg, engine->window_width - bounds[2], bounds[1], bounds[2], bounds[3]);
+	nvgRect(engine->vg, engine->window_width - bounds[2], engine->window_height - bounds[3], bounds[2], bounds[3]);
 	nvgFillColor(engine->vg, nvgRGBAf(0, 0, 0, 0.65f));
 	nvgFill(engine->vg);
 
 	// text
 	nvgBeginPath(engine->vg);
 	nvgFillColor(engine->vg, nvgRGBf(1.0f, 1.0f, 0.0f));
-	nvgText(engine->vg, engine->window_width - bounds[2], 0.0f, debug_info, NULL);
+	nvgText(engine->vg, engine->window_width - bounds[2], engine->window_height - bounds[3], debug_info, NULL);
 #endif
 
 	nk_sdl_render(NK_ANTI_ALIASING_ON, 512 * 1024, 128 * 1024);

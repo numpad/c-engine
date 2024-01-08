@@ -120,7 +120,7 @@ static void load(struct scene_battle_s *scene, struct engine_s *engine) {
 	cardrenderer_init(g_cardrenderer, "res/image/cards.png");
 
 	// background
-	background_set_image("res/image/bg-glaciers-light.png");
+	background_set_parallax("res/image/bg-glaciers/%d.png", 4);
 
 	sound = Mix_LoadWAV("res/sounds/test.wav");
 }
@@ -191,7 +191,7 @@ static void update(struct scene_battle_s *scene, struct engine_s *engine, float 
 	// map transform
 	const float mw = g_terrain->width * 16.0f;
 	glm_mat4_identity(engine->u_view);
-	glm_translate(engine->u_view, (vec3){ 0.0f, 0.0f, 0.0f });
+	glm_translate(engine->u_view, (vec3){ 0.0f, 140.0f, 0.0f });
 	glm_scale(engine->u_view, (vec3){ engine->window_width / mw, -(engine->window_width / mw), 1.0f});
 }
 

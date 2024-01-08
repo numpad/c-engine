@@ -58,10 +58,16 @@ void background_set_parallax(const char *filename_fmt, int layers_count) {
 	
 	// load images
 	stbds_arrinsn(g_textures, 0, layers_count);
+	struct texture_settings_s settings = {
+		.filter_min = GL_LINEAR,
+		.filter_mag = GL_NEAREST,
+		.wrap_s = GL_REPEAT,
+		.wrap_t = GL_CLAMP_TO_EDGE,
+	};
 	for (int i = 0; i < layers_count; ++i) {
 		char filename[512] = {0};
 		snprintf(filename, 512, filename_fmt, i);
-		texture_init_from_image(&g_textures[i], filename, NULL);
+		texture_init_from_image(&g_textures[i], filename, &settings);
 	}
 }
 
@@ -88,7 +94,11 @@ void background_draw(struct engine_s *engine) {
 	shader_set_uniform_vec2(&g_shader, "u_resolution", (vec2){ engine->window_width * engine->window_pixel_ratio, engine->window_height * engine->window_pixel_ratio });
 	const int g_textures_len = stbds_arrlen(g_textures);
 	for (int i = g_textures_len - 1; i >= 0; --i) {
-		shader_set_uniform_float(&g_shader, "u_parallax_offset", fmodf((engine->time_elapsed * 0.01f) * (4 - i + 1), 1.0f));
+		vec2 parallax_offset = {
+			fmodf((engine->time_elapsed * 0.01f) * (4 - i + 1), 1.0f),
+			-0.4f
+		};
+		shader_set_uniform_vec2(&g_shader, "u_parallax_offset", parallax_offset);
 		shader_set_uniform_texture(&g_shader, "u_texture", GL_TEXTURE0, &g_textures[i]);
 		vbuffer_draw(&g_vbuffer, 6);
 	}
@@ -104,11 +114,11 @@ void background_draw(struct engine_s *engine) {
 static void init_vbuffer_rect(vbuffer_t *vbuf, shader_t *shader) {
 	GLfloat vertices[] = {
 		-1.0f, -1.0f,
-		1.0f, -1.0f,
-		-1.0f, 1.0f,
-		-1.0f, 1.0f,
-		1.0f, -1.0f,
-		1.0f, 1.0f,
+		 1.0f, -1.0f,
+		-1.0f,  1.0f,
+		-1.0f,  1.0f,
+		 1.0f, -1.0f,
+		 1.0f,  1.0f,
 	};
 
 	vbuffer_init(vbuf);

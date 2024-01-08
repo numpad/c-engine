@@ -14,6 +14,11 @@ const float g_bookmark_width = 110.0f;
 const float g_bookmark_pointyness = 30.0f;
 
 //
+// private funcs
+//
+static void mix_color(NVGcolor *out, NVGcolor a, NVGcolor b, float v);
+
+//
 // public api
 //
 
@@ -215,5 +220,77 @@ void ugui_mainmenu_button(engine_t *engine, float x, float y, float w, float h, 
 	if (subtext) nvgText(vg, x + w * 0.5f, y + 80.0f + 58.0f, subtext, NULL);
 
 	nvgRestore(vg);
+}
+
+void ugui_mainmenu_checkbox(engine_t *engine, float x, float y, float w, float h, int font, const char *text, float is_checked) {
+	assert(text != NULL);
+	NVGcontext *vg = engine->vg;
+	const float hp = glm_ease_exp_inout(is_checked);
+
+	const NVGcolor color_red = nvgRGBf(0.79f, 0.3f, 0.16f);
+	const NVGcolor color_green = nvgRGBf(0.39f, 0.82f, 0.2f);
+	NVGcolor color_knob;
+	mix_color(&color_knob, color_red, color_green, glm_ease_circ_inout(hp));
+
+	const NVGcolor color_bg = nvgRGBf(0.95f, 0.95f, 0.95f);
+	const float radius = h * 0.5f;
+	const float knob_radius = radius - 5.0f;
+
+	nvgSave(vg);
+
+	// background
+	nvgBeginPath(vg);
+	nvgArc(vg, x + radius, y + radius, radius, GLM_PIf - GLM_PI_2f, 2.0f * GLM_PI - GLM_PI_2f, NVG_CW);
+	nvgFillColor(vg, color_bg);
+	nvgFill(vg);
+
+	nvgBeginPath(vg);
+	nvgRect(vg, x + radius - 1.0f, y, w - radius * 2.0f + 2.0f, h);
+	nvgFillColor(vg, color_bg);
+	nvgFill(vg);
+
+	nvgBeginPath(vg);
+	nvgArc(vg, x + w - radius, y + radius, radius, GLM_PIf + GLM_PI_2f, 2.0f * GLM_PI + GLM_PI_2f, NVG_CW);
+	nvgFillColor(vg, color_bg);
+	nvgFill(vg);
+	
+	// outline
+	nvgBeginPath(vg);
+	nvgArc(vg, x + radius, y + radius, radius, GLM_PIf - GLM_PI_2f, 2.0f * GLM_PI - GLM_PI_2f, NVG_CW);
+	nvgArc(vg, x + w - radius, y + radius, radius, GLM_PIf + GLM_PI_2f, 2.0f * GLM_PI + GLM_PI_2f, NVG_CW);
+	nvgLineTo(vg, x + radius, y + h);
+	nvgStrokeColor(vg, nvgRGBf(0.2f, 0.2f, 0.2f));
+	nvgStrokeWidth(vg, 3.0f);
+	nvgStroke(vg);
+
+	// knob
+	nvgBeginPath(vg);
+	nvgEllipse(vg, x + radius + (w - radius * 2.0f) * hp, y + radius, knob_radius, knob_radius * (2.0f * hp - 1.0f));
+	nvgFillColor(vg, color_knob);
+	nvgFill(vg);
+	nvgStrokeColor(vg, nvgRGBf(0.2f, 0.2f, 0.2f));
+	nvgStrokeWidth(vg, 3.0f);
+	nvgStroke(vg);
+
+	// text
+	nvgFontFaceId(vg, font);
+	nvgFontSize(vg, 34.0f);
+	nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
+	nvgFillColor(vg, nvgRGBf(0.1f, 0.1f, 0.1f));
+	nvgText(vg, x + w + 20.0f, y + h * 0.5f, text, NULL);
+
+	nvgRestore(vg);
+}
+
+
+//
+// private impls
+//
+
+static void mix_color(NVGcolor *out, NVGcolor a, NVGcolor b, float v) {
+	out->r = glm_lerp(a.r, b.r, v);
+	out->g = glm_lerp(a.g, b.g, v);
+	out->b = glm_lerp(a.b, b.b, v);
+	out->a = 1.0f;
 }
 
