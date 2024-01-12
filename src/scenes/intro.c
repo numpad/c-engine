@@ -19,7 +19,7 @@ static void intro_load(struct intro_s *scene, struct engine_s *engine) {
 
 	scene->timer = 0.0f;
 	scene->time_passed = 0.0f;
-	scene->time_passed_max = 4.0f;
+	scene->time_passed_max = 1.75f;
 
 	scene->logo_image_nvg = nvgCreateImage(engine->vg, "res/image/numpad.png", NVG_IMAGE_NEAREST);
 

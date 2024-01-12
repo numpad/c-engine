@@ -25,29 +25,16 @@ static void init_vbuffer_rect(vbuffer_t *vbuf, shader_t *shader);
 static shader_t g_shader = {0};
 static vbuffer_t g_vbuffer = {0};
 static texture_t *g_textures = NULL;
+static float g_parallax_offset_y = 0.0f;
 
 //
 // public api
 //
 
-void background_set_image(const char *filename) {
-	assert(g_textures == NULL);
-
-	// load shader
-	shader_init_from_dir(&g_shader, "res/shader/background/");
-	assert(g_shader.program != 0);
-
-	// load vertices
-	init_vbuffer_rect(&g_vbuffer, &g_shader);
-
-	// load image
-	stbds_arrinsn(g_textures, 0, 1);
-	texture_init_from_image(&g_textures[0], filename, NULL);
-	
-}
-
 void background_set_parallax(const char *filename_fmt, int layers_count) {
 	assert(g_textures == NULL);
+
+	g_parallax_offset_y = 0.0f;
 
 	// load shader
 	shader_init_from_dir(&g_shader, "res/shader/background/");
@@ -69,6 +56,10 @@ void background_set_parallax(const char *filename_fmt, int layers_count) {
 		snprintf(filename, 512, filename_fmt, i);
 		texture_init_from_image(&g_textures[i], filename, &settings);
 	}
+}
+
+void background_set_parallax_offset(float y) {
+	g_parallax_offset_y = y;
 }
 
 void background_destroy(void) {
@@ -94,11 +85,13 @@ void background_draw(struct engine_s *engine) {
 	shader_set_uniform_vec2(&g_shader, "u_resolution", (vec2){ engine->window_width * engine->window_pixel_ratio, engine->window_height * engine->window_pixel_ratio });
 	const int g_textures_len = stbds_arrlen(g_textures);
 	for (int i = g_textures_len - 1; i >= 0; --i) {
-		vec2 parallax_offset = {
-			fmodf((engine->time_elapsed * 0.01f) * (4 - i + 1), 1.0f),
-			-0.4f
+		const float p = (g_textures_len - i + 1);
+		vec3 parallax_offset = {
+			fmodf((engine->time_elapsed * 0.01f) * p, 1.0f),
+			g_parallax_offset_y * (0.4f + (1.0f - glm_ease_bounce_in((float)i / g_textures_len)) * 0.5f) - (1.0f - p) * 0.02f,
+			(float)i / g_textures_len,
 		};
-		shader_set_uniform_vec2(&g_shader, "u_parallax_offset", parallax_offset);
+		shader_set_uniform_vec3(&g_shader, "u_parallax_offset", parallax_offset);
 		shader_set_uniform_texture(&g_shader, "u_texture", GL_TEXTURE0, &g_textures[i]);
 		vbuffer_draw(&g_vbuffer, 6);
 	}

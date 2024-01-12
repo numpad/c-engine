@@ -6,6 +6,7 @@
 #include <SDL_mixer.h>
 #include <nanovg.h>
 #include <cglm/cglm.h>
+#include <cglm/struct.h>
 #include <stb_ds.h>
 #include <nuklear.h>
 #include "engine.h"
@@ -56,6 +57,8 @@ static int g_menuicon_social = -1;
 static int g_entity_texture = -1;
 static const char *g_search_friends_texts[] = {"(Both Users Hold Button)", "Searching..."};
 static const char *g_search_friends_text = NULL;
+static vec2s g_menu_camera;
+static float g_menu_camera_target_y = 0.0f;
 
 // sfx
 static Mix_Chunk *g_sound_click = NULL;
@@ -86,10 +89,10 @@ void reset_ids_of_lobbies(void) {
 static float menuitem_active(float menu_x, float bookmark_x, float bookmark_tx);
 
 // switch scenes
-static void switch_to_game_scene(struct engine_s *engine);
 static void switch_to_minigame_scene(struct engine_s *engine);
 
 // button callbacks
+static void on_start_game(struct engine_s *engine);
 void on_begin_search_friends(struct engine_s *);
 void on_end_search_friends(struct engine_s *);
 
@@ -179,12 +182,12 @@ static void menu_draw(struct menu_s *menu, struct engine_s *engine) {
 
 	// draw terrain
 	const float t_padding = 50.0f;
-	int t_width;
-	isoterrain_get_projected_size(menu->terrain, &t_width, NULL);
+	int t_width = menu->terrain->projected_width;
+
 	// build matrix
 	glm_mat4_identity(engine->u_view);
 	const float t_scale = ((engine->window_width - t_padding) / (float)t_width);
-	glm_translate(engine->u_view, (vec3){ 25.0f, 160.0f + fabsf(sinf(engine->time_elapsed)) * -30.0f, 0.0f });
+	glm_translate(engine->u_view, (vec3){ 25.0f + g_menu_camera.x, 160.0f + fabsf(sinf(engine->time_elapsed)) * -30.0f, 0.0f });
 	glm_scale(engine->u_view, (vec3){ t_scale, -t_scale, t_scale });
 	isoterrain_draw(menu->terrain, engine->u_projection, engine->u_view);
 
@@ -235,7 +238,7 @@ static void menu_draw(struct menu_s *menu, struct engine_s *engine) {
 				.bg1 = nvgRGBf(0.80f, 1.0f, 0.42f),
 				.bg2 = nvgRGBf(0.39f, 0.82f, 0.20f),
 				.outline = nvgRGBf(0.0f, 0.2f, 0.0f),
-				.on_click = &switch_to_game_scene,
+				.on_click = &on_start_game,
 			},
 			// "social"
 			{
@@ -252,20 +255,16 @@ static void menu_draw(struct menu_s *menu, struct engine_s *engine) {
 			{ .text1 = NULL } // "null" elem
 		};
 
-		// draw navbar
-		ugui_mainmenu_bar(engine);
-		ugui_mainmenu_bookmark(engine, glm_lerp(bookmark_x, navitems[active_navitem].x, 0.5f));
-		for (navitem_t *i = &navitems[0]; i->text != NULL; ++i) {
-			ugui_mainmenu_icon(engine, i->x, i->text, i->icon, g_font, menuitem_active(i->x, bookmark_x, navitems[active_navitem].x));
-		}
-
 		static mainbutton_t *active_button = NULL;
 		static float active_button_progress = 0.0f;
 
 		// draw menu tabs/screens
-		const float menu_camera_x = ((bookmark_x - W2) / 128.0f) * -engine->window_width;
+		g_menu_camera.x = ((bookmark_x - W2) / 128.0f) * -engine->window_width;
+		g_menu_camera.y = glm_lerp(g_menu_camera.y, g_menu_camera_target_y * engine->window_height * -1.0f, engine->dt * 5.0f);
+		background_set_parallax_offset(-0.4f + g_menu_camera.y / engine->window_height * 0.4f);
+
 		nvgSave(vg);
-		nvgTranslate(vg, menu_camera_x, 0.0f);
+		nvgTranslate(vg, g_menu_camera.x, g_menu_camera.y);
 
 		// "cards" menu
 		{
@@ -278,7 +277,7 @@ static void menu_draw(struct menu_s *menu, struct engine_s *engine) {
 		// "play" menu
 		{
 			for (mainbutton_t *b = &buttons[0]; b->text1 != NULL; ++b) {
-				if (drag->state == INPUT_DRAG_BEGIN && point_in_rect(drag->begin_x - menu_camera_x, drag->begin_y, b->x, b->y, b->w, b->h)) {
+				if (drag->state == INPUT_DRAG_BEGIN && point_in_rect(drag->begin_x - g_menu_camera.x, drag->begin_y - g_menu_camera.y, b->x, b->y, b->w, b->h)) {
 					Mix_PlayChannel(-1, g_sound_click, 0);
 					active_button = b;
 					active_button_progress = 0.0f;
@@ -291,7 +290,7 @@ static void menu_draw(struct menu_s *menu, struct engine_s *engine) {
 					active_button_progress = fminf(active_button_progress, 1.0f);
 				}
 				if (drag->state == INPUT_DRAG_END && b == active_button) {
-					if (b->on_click != NULL && point_in_rect(drag->end_x - menu_camera_x, drag->end_y, b->x, b->y, b->w, b->h)) {
+					if (b->on_click != NULL && point_in_rect(drag->end_x - g_menu_camera.x, drag->end_y - g_menu_camera.y, b->x, b->y, b->w, b->h)) {
 						b->on_click(engine);
 					}
 					if (b->on_press_end != NULL) {
@@ -324,9 +323,16 @@ static void menu_draw(struct menu_s *menu, struct engine_s *engine) {
 
 		nvgRestore(vg);
 
+		// draw navbar
+		ugui_mainmenu_bar(engine);
+		ugui_mainmenu_bookmark(engine, bookmark_x);
+		for (navitem_t *i = &navitems[0]; i->text != NULL; ++i) {
+			ugui_mainmenu_icon(engine, i->x, i->text, i->icon, g_font, menuitem_active(i->x, bookmark_x, navitems[active_navitem].x));
+		}
+
 		// logic
 		if (fabsf(navitems[active_navitem].x - bookmark_x) > 0.001f) {
-			bookmark_x = glm_lerp(bookmark_x, navitems[active_navitem].x, 0.2f);
+			bookmark_x = glm_lerp(bookmark_x, navitems[active_navitem].x, engine->dt * 15.0f);
 		}
 		if (drag->state == INPUT_DRAG_END && drag->begin_y <= bar_height && drag->end_y <= bar_height) {
 			size_t index = 0;
@@ -335,6 +341,7 @@ static void menu_draw(struct menu_s *menu, struct engine_s *engine) {
 					if (index != active_navitem) {
 						Mix_PlayChannel(-1, g_sound_click, 0);
 						active_navitem = index;
+						g_menu_camera_target_y = 0.0f;
 					}
 					break;
 				}
@@ -350,7 +357,7 @@ static void menu_draw(struct menu_s *menu, struct engine_s *engine) {
 		isoterrain_pos_block_to_screen(menu->terrain, e->pos[0], e->pos[1], e->pos[2], bp);
 
 		nvgSave(vg);
-		nvgTranslate(vg, 25.0f, 160.0f + fabsf(sinf(engine->time_elapsed)) * -30.0f);
+		nvgTranslate(vg, 25.0f + g_menu_camera.x, 160.0f + fabsf(sinf(engine->time_elapsed)) * -30.0f);
 		nvgScale(vg, t_scale, t_scale);
 		nvgTranslate(vg, bp[0], -bp[1] - 25.0f);
 
@@ -375,6 +382,10 @@ static void menu_draw(struct menu_s *menu, struct engine_s *engine) {
 
 static void menu_on_message(struct menu_s *menu, struct engine_s *engine, struct message_header *msg) {
 	switch (msg->type) {
+		case WELCOME_RESPONSE: {
+			struct welcome_response *response = (struct welcome_response *)msg;
+			break;
+		}
 		case LOBBY_CREATE_RESPONSE: {
 			struct lobby_create_response *response = (struct lobby_create_response *)msg;
 			if (response->create_error) {
@@ -448,11 +459,15 @@ void scene_menu_init(struct menu_s *menu, struct engine_s *engine) {
 // private impls
 //
 
-static void switch_to_game_scene(struct engine_s *engine) {
+static void on_start_game(struct engine_s *engine) {
+	g_menu_camera_target_y = -1.0f;
+
+	/*
 	struct scene_battle_s *game_scene_battle = malloc(sizeof(struct scene_battle_s));
 	scene_battle_init(game_scene_battle, engine);
 	//engine_setscene(engine, (struct scene_s *)game_scene_battle);
 	g_next_scene = (struct scene_s *)game_scene_battle;
+	*/
 
 	platform_vibrate(PLATFORM_VIBRATE_TAP);
 }
@@ -482,7 +497,7 @@ static void draw_menu(struct engine_s *engine, struct nk_context *nk) {
 		nk_layout_row_dynamic(nk, row_height, 1);
 		if (nk_button_symbol_label(nk, NK_SYMBOL_TRIANGLE_RIGHT, "Play Game", NK_TEXT_ALIGN_RIGHT)) {
 			platform_vibrate(PLATFORM_VIBRATE_TAP);
-			switch_to_game_scene(engine);
+			on_start_game(engine);
 		}
 
 		nk_style_pop_color(nk);

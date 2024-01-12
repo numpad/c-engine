@@ -54,7 +54,7 @@ void isoterrain_init(struct isoterrain_s *terrain, int w, int h, int layers) {
 	terrain->layers = layers;
 	terrain->blocks = malloc(w * h * layers * sizeof(iso_block));
 
-	isoterrain_get_projected_size(terrain, NULL, &terrain->projected_height);
+	isoterrain_get_projected_size(terrain, &terrain->projected_width, &terrain->projected_height);
 
 
 	shader_init(&terrain->shader, "res/shader/isoterrain/vertex.glsl", "res/shader/isoterrain/fragment.glsl");

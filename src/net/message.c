@@ -14,6 +14,12 @@ const message_function_info_t message_function_infos[MSG_TYPE_MAX] = {
 		.unpack_fn=NULL,
 		.struct_size=0,
 	},
+	[WELCOME_RESPONSE] = (message_function_info_t){
+		.name        = "WELCOME_RESPONSE",
+		.pack_fn     = (message_pack_fn)pack_welcome_response,
+		.unpack_fn   = (message_unpack_fn)unpack_welcome_response,
+		.struct_size = sizeof(struct welcome_response),
+	},
 	[LOBBY_CREATE_REQUEST] = (message_function_info_t){
 		.name        = "LOBBY_CREATE_REQUEST",
 		.pack_fn     = (message_pack_fn)pack_lobby_create_request,
@@ -126,6 +132,20 @@ void free_message(cJSON *json, struct message_header *msg) {
 	cJSON_Delete(json);
 }
 
+// WELCOME_RESPONSE
+void pack_welcome_response(struct welcome_response *msg, cJSON *json) {
+	assert(msg->header.type == WELCOME_RESPONSE);
+	pack_message_header(&msg->header, json);
+
+	cJSON_AddNumberToObject(json, "_dummy", msg->_dummy);
+}
+
+void unpack_welcome_response(cJSON *json, struct welcome_response *msg) {
+	unpack_message_header(json, &msg->header);
+	assert(msg->header.type == WELCOME_RESPONSE);
+
+	msg->_dummy = cJSON_GetObjectItem(json, "_dummy")->valueint;
+}
 
 // LOBBY_CREATE_REQUEST
 void pack_lobby_create_request(struct lobby_create_request *msg, cJSON *json) {

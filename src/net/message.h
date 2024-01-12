@@ -7,6 +7,8 @@
 
 enum message_type {
 	MSG_TYPE_UNKNOWN = 0,
+	// connection management
+	WELCOME_RESPONSE,
 	// lobby related
 	LOBBY_CREATE_REQUEST, LOBBY_CREATE_RESPONSE,
 	LOBBY_JOIN_REQUEST,   LOBBY_JOIN_RESPONSE,
@@ -77,6 +79,8 @@ void free_message(cJSON *json, struct message_header *);
 	void pack_##_name   (struct _name *, cJSON *); \
 	void unpack_##_name (cJSON *, struct _name *)
 
+MESSAGE_DECLARATION(WELCOME_RESPONSE, welcome_response,
+	int _dummy);
 
 MESSAGE_DECLARATION(LOBBY_CREATE_REQUEST, lobby_create_request,
 	int lobby_id; char *lobby_name);

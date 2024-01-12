@@ -130,6 +130,12 @@ int main(int argc, char **argv) {
 
 static void server_on_connect(struct gameserver *gs, struct session *session) {
 	console_log("Client %d connected.", session->id);
+
+	// send a welcome message
+	struct welcome_response res;
+	message_header_init(&res.header, WELCOME_RESPONSE);
+	res._dummy = 1337;
+	gameserver_send_to(gs, (struct message_header *)&res, session);
 }
 
 static void server_on_disconnect(struct gameserver *gs, struct session *session) {

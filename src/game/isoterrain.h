@@ -15,6 +15,7 @@ struct isoterrain_s {
 	iso_block *blocks;
 
 	// screen size in pixels
+	int projected_width;
 	int projected_height;
 
 	shader_t shader;

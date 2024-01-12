@@ -277,7 +277,7 @@ void ugui_mainmenu_checkbox(engine_t *engine, float x, float y, float w, float h
 	nvgFontSize(vg, 34.0f);
 	nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
 	nvgFillColor(vg, nvgRGBf(0.1f, 0.1f, 0.1f));
-	nvgText(vg, x + w + 20.0f, y + h * 0.5f, text, NULL);
+	nvgText(vg, x + w + 20.0f, y + h * 0.5f + 3.0f, text, NULL);
 
 	nvgRestore(vg);
 }

@@ -555,11 +555,7 @@ static void engine_gameserver_receive(struct engine_s *engine) {
 
 		// TODO: we handle reading multiple objects in a single recv, but not partial objects.
 		const int data_len = SDLNet_TCP_Recv(engine->gameserver_tcp, &data, 511);
-		if (data_len <= 0) {
-			// TODO: Attempt to reconnect?
-			printf("TCP_Recv failure, got 0 bytes... Disconnecting.\n");
-			engine_gameserver_disconnect(engine);
-		} else {
+		if (data_len > 0) {
 			// handle multiple json objects in a single message
 			const char *begin = data;
 			while (begin != NULL && begin < data + data_len) {
@@ -575,6 +571,11 @@ static void engine_gameserver_receive(struct engine_s *engine) {
 			}
 			assert(begin == data + data_len);
 
+		} else {
+			// TODO: why did we recieve nothing?
+			printf("TCP_Recv failure, got 0 bytes...\n");
+			// TODO: if we dont disconnect this will trigger continously in browser
+			engine_gameserver_disconnect(engine);
 		}
 	}
 }
