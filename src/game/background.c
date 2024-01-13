@@ -26,6 +26,7 @@ static shader_t g_shader = {0};
 static vbuffer_t g_vbuffer = {0};
 static texture_t *g_textures = NULL;
 static float g_parallax_offset_y = 0.0f;
+static int g_textures_len = 0;
 
 //
 // public api
@@ -51,11 +52,13 @@ void background_set_parallax(const char *filename_fmt, int layers_count) {
 		.wrap_s = GL_REPEAT,
 		.wrap_t = GL_CLAMP_TO_EDGE,
 	};
+
 	for (int i = 0; i < layers_count; ++i) {
 		char filename[512] = {0};
 		snprintf(filename, 512, filename_fmt, i);
 		texture_init_from_image(&g_textures[i], filename, &settings);
 	}
+	g_textures_len = stbds_arrlen(g_textures);
 }
 
 void background_set_parallax_offset(float y) {
@@ -68,11 +71,12 @@ void background_destroy(void) {
 	shader_destroy(&g_shader);
 	g_shader.program = 0;
 	vbuffer_destroy(&g_vbuffer);
-	for (int i = 0; i < stbds_arrlen(g_textures); ++i) {
+	for (int i = 0; i < g_textures_len; ++i) {
 		texture_destroy(&g_textures[i]);
 	}
 	stbds_arrfree(g_textures);
 	g_textures = NULL;
+	g_textures_len = 0;
 }
 
 void background_draw(struct engine_s *engine) {
@@ -83,7 +87,6 @@ void background_draw(struct engine_s *engine) {
 
 	glUseProgram(g_shader.program);
 	shader_set_uniform_vec2(&g_shader, "u_resolution", (vec2){ engine->window_width * engine->window_pixel_ratio, engine->window_height * engine->window_pixel_ratio });
-	const int g_textures_len = stbds_arrlen(g_textures);
 	for (int i = g_textures_len - 1; i >= 0; --i) {
 		const float p = (g_textures_len - i + 1);
 		vec3 parallax_offset = {

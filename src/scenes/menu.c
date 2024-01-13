@@ -89,6 +89,7 @@ void reset_ids_of_lobbies(void) {
 static float menuitem_active(float menu_x, float bookmark_x, float bookmark_tx);
 
 // switch scenes
+static void switch_to_game_scene(struct engine_s *engine);
 static void switch_to_minigame_scene(struct engine_s *engine);
 
 // button callbacks
@@ -106,6 +107,9 @@ static void draw_menu(struct engine_s *, struct nk_context *nk);
 static void menu_load(struct menu_s *menu, struct engine_s *engine) {
 	engine_set_clear_color(0.34f, 0.72f, 0.98f);
 	engine->console_visible = 0;
+
+	g_menu_camera = GLMS_VEC2_ZERO;
+	g_menu_camera_target_y = 0.0f;
 
 	g_search_friends_text = g_search_friends_texts[0];
 	id_of_current_lobby = 0;
@@ -146,8 +150,8 @@ static void menu_load(struct menu_s *menu, struct engine_s *engine) {
 	g_entities[1].tile[0] = 0;
 	g_entities[1].tile[1] = 7;
 
-	g_entities[2].pos[0] = 6;
-	g_entities[2].pos[1] = 8;
+	g_entities[2].pos[0] = 9;
+	g_entities[2].pos[1] = 0;
 	g_entities[2].pos[2] = 0;
 	g_entities[2].tile[0] = 4;
 	g_entities[2].tile[1] = 7;
@@ -251,6 +255,17 @@ static void menu_draw(struct menu_s *menu, struct engine_s *engine) {
 				.outline = nvgRGBf(0.0f, 0.2f, 0.0f),
 				.on_press_begin = &on_begin_search_friends,
 				.on_press_end = &on_end_search_friends,
+			},
+			// start game
+			{
+				engine->window_width * 0.125f, -150.0f - engine->window_width * 0.125f, engine->window_width * 0.75f, 150.0f,
+				.text1 = "Start →",
+				.text2 = NULL,
+				.subtext = NULL,
+				.bg1 = nvgRGBf(0.80f, 1.0f, 0.42f),
+				.bg2 = nvgRGBf(0.39f, 0.82f, 0.20f),
+				.outline = nvgRGBf(0.0f, 0.2f, 0.0f),
+				.on_click = &switch_to_game_scene,
 			},
 			{ .text1 = NULL } // "null" elem
 		};
@@ -359,7 +374,7 @@ static void menu_draw(struct menu_s *menu, struct engine_s *engine) {
 		nvgSave(vg);
 		nvgTranslate(vg, 25.0f + g_menu_camera.x, 160.0f + fabsf(sinf(engine->time_elapsed)) * -30.0f);
 		nvgScale(vg, t_scale, t_scale);
-		nvgTranslate(vg, bp[0], -bp[1] - 25.0f);
+		nvgTranslate(vg, bp[0], -bp[1] - 27.0f);
 
 		// draw shadow
 		nvgBeginPath(vg);
@@ -462,12 +477,13 @@ void scene_menu_init(struct menu_s *menu, struct engine_s *engine) {
 static void on_start_game(struct engine_s *engine) {
 	g_menu_camera_target_y = -1.0f;
 
-	/*
+	platform_vibrate(PLATFORM_VIBRATE_TAP);
+}
+
+static void switch_to_game_scene(struct engine_s *engine) {
 	struct scene_battle_s *game_scene_battle = malloc(sizeof(struct scene_battle_s));
 	scene_battle_init(game_scene_battle, engine);
-	//engine_setscene(engine, (struct scene_s *)game_scene_battle);
 	g_next_scene = (struct scene_s *)game_scene_battle;
-	*/
 
 	platform_vibrate(PLATFORM_VIBRATE_TAP);
 }
