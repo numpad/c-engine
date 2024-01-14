@@ -56,7 +56,6 @@ static int g_font = -1;
 static int g_menuicon_play = -1;
 static int g_menuicon_cards = -1;
 static int g_menuicon_social = -1;
-static int g_entity_texture = -1;
 static texture_t g_entity_tex;
 static const char *g_search_friends_texts[] = {"(Both Users Hold Button)", "Searching..."};
 static const char *g_search_friends_text = NULL;
@@ -124,7 +123,6 @@ static void menu_load(struct menu_s *menu, struct engine_s *engine) {
 	if (g_menuicon_play == -1) g_menuicon_play = nvgCreateImage(engine->vg, "res/sprites/menuicon-dice.png", NVG_IMAGE_GENERATE_MIPMAPS);
 	if (g_menuicon_cards == -1) g_menuicon_cards = nvgCreateImage(engine->vg, "res/sprites/menuicon-cards.png", NVG_IMAGE_GENERATE_MIPMAPS);
 	if (g_menuicon_social == -1) g_menuicon_social = nvgCreateImage(engine->vg, "res/sprites/menuicon-camp.png", NVG_IMAGE_GENERATE_MIPMAPS);
-	if (g_entity_texture == -1) g_entity_texture = nvgCreateImage(engine->vg, "res/sprites/entities.png", NVG_IMAGE_NEAREST);
 	// load sfx & music
 	if (g_sound_click == NULL) g_sound_click = Mix_LoadWAV("res/sounds/click_002.ogg");
 	if (g_sound_clickend == NULL) g_sound_clickend = Mix_LoadWAV("res/sounds/click_005.ogg");
@@ -134,7 +132,7 @@ static void menu_load(struct menu_s *menu, struct engine_s *engine) {
 	menu->terrain = malloc(sizeof(struct isoterrain_s));
 	isoterrain_init_from_file(menu->terrain, "res/data/levels/winter.json");
 
-	texture_init_from_image(&g_entity_tex, "res/sprites/entities.png", NULL);
+	texture_init_from_image(&g_entity_tex, "res/sprites/entities-outline.png", NULL);
 
 	background_set_parallax("res/image/bg-glaciers/%d.png", 4);
 
@@ -168,7 +166,6 @@ static void menu_destroy(struct menu_s *menu, struct engine_s *engine) {
 	nvgDeleteImage(engine->vg, g_menuicon_play); g_menuicon_play = -1;
 	nvgDeleteImage(engine->vg, g_menuicon_cards); g_menuicon_cards = -1;
 	nvgDeleteImage(engine->vg, g_menuicon_social); g_menuicon_social = -1;
-	nvgDeleteImage(engine->vg, g_entity_texture); g_entity_texture = -1;
 	Mix_FreeChunk(g_sound_click); g_sound_click = NULL;
 	Mix_FreeChunk(g_sound_clickend); g_sound_clickend = NULL;
 	Mix_FreeMusic(g_music); g_music = NULL;
@@ -374,17 +371,18 @@ static void menu_draw(struct menu_s *menu, struct engine_s *engine) {
 	entity_anim = fmodf(entity_anim + engine->dt, 1.0f);
 
 	// test entity rendering
+	primitive2d_t sprite = {0};
+	graphics2d_init_rect(&sprite, 0.0f, 0.0f, 16.0f, 17.0f);
 	for (size_t i = 0; i < g_entities_len; ++i) {
 		entity_t *e = &g_entities[i];
 		vec2s bp = GLMS_VEC2_ZERO_INIT;
 		isoterrain_pos_block_to_screen(menu->terrain, e->pos[0], e->pos[1], e->pos[2], bp.raw);
 		
-		primitive2d_t sprite = {0};
-		graphics2d_init_rect(&sprite, bp.x, bp.y, 16.0f, 17.0f);
+		// draw sprite
+		graphics2d_set_position(&sprite, bp.x, bp.y);
 		graphics2d_set_texture_tile(&sprite, &g_entity_tex, 16.0f, 17.0f, e->tile[0] + (entity_anim < 0.5f), e->tile[1]);
 		graphics2d_draw_primitive2d(engine, &sprite);
 	}
-
 }
 
 static void menu_on_message(struct menu_s *menu, struct engine_s *engine, struct message_header *msg) {

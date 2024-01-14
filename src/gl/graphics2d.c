@@ -1,5 +1,6 @@
 #include "graphics2d.h"
 
+#include <assert.h>
 #include <cglm/cglm.h>
 #include "engine.h"
 #include "gl/texture.h"
@@ -12,6 +13,16 @@
 
 static shader_t g_primitive_shader = {0};
 static vbuffer_t g_rect_vbuffer = {0};
+
+static float g_vertices[] = {
+	// Quad
+	0.0f, 0.0f,  0.0f, 0.0f,
+	1.0f, 0.0f,  1.0f, 0.0f,
+	0.0f, 1.0f,  0.0f, 1.0f,
+	0.0f, 1.0f,  0.0f, 1.0f,
+	1.0f, 0.0f,  1.0f, 0.0f,
+	1.0f, 1.0f,  1.0f, 1.0f,
+};
 
 //
 // public api
@@ -28,15 +39,6 @@ void graphics2d_init_rect(primitive2d_t *pri, float x, float y, float w, float h
 	// vertices
 	// TODO: init vertices elsewhere
 	if (g_rect_vbuffer.attribs == NULL) {
-		float g_vertices[] = {
-			// Quad
-			0.0f, 0.0f,  0.0f, 0.0f,
-			1.0f, 0.0f,  1.0f, 0.0f,
-			0.0f, 1.0f,  0.0f, 1.0f,
-			0.0f, 1.0f,  0.0f, 1.0f,
-			1.0f, 0.0f,  1.0f, 0.0f,
-			1.0f, 1.0f,  1.0f, 1.0f,
-		};
 		vbuffer_init(&g_rect_vbuffer);
 		vbuffer_set_data(&g_rect_vbuffer, sizeof(g_vertices), g_vertices);
 		vbuffer_set_attrib(&g_rect_vbuffer, &g_primitive_shader, "a_position", 2, GL_FLOAT, 4 * sizeof(float), 0);
@@ -59,6 +61,11 @@ void graphics2d_init_rect(primitive2d_t *pri, float x, float y, float w, float h
 	pri->subrect.y = 0.0f;
 	pri->subrect.z = 1.0f;
 	pri->subrect.w = 1.0f;
+}
+
+void graphics2d_set_position(primitive2d_t *pri, float x, float y) {
+	pri->model[3][0] = x;
+	pri->model[3][1] = y;
 }
 
 void graphics2d_set_texture_tile(primitive2d_t *pri, texture_t *texture, int tile_width, int tile_height, int tile_x, int tile_y) {

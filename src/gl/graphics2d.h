@@ -19,6 +19,9 @@ struct primitive2d_s {
 // init
 void graphics2d_init_rect(primitive2d_t *, float x, float y, float w, float h);
 
+// transform
+void graphics2d_set_position(primitive2d_t *, float x, float y);
+
 // texture
 void graphics2d_set_texture_tile(primitive2d_t *, texture_t *, int tile_width, int tile_height, int tile_x, int tile_y);
 
