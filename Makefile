@@ -37,7 +37,7 @@ SRC = main.c src/engine.c src/platform.c \
 	  src/gui/console.c src/gui/ugui.c \
 	  src/game/background.c src/game/terrain.c src/game/isoterrain.c src/game/cards.c \
 	  src/util/easing.c src/util/fs.c src/util/util.c \
-	  src/gl/shader.c src/gl/texture.c src/gl/vbuffer.c \
+	  src/gl/shader.c src/gl/texture.c src/gl/vbuffer.c src/gl/graphics2d.c \
 	  src/net/message.c \
 	  src/scenes/scene.c \
 	  lib/nanovg/src/nanovg.c \
@@ -77,7 +77,7 @@ $(BIN)%.o: %.c
 scenes: CFLAGS += -DDEBUG -ggdb -O0
 scenes: LIBS += -ldl
 scenes:
-	$(CC) $(CFLAGS) -shared -o scene_game.so $(INCLUDES) $(LIBS) src/scenes/menu.c src/gui/ugui.c
+	$(CC) $(CFLAGS) -shared -o scene_game.so $(INCLUDES) $(LIBS) src/scenes/menu.c src/gl/graphics2d.c
 
 clean:
 	rm -rf $(BIN) $(TARGET) "$(TARGET).data" "$(TARGET).html" "$(TARGET).js" "$(TARGET).wasm"

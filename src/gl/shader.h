@@ -27,6 +27,9 @@ void shader_init         (shader_t *, const char *vert_path, const char *frag_pa
 void shader_init_from_dir(shader_t *, const char *dir_path);
 void shader_destroy      (shader_t *);
 
+// use
+void shader_use(shader_t *);
+
 // uniform setters
 void shader_set_uniform_texture(shader_t *, const char *uniform_name, GLenum texture_unit, texture_t *texture);
 void shader_set_uniform_float  (shader_t *, const char *uniform_name, float);

@@ -15,6 +15,8 @@
 #include "game/isoterrain.h"
 #include "game/background.h"
 #include "gui/ugui.h"
+#include "gl/texture.h"
+#include "gl/graphics2d.h"
 #include "net/message.h"
 #include "util/util.h"
 #include "platform.h"
@@ -55,6 +57,7 @@ static int g_menuicon_play = -1;
 static int g_menuicon_cards = -1;
 static int g_menuicon_social = -1;
 static int g_entity_texture = -1;
+static texture_t g_entity_tex;
 static const char *g_search_friends_texts[] = {"(Both Users Hold Button)", "Searching..."};
 static const char *g_search_friends_text = NULL;
 static vec2s g_menu_camera;
@@ -131,6 +134,7 @@ static void menu_load(struct menu_s *menu, struct engine_s *engine) {
 	menu->terrain = malloc(sizeof(struct isoterrain_s));
 	isoterrain_init_from_file(menu->terrain, "res/data/levels/winter.json");
 
+	texture_init_from_image(&g_entity_tex, "res/sprites/entities.png", NULL);
 
 	background_set_parallax("res/image/bg-glaciers/%d.png", 4);
 
@@ -140,20 +144,20 @@ static void menu_load(struct menu_s *menu, struct engine_s *engine) {
 	// setup entities
 	g_entities[0].pos[0] = 4;
 	g_entities[0].pos[1] = 4;
-	g_entities[0].pos[2] = 0;
+	g_entities[0].pos[2] = 1;
 	g_entities[0].tile[0] = 0;
-	g_entities[0].tile[1] = 10;
+	g_entities[0].tile[1] = 1;
 
 	g_entities[1].pos[0] = 1;
 	g_entities[1].pos[1] = 8;
-	g_entities[1].pos[2] = 1;
-	g_entities[1].tile[0] = 0;
+	g_entities[1].pos[2] = 2;
+	g_entities[1].tile[0] = 4;
 	g_entities[1].tile[1] = 7;
 
-	g_entities[2].pos[0] = 9;
-	g_entities[2].pos[1] = 0;
-	g_entities[2].pos[2] = 0;
-	g_entities[2].tile[0] = 4;
+	g_entities[2].pos[0] = 7;
+	g_entities[2].pos[1] = 6;
+	g_entities[2].pos[2] = 1;
+	g_entities[2].tile[0] = 12;
 	g_entities[2].tile[1] = 7;
 }
 
@@ -168,6 +172,7 @@ static void menu_destroy(struct menu_s *menu, struct engine_s *engine) {
 	Mix_FreeChunk(g_sound_click); g_sound_click = NULL;
 	Mix_FreeChunk(g_sound_clickend); g_sound_clickend = NULL;
 	Mix_FreeMusic(g_music); g_music = NULL;
+	texture_destroy(&g_entity_tex);
 }
 
 static void menu_update(struct menu_s *menu, struct engine_s *engine, float dt) {
@@ -365,32 +370,19 @@ static void menu_draw(struct menu_s *menu, struct engine_s *engine) {
 		}
 	}
 
+	static float entity_anim = 0.0f;
+	entity_anim = fmodf(entity_anim + engine->dt, 1.0f);
+
 	// test entity rendering
 	for (size_t i = 0; i < g_entities_len; ++i) {
 		entity_t *e = &g_entities[i];
-		vec2 bp = GLM_VEC2_ZERO_INIT;
-		isoterrain_pos_block_to_screen(menu->terrain, e->pos[0], e->pos[1], e->pos[2], bp);
-
-		nvgSave(vg);
-		nvgTranslate(vg, 25.0f + g_menu_camera.x, 160.0f + fabsf(sinf(engine->time_elapsed)) * -30.0f);
-		nvgScale(vg, t_scale, t_scale);
-		nvgTranslate(vg, bp[0], -bp[1] - 27.0f);
-
-		// draw shadow
-		nvgBeginPath(vg);
-		nvgEllipse(vg, 8.0f, 15.0f, 5.0f, 2.0f);
-		nvgFillColor(vg, nvgRGBAf(0.0f, 0.0f, 0.0f, 0.325f));
-		nvgFill(vg);
-
-		// draw sprite
-		const int anim = fmodf(engine->time_elapsed, 1.0f) < 0.5f;
-		NVGpaint p = nvgImagePattern(vg, -16.0f * (e->tile[0] + anim), -17.0f * e->tile[1], 256.0f, 256.0f, 0.0f, g_entity_texture, 1.0f);
-		nvgBeginPath(vg);
-		nvgRect(vg, 0.0f, 0.0f, 16.0f, 17.0f);
-		nvgFillPaint(vg, p);
-		nvgFill(vg);
-
-		nvgRestore(vg);
+		vec2s bp = GLMS_VEC2_ZERO_INIT;
+		isoterrain_pos_block_to_screen(menu->terrain, e->pos[0], e->pos[1], e->pos[2], bp.raw);
+		
+		primitive2d_t sprite = {0};
+		graphics2d_init_rect(&sprite, bp.x, bp.y, 16.0f, 17.0f);
+		graphics2d_set_texture_tile(&sprite, &g_entity_tex, 16.0f, 17.0f, e->tile[0] + (entity_anim < 0.5f), e->tile[1]);
+		graphics2d_draw_primitive2d(engine, &sprite);
 	}
 
 }

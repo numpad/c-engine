@@ -56,6 +56,11 @@ void shader_destroy(shader_t *shader) {
 	shader->program = 0;
 }
 
+// use
+void shader_use(shader_t *shader) {
+	glUseProgram(shader->program);
+}
+
 // uniform setters
 
 void shader_set_uniform_texture(shader_t *shader, const char *uniform_name, GLenum texture_unit, texture_t *texture) {
