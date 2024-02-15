@@ -163,3 +163,128 @@ static void update_model_matrix(primitive2d_t *pri) {
 	glm_scale(pri->model, pri->scale.raw);
 }
 
+
+// pipeline
+
+void drawcmd_set_texture_subrect_tile(drawcmd_t *cmd, texture_t *tex, int tile_width, int tile_height, int tile_x, int tile_y) {
+	const float uv_w = (float)tile_width / tex->width;
+	const float uv_h = (float)tile_height / tex->height;
+	cmd->texture_subrect[0] = uv_w * tile_x;
+	cmd->texture_subrect[1] = uv_h * tile_y;
+	cmd->texture_subrect[2] = uv_w;
+	cmd->texture_subrect[3] = uv_h;
+}
+
+void pipeline_init(pipeline_t *pl, shader_t *shader, int commands_max) {
+	// config
+	pl->components_per_vertex = 3 + 2 + 4 + 4; // pos + texcoord + color_mult + color_add
+	pl->vertices_per_primitive = 6;
+	int size_per_primitive = pl->components_per_vertex * sizeof(GLfloat) * pl->vertices_per_primitive;
+
+	// state
+	pl->commands_count = 0;
+	pl->commands_max = commands_max;
+	pl->texture = NULL;
+	pl->shader = shader;
+
+	glGenBuffers(1, &pl->vertex_buffer);
+	glBindBuffer(GL_ARRAY_BUFFER, pl->vertex_buffer);
+	glBufferData(GL_ARRAY_BUFFER, pl->commands_max * size_per_primitive, NULL, GL_DYNAMIC_DRAW);
+
+	// init attribs
+	pl->a_pos = glGetAttribLocation(pl->shader->program, "a_pos");
+	pl->a_texcoord = glGetAttribLocation(pl->shader->program, "a_texcoord");
+	pl->a_color_mult = glGetAttribLocation(pl->shader->program, "a_color_mult");
+	pl->a_color_add = glGetAttribLocation(pl->shader->program, "a_color_add");
+}
+
+void pipeline_destroy(pipeline_t *pl) {
+	glDeleteBuffers(1, &pl->vertex_buffer);
+	glDisableVertexAttribArray(pl->a_pos);
+	glDisableVertexAttribArray(pl->a_texcoord);
+	glDisableVertexAttribArray(pl->a_color_mult);
+	glDisableVertexAttribArray(pl->a_color_add);
+}
+
+void pipeline_reset(pipeline_t *pl) {
+	pl->commands_count = 0;
+}
+
+void pipeline_emit(pipeline_t *pl, drawcmd_t *cmd) {
+	assert(pl->commands_count < pl->commands_max);
+
+	float px = cmd->position.x;
+	float py = cmd->position.y;
+	float pz = cmd->position.z;
+
+	float w = cmd->size.x;
+	float h = cmd->size.y;
+
+	float srx = cmd->texture_subrect[0];
+	float sry = cmd->texture_subrect[1];
+	float srw = cmd->texture_subrect[2];
+	float srh = cmd->texture_subrect[3];
+
+	float angle_cos = cosf(cmd->angle);
+	float angle_sin = sinf(cmd->angle);
+	float cx = px + 0.5f * w;
+	float cy = py + 0.5f * h;
+
+	float colm[4] = { cmd->color_mult[0], cmd->color_mult[1], cmd->color_mult[2], cmd->color_mult[3] };
+	float cola[4] = { cmd->color_add[0], cmd->color_add[1], cmd->color_add[2], cmd->color_add[3] };
+
+	/*
+	float primitive_vertices[] = {
+		px + 0.0f * w, py + 0.0f * h, pz,  srx + srw * 0.0f, sry + srh * 0.0f, 1.0f, 1.0f,
+		px + 1.0f * w, py + 0.0f * h, pz,  srx + srw * 1.0f, sry + srh * 0.0f, 1.0f, 1.0f,
+		px + 0.0f * w, py + 1.0f * h, pz,  srx + srw * 0.0f, sry + srh * 1.0f, 1.0f, 1.0f,
+		px + 0.0f * w, py + 1.0f * h, pz,  srx + srw * 0.0f, sry + srh * 1.0f, 1.0f, 1.0f,
+		px + 1.0f * w, py + 0.0f * h, pz,  srx + srw * 1.0f, sry + srh * 0.0f, 1.0f, 1.0f,
+		px + 1.0f * w, py + 1.0f * h, pz,  srx + srw * 1.0f, sry + srh * 1.0f, 1.0f, 1.0f,
+	};
+	*/
+
+	float primitive_vertices[] = {
+		// position | texcoord | color_mult | color_add
+		angle_cos * (px + 0.0f * w - cx) - angle_sin * (py + 0.0f * h - cy) + cx, angle_sin * (px + 0.0f * w - cx) + angle_cos * (py + 0.0f * h - cy) + cy, pz,  srx + srw * 0.0f, sry + srh * 0.0f,  colm[0], colm[1], colm[2], colm[3],  cola[0], cola[1], cola[2], cola[3],
+		angle_cos * (px + 1.0f * w - cx) - angle_sin * (py + 0.0f * h - cy) + cx, angle_sin * (px + 1.0f * w - cx) + angle_cos * (py + 0.0f * h - cy) + cy, pz,  srx + srw * 1.0f, sry + srh * 0.0f,  colm[0], colm[1], colm[2], colm[3],  cola[0], cola[1], cola[2], cola[3],
+		angle_cos * (px + 0.0f * w - cx) - angle_sin * (py + 1.0f * h - cy) + cx, angle_sin * (px + 0.0f * w - cx) + angle_cos * (py + 1.0f * h - cy) + cy, pz,  srx + srw * 0.0f, sry + srh * 1.0f,  colm[0], colm[1], colm[2], colm[3],  cola[0], cola[1], cola[2], cola[3],
+		angle_cos * (px + 0.0f * w - cx) - angle_sin * (py + 1.0f * h - cy) + cx, angle_sin * (px + 0.0f * w - cx) + angle_cos * (py + 1.0f * h - cy) + cy, pz,  srx + srw * 0.0f, sry + srh * 1.0f,  colm[0], colm[1], colm[2], colm[3],  cola[0], cola[1], cola[2], cola[3],
+		angle_cos * (px + 1.0f * w - cx) - angle_sin * (py + 0.0f * h - cy) + cx, angle_sin * (px + 1.0f * w - cx) + angle_cos * (py + 0.0f * h - cy) + cy, pz,  srx + srw * 1.0f, sry + srh * 0.0f,  colm[0], colm[1], colm[2], colm[3],  cola[0], cola[1], cola[2], cola[3],
+		angle_cos * (px + 1.0f * w - cx) - angle_sin * (py + 1.0f * h - cy) + cx, angle_sin * (px + 1.0f * w - cx) + angle_cos * (py + 1.0f * h - cy) + cy, pz,  srx + srw * 1.0f, sry + srh * 1.0f,  colm[0], colm[1], colm[2], colm[3],  cola[0], cola[1], cola[2], cola[3],
+	};
+
+	// sanity check:
+	int size_per_primitive = pl->components_per_vertex * sizeof(GLfloat) * pl->vertices_per_primitive;
+	assert(sizeof(primitive_vertices) == size_per_primitive);
+
+	glBindBuffer(GL_ARRAY_BUFFER, pl->vertex_buffer);
+	// TODO: map buffer, or use subdata once in draw?
+	glBufferSubData(GL_ARRAY_BUFFER, pl->commands_count * sizeof(primitive_vertices), sizeof(primitive_vertices), primitive_vertices);
+
+	++pl->commands_count;
+}
+
+void pipeline_draw(pipeline_t *pl, engine_t *engine) {
+	shader_use(pl->shader);
+
+	shader_set_uniform_mat4(pl->shader, "u_projection", (float *)engine->u_projection);
+	shader_set_uniform_mat4(pl->shader, "u_view",       (float *)engine->u_view);
+	if (pl->texture != NULL) {
+		shader_set_uniform_texture(pl->shader, "u_texture", GL_TEXTURE0, pl->texture);
+	}
+
+	glBindBuffer(GL_ARRAY_BUFFER, pl->vertex_buffer);
+
+	glEnableVertexAttribArray(pl->a_pos);
+	glVertexAttribPointer    (pl->a_pos, 3, GL_FLOAT, GL_FALSE, pl->components_per_vertex * sizeof       (GLfloat), (void*)0);
+	glEnableVertexAttribArray(pl->a_texcoord);
+	glVertexAttribPointer    (pl->a_texcoord, 2, GL_FLOAT, GL_FALSE, pl->components_per_vertex * sizeof  (GLfloat), (void*)(3 * sizeof(GLfloat)));
+	glEnableVertexAttribArray(pl->a_color_mult);
+	glVertexAttribPointer    (pl->a_color_mult, 4, GL_FLOAT, GL_FALSE, pl->components_per_vertex * sizeof(GLfloat), (void*)(5 * sizeof(GLfloat)));
+	glEnableVertexAttribArray(pl->a_color_add);
+	glVertexAttribPointer    (pl->a_color_add, 4, GL_FLOAT, GL_FALSE, pl->components_per_vertex * sizeof (GLfloat), (void*)(9 * sizeof(GLfloat)));
+
+	glDrawArrays(GL_TRIANGLES, 0, pl->vertices_per_primitive * pl->commands_count);
+}
+

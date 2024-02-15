@@ -25,6 +25,7 @@
 #define ZLAYER_ITEMS        0.4f
 #define ZLAYER_PLANES       0.5f
 #define ZLAYER_BULLETS      0.6f
+#define ZLAYER_PLAYER       0.7f
 
 enum faction {
 	FACTION_NEUTRAL,
@@ -142,7 +143,7 @@ void close_levelup_rewards(void);
 void use_reward(reward_t *);
 void collect_xp(float xp);
 
-void hit_enemy(ecs_entity_t e_bullet, ecs_entity_t e_enemy, c_bullet *bullet, c_sprite *spr_enemy, c_health *hl_enemy, c_plane *pl_enemy);
+void hit_enemy(ecs_entity_t e_bullet, ecs_entity_t e_enemy, c_bullet *bullet, c_pos *pos_bullet, c_sprite *spr_enemy, c_health *hl_enemy, c_plane *pl_enemy);
 
 //
 // vars
@@ -154,8 +155,10 @@ static engine_t *g_engine; // engine reference for ecs callbacks
 static int g_font;
 static texture_t g_plane_tex;
 static texture_t g_tiles_tex;
-static primitive2d_t g_rect;
-static primitive2d_t g_tile_rect;
+
+// rendering
+static shader_t g_planes_shader;
+static pipeline_t g_pipeline;
 
 // state
 static int g_game_started;
@@ -264,6 +267,11 @@ static void load(struct scene_planes_s *scene, struct engine_s *engine) {
 	engine->console_visible = 0;
 	glm_mat4_identity(engine->u_view);
 
+	// rendering
+	shader_init_from_dir(&g_planes_shader, "res/shader/planes/");
+	pipeline_init(&g_pipeline, &g_planes_shader, 2048);
+	g_pipeline.texture = &g_plane_tex;
+
 	// setup state
 	g_game_started    = 0;
 	g_game_timer      = 0.0;
@@ -272,16 +280,12 @@ static void load(struct scene_planes_s *scene, struct engine_s *engine) {
 	g_xp              = 0.0f;
 
 	// assets
-	g_font = nvgCreateFont(engine->vg, "Miracode", "res/font/Miracode.ttf");
+	g_font = nvgCreateFont(engine->vg, "Baloo", "res/font/Baloo-Regular.ttf");
 	struct texture_settings_s settings = TEXTURE_SETTINGS_INIT;
 	settings.flip_y = 0;
 	texture_init_from_image(&g_plane_tex, "res/sprites/planes.png", &settings);
-	graphics2d_init_rect(&g_rect, 0.0f, 0.0f, 32.0f, 32.0f);
-	graphics2d_set_texture_tile(&g_rect, &g_plane_tex, 32.0f, 32.0f, 0, 2);
 
 	texture_init_from_image(&g_tiles_tex, "res/sprites/plane_tiles.png", &settings);
-	graphics2d_init_rect(&g_tile_rect, 0.0f, 0.0f, 16.0f, 16.0f);
-	graphics2d_set_texture_tile(&g_tile_rect, &g_tiles_tex, 16, 16, 1, 3);
 
 	// ecs
 	g_engine = engine;
@@ -330,7 +334,7 @@ static void load(struct scene_planes_s *scene, struct engine_s *engine) {
 			.tile_size = {32, 32},
 			.scale = 2.0f,
 			.angle = 0.0f,
-			.z_layer = ZLAYER_PLANES + 0.01f,
+			.z_layer = ZLAYER_PLAYER,
 		});
 		ecs_set(g_ecs, e, c_shadow, { .distance = 32.0f });
 		ecs_set(g_ecs, e, c_player, {
@@ -355,15 +359,15 @@ static void load(struct scene_planes_s *scene, struct engine_s *engine) {
 		
 	}
 
-	// planes
+	// enemies
 	for (int i = 0; i < 10; ++i) {
 		ecs_entity_t e = ecs_new_id(g_ecs);
 		ecs_set(g_ecs, e, c_pos, { .p.raw = {100.0f, 100.0f + (float)i * 50.0f} });
 		ecs_set(g_ecs, e, c_plane, {
 			.speed = 1.0f,
 			.angle = 0.3f,
-			.poof_cd = 0.0f,
-			.poof_cd_max = 1.1f,
+			.poof_cd = (rand() % 700) * 0.003f,
+			.poof_cd_max = 0.7f,
 		});
 		ecs_set(g_ecs, e, c_sprite, {
 			.tile = {rand() % 4, 5},
@@ -411,6 +415,9 @@ static void destroy(struct scene_planes_s *scene, struct engine_s *engine) {
 	ecs_fini(g_ecs);
 	texture_destroy(&g_plane_tex);
 	texture_destroy(&g_tiles_tex);
+
+	shader_destroy(&g_planes_shader);
+	pipeline_destroy(&g_pipeline);
 }
 
 static void update(struct scene_planes_s *scene, struct engine_s *engine, float dt) {
@@ -744,7 +751,7 @@ void mapchunk_init(c_mapchunk *chunk) {
 				mapchunk_get(chunk, x + 1, y - 1, NULL, NULL) < 0,
 				// mid
 				mapchunk_get(chunk, x - 1, y    , NULL, NULL) < 0,
-				-1,
+				-1, // current tile
 				mapchunk_get(chunk, x + 1, y    , NULL, NULL) < 0,
 				// bottom
 				mapchunk_get(chunk, x - 1, y + 1, NULL, NULL) < 0,
@@ -850,12 +857,34 @@ void collect_xp(float xp) {
 	}
 }
 
-void hit_enemy(ecs_entity_t e_bullet, ecs_entity_t e_enemy, c_bullet *bullet, c_sprite *spr_enemy, c_health *hl_enemy, c_plane *pl_enemy) {
+void hit_enemy(ecs_entity_t e_bullet, ecs_entity_t e_enemy, c_bullet *bullet, c_pos *pos_bullet, c_sprite *spr_enemy, c_health *hl_enemy, c_plane *pl_enemy) {
 	spr_enemy->hurt = 1.0f;
 	hl_enemy->hp -= bullet->damage;
 
 	// destroy bullet
 	ecs_delete(g_ecs, e_bullet);
+
+	// and create particles
+	for (int i = 0; i < 5; ++i) {
+		float bullet_angle = atan2f(-bullet->vel.y, -bullet->vel.x);
+		float angle = bullet_angle + glm_rad( (rand() / (double)RAND_MAX) * 90.0f - 45.0f );
+
+		ecs_entity_t e = ecs_new_id(g_ecs);
+		ecs_set(g_ecs, e, c_pos, { .p.raw = { pos_bullet->p.x, pos_bullet->p.y } });
+		ecs_set(g_ecs, e, c_despawn_after, { .seconds = 0.25f });
+		ecs_set(g_ecs, e, c_sprite, {
+			.tile = {10 + (rand() & 1), 3 + (rand() & 1)},
+			.tile_size = {16, 16},
+			.angle = 0.0f,
+			.scale = 1.5f,
+			.z_layer = ZLAYER_BULLETS,
+		});
+		ecs_set(g_ecs, e, c_particle, {
+			.rotation = 0.1f,
+			.scale_factor = 0.95f,
+			.vel = { cosf(angle) * 1.0f, sinf(angle) * 1.0f },
+		});
+	}
 
 	// no hp left? also destroy plane
 	if (hl_enemy->hp <= 0.0f) {
@@ -863,9 +892,11 @@ void hit_enemy(ecs_entity_t e_bullet, ecs_entity_t e_enemy, c_bullet *bullet, c_
 		ecs_set(g_ecs, e_enemy, c_particle, {
 				.rotation=((rand() & 1) == 0 ? -0.1f : 0.1f),
 				.vel={ cosf(pl_enemy->angle) * pl_enemy->speed, sinf(pl_enemy->angle) * pl_enemy->speed },
-				.scale_factor = 0.999f,
+				.scale_factor = 0.997f,
 				});
 		ecs_remove(g_ecs, e_enemy, c_plane);
+		c_sprite *spr = ecs_get_mut(g_ecs, e_enemy, c_sprite);
+		spr->z_layer = ZLAYER_ABOVE_GROUND;
 		ecs_set(g_ecs, e_enemy, c_despawn_after, { .seconds=1.0f });
 
 		// TODO: better xp handling
@@ -915,7 +946,7 @@ void system_move_bullets(ecs_iter_t *it_bullet) {
 
 				// hit!
 				if (glm_vec2_norm2(to_plane) <= 25.0f * 25.0f) {
-					hit_enemy(it_bullet->entities[i], it_enemy.entities[j], &bullets[i], &spr_planes[j], &health_planes[j], &planes[j]);
+					hit_enemy(it_bullet->entities[i], it_enemy.entities[j], &bullets[i], &p_bullets[i], &spr_planes[j], &health_planes[j], &planes[j]);
 				}
 			}
 		}
@@ -941,7 +972,7 @@ void system_move_particles(ecs_iter_t *it) {
 		vec2 dir;
 		glm_vec2_scale(particles[i].vel, 60.0f * it->delta_time, dir);
 		glm_vec2_add(pos[i].p.raw, dir, pos[i].p.raw);
-
+		
 		// scale
 		sprites[i].scale *= particles[i].scale_factor;
 
@@ -969,54 +1000,6 @@ void system_unsquish(ecs_iter_t *it) {
 	for (int i = 0; i < it->count; ++i) {
 		sprs[i].squish = glm_max(0.0f, sprs[i].squish - it->delta_time);
 		sprs[i].hurt = glm_max(0.0f, sprs[i].hurt - it->delta_time);
-	}
-}
-
-void system_draw_sprites(ecs_iter_t *it) {
-	glDisable(GL_DEPTH_TEST);
-	c_pos *pos = ecs_field(it, c_pos, 1);
-	c_sprite *sprite = ecs_field(it, c_sprite, 2);
-	c_shadow *shadow = NULL;
-
-	for (int i = 0; i < it->count; ++i) {
-		if (ecs_field_is_set(it, 3)) {
-			shadow = ecs_field(it, c_shadow, 3);
-		}
-
-		ecs_field(it, c_shadow, 3);
-		const float w = sprite[i].tile_size[0] * sprite[i].scale;
-		const float h = sprite[i].tile_size[1] * sprite[i].scale;
-
-		// squish
-		float sq_amount = 0.3f;
-		float sq_amount_inv = (1.0f - sq_amount);
-		float sqw = w * sq_amount_inv + w * sq_amount * glm_ease_elast_out(1.0f - sprite[i].squish);
-		float sqh = h * sq_amount_inv + h * sq_amount * glm_ease_elast_out(1.0f - sprite[i].squish);
-
-		// hurt
-		float hurt_color = glm_ease_exp_in(sprite[i].hurt);
-
-		// draw shadow
-		if (shadow != NULL) {
-			float ox = -shadow[i].distance * 0.25f;
-			float oy = shadow[i].distance;
-			graphics2d_set_position_z(&g_rect, pos[i].p.x - sqw * 0.5f + ox, pos[i].p.y - sqh * 0.5f + oy, ZLAYER_ON_GROUND);
-			graphics2d_set_scale(&g_rect, sqw, sqh);
-			graphics2d_set_angle(&g_rect, sprite[i].angle + GLM_PI * 0.5f);
-			graphics2d_set_texture_tile(&g_rect, &g_plane_tex, sprite[i].tile_size[0], sprite[i].tile_size[1], sprite[i].tile[0], sprite[i].tile[1]);
-			graphics2d_set_color_mult(&g_rect, 0.0f, 0.0f, 0.0f, 0.25f);
-			graphics2d_set_color_add(&g_rect, 0.0f, 0.0f, 0.0f, 0.0f);
-			graphics2d_draw_primitive2d(g_engine, &g_rect);
-		}
-		
-		// draw sprite
-		graphics2d_set_position_z(&g_rect, pos[i].p.x - sqw * 0.5f, pos[i].p.y - sqh * 0.5f, sprite[i].z_layer);
-		graphics2d_set_scale(&g_rect, sqw, sqh);
-		graphics2d_set_angle(&g_rect, sprite[i].angle + GLM_PI * 0.5f);
-		graphics2d_set_texture_tile(&g_rect, &g_plane_tex, sprite[i].tile_size[0], sprite[i].tile_size[1], sprite[i].tile[0], sprite[i].tile[1]);
-		graphics2d_set_color_mult(&g_rect, 1.0f, 1.0f, 1.0f, 1.0f);
-		graphics2d_set_color_add(&g_rect, hurt_color, hurt_color, hurt_color, 0.0f);
-		graphics2d_draw_primitive2d(g_engine, &g_rect);
 	}
 }
 
@@ -1079,7 +1062,7 @@ void system_spawn_enemies(ecs_iter_t *it) {
 			.angle = 0.3f,
 			.speed = 1.0f,
 			.poof_cd = 0.0f,
-			.poof_cd_max = 1.1f,
+			.poof_cd_max = 0.7f,
 		});
 		ecs_set(g_ecs, e, c_sprite, {
 			.tile = {rand() % 4, 5},
@@ -1095,13 +1078,77 @@ void system_spawn_enemies(ecs_iter_t *it) {
 	}
 }
 
+void system_draw_sprites(ecs_iter_t *it) {
+	pipeline_reset(&g_pipeline);
+	g_pipeline.texture = &g_plane_tex;
+
+	glDisable(GL_DEPTH_TEST);
+	c_pos *pos = ecs_field(it, c_pos, 1);
+	c_sprite *sprite = ecs_field(it, c_sprite, 2);
+	c_shadow *shadow = NULL;
+
+	for (int i = 0; i < it->count; ++i) {
+		if (ecs_field_is_set(it, 3)) {
+			shadow = ecs_field(it, c_shadow, 3);
+		}
+
+		ecs_field(it, c_shadow, 3);
+		const float w = sprite[i].tile_size[0] * sprite[i].scale;
+		const float h = sprite[i].tile_size[1] * sprite[i].scale;
+
+		// squish
+		float sq_amount = 0.3f;
+		float sq_amount_inv = (1.0f - sq_amount);
+		float sqw = w * sq_amount_inv + w * sq_amount * glm_ease_elast_out(1.0f - sprite[i].squish);
+		float sqh = h * sq_amount_inv + h * sq_amount * glm_ease_elast_out(1.0f - sprite[i].squish);
+
+		// hurt
+		float hurt_color = glm_ease_exp_in(sprite[i].hurt);
+
+		drawcmd_t cmd = DRAWCMD_INIT;
+		cmd.size.x = sqw;
+		cmd.size.y = sqh;
+		cmd.angle = sprite[i].angle + GLM_PI * 0.5f;
+		drawcmd_set_texture_subrect_tile(&cmd, g_pipeline.texture, sprite[i].tile_size[0], sprite[i].tile_size[1], sprite[i].tile[0], sprite[i].tile[1]);
+
+		// draw shadow
+		if (shadow != NULL) {
+			float ox = -shadow[i].distance * 0.25f;
+			float oy = shadow[i].distance;
+
+			cmd.position.x = pos[i].p.x - sqw * 0.5f + ox;
+			cmd.position.y = pos[i].p.y - sqh * 0.5f + oy;
+			cmd.position.z = ZLAYER_ON_GROUND;
+			glm_vec3_zero(cmd.color_mult);
+			cmd.color_mult[3] = 0.25f;
+			pipeline_emit(&g_pipeline, &cmd);
+		}
+
+		cmd.position.x = pos[i].p.x - sqw * 0.5f;
+		cmd.position.y = pos[i].p.y - sqh * 0.5f;
+		cmd.position.z = sprite[i].z_layer;
+		glm_vec4_one(cmd.color_mult);
+		glm_vec3_fill(cmd.color_add, hurt_color);
+		pipeline_emit(&g_pipeline, &cmd);
+	}
+
+
+	// test drawing planes
+	glEnable(GL_DEPTH_TEST);
+	pipeline_draw(&g_pipeline, g_engine);
+}
+
 void system_draw_map(ecs_iter_t *it) {
 	float alpha = cosf(g_engine->time_elapsed * 0.2f) * 0.08f;
+
+	pipeline_reset(&g_pipeline);
+	g_pipeline.texture = &g_tiles_tex;
 
 	c_pos *ps = ecs_field(it, c_pos, 1);
 	c_mapchunk *cs = ecs_field(it, c_mapchunk, 2);
 	for (int i = 0; i < it->count; ++i) {
 
+		drawcmd_t cmd = DRAWCMD_INIT;
 		for (int y = 0; y < cs[i].height; ++y) {
 			for (int x = 0; x < cs[i].width; ++x) {
 				int id = cs[i].tiles[x + y * cs[i].width];
@@ -1112,12 +1159,15 @@ void system_draw_map(ecs_iter_t *it) {
 				int tx = id % 16;
 				int ty = (int)(id / 16);
 
-				graphics2d_set_position(&g_tile_rect, ps[i].p.x + (x * 16), ps[i].p.y + (y * 16));
-				graphics2d_set_texture_tile(&g_tile_rect, &g_tiles_tex, 16, 16, tx, ty);
-				graphics2d_set_color_mult(&g_tile_rect, 1.0f, 1.0f, 1.0f, 0.75f + alpha);
-				graphics2d_draw_primitive2d(g_engine, &g_tile_rect);
+				cmd.position.x = ps[i].p.x + (x * 16);
+				cmd.position.y = ps[i].p.y + (y * 16);
+				cmd.size.x = cmd.size.y = 16.0f;
+				drawcmd_set_texture_subrect_tile(&cmd, g_pipeline.texture, 16, 16, tx, ty);
+				pipeline_emit(&g_pipeline, &cmd);
 			}
 		}
 	}
+
+	pipeline_draw(&g_pipeline, g_engine);
 }
 
