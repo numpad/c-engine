@@ -51,6 +51,8 @@ void background_set_parallax(const char *filename_fmt, int layers_count) {
 		.filter_mag = GL_NEAREST,
 		.wrap_s = GL_REPEAT,
 		.wrap_t = GL_CLAMP_TO_EDGE,
+		.flip_y = 1,
+		.gen_mipmap = 0,
 	};
 
 	for (int i = 0; i < layers_count; ++i) {

@@ -5,12 +5,13 @@
 #include "gl/vbuffer.h"
 
 void cardrenderer_init(struct cardrenderer_s *renderer, const char *tileset) {
-	struct texture_settings_s tconf;
+	struct texture_settings_s tconf = TEXTURE_SETTINGS_INIT;
 	tconf.filter_min = GL_LINEAR_MIPMAP_LINEAR;
 	tconf.filter_mag = GL_NEAREST;
 	tconf.wrap_s = GL_CLAMP_TO_EDGE;
 	tconf.wrap_t = GL_CLAMP_TO_EDGE;
 	tconf.gen_mipmap = 1;
+	tconf.flip_y = 1;
 
 	texture_init_from_image(&renderer->texture_atlas, tileset, &tconf);
 	shader_init_from_dir(&renderer->shader, "res/shader/card");

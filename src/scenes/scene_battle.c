@@ -112,7 +112,6 @@ static void load(struct scene_battle_s *scene, struct engine_s *engine) {
 
 	// isoterrain
 	g_terrain = malloc(sizeof(struct isoterrain_s));
-	//isoterrain_init(g_terrain, 10, 10, 2);
 	isoterrain_init_from_file(g_terrain, "res/data/levels/winter.json");
 
 	// card renderer
@@ -121,6 +120,7 @@ static void load(struct scene_battle_s *scene, struct engine_s *engine) {
 
 	// background
 	background_set_parallax("res/image/bg-glaciers/%d.png", 4);
+	background_set_parallax_offset(-0.4f);
 
 	sound = Mix_LoadWAV("res/sounds/test.wav");
 }

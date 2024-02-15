@@ -12,6 +12,7 @@
 #include "engine.h"
 #include "scenes/scene_battle.h"
 #include "scenes/experiments.h"
+#include "scenes/planes.h"
 #include "game/isoterrain.h"
 #include "game/background.h"
 #include "gui/ugui.h"
@@ -61,6 +62,7 @@ static const char *g_search_friends_texts[] = {"(Both Users Hold Button)", "Sear
 static const char *g_search_friends_text = NULL;
 static vec2s g_menu_camera;
 static float g_menu_camera_target_y = 0.0f;
+static primitive2d_t g_entity_rect = {0};
 
 // sfx
 static Mix_Chunk *g_sound_click = NULL;
@@ -132,7 +134,10 @@ static void menu_load(struct menu_s *menu, struct engine_s *engine) {
 	menu->terrain = malloc(sizeof(struct isoterrain_s));
 	isoterrain_init_from_file(menu->terrain, "res/data/levels/winter.json");
 
-	texture_init_from_image(&g_entity_tex, "res/sprites/entities-outline.png", NULL);
+	struct texture_settings_s settings = TEXTURE_SETTINGS_INIT;
+	settings.flip_y = 1;
+	texture_init_from_image(&g_entity_tex, "res/sprites/entities-outline.png", &settings);
+	graphics2d_init_rect(&g_entity_rect, 0.0f, 0.0f, 16.0f, 17.0f);
 
 	background_set_parallax("res/image/bg-glaciers/%d.png", 4);
 
@@ -367,21 +372,20 @@ static void menu_draw(struct menu_s *menu, struct engine_s *engine) {
 		}
 	}
 
+	// test entity rendering
 	static float entity_anim = 0.0f;
 	entity_anim = fmodf(entity_anim + engine->dt, 1.0f);
 
-	// test entity rendering
-	primitive2d_t sprite = {0};
-	graphics2d_init_rect(&sprite, 0.0f, 0.0f, 16.0f, 17.0f);
 	for (size_t i = 0; i < g_entities_len; ++i) {
 		entity_t *e = &g_entities[i];
 		vec2s bp = GLMS_VEC2_ZERO_INIT;
 		isoterrain_pos_block_to_screen(menu->terrain, e->pos[0], e->pos[1], e->pos[2], bp.raw);
 		
 		// draw sprite
-		graphics2d_set_position(&sprite, bp.x, bp.y);
-		graphics2d_set_texture_tile(&sprite, &g_entity_tex, 16.0f, 17.0f, e->tile[0] + (entity_anim < 0.5f), e->tile[1]);
-		graphics2d_draw_primitive2d(engine, &sprite);
+		graphics2d_set_position(&g_entity_rect, bp.x, bp.y);
+		graphics2d_set_texture_tile(&g_entity_rect, &g_entity_tex, 16.0f, 17.0f, e->tile[0] + (entity_anim < 0.5f), e->tile[1]);
+		graphics2d_set_scale(&g_entity_rect, 16.0f, 17.0f);
+		graphics2d_draw_primitive2d(engine, &g_entity_rect);
 	}
 }
 
@@ -479,10 +483,10 @@ static void switch_to_game_scene(struct engine_s *engine) {
 }
 
 static void switch_to_minigame_scene(struct engine_s *engine) {
-	struct scene_experiments_s *game_scene_experiments = malloc(sizeof(struct scene_experiments_s));
-	scene_experiments_init(game_scene_experiments, engine);
-	//engine_setscene(engine, (struct scene_s *)game_scene_experiments);
-	g_next_scene = (struct scene_s *)game_scene_experiments;
+	struct scene_planes_s *scene = malloc(sizeof(struct scene_planes_s));
+	scene_planes_init(scene, engine);
+	//engine_setscene(engine, (struct scene_s *)game_scene_planes);
+	g_next_scene = (struct scene_s *)scene;
 
 	platform_vibrate(PLATFORM_VIBRATE_TAP);
 }
