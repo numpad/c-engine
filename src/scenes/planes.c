@@ -19,13 +19,19 @@
 // structs & enums
 //
 
-#define ZLAYER_ON_GROUND    0.1f
-#define ZLAYER_ABOVE_GROUND 0.2f
-#define ZLAYER_PARTICLES    0.3f
-#define ZLAYER_ITEMS        0.4f
-#define ZLAYER_PLANES       0.5f
-#define ZLAYER_BULLETS      0.6f
-#define ZLAYER_PLAYER       0.7f
+#define ZLAYER_GROUND       0.0f
+#define ZLAYER_PEOPLE       0.1f
+#define ZLAYER_SHADOW       0.2f
+#define ZLAYER_ABOVE_GROUND 0.3f
+#define ZLAYER_PARTICLES    0.4f
+#define ZLAYER_ITEMS        0.5f
+#define ZLAYER_PLANES       0.6f
+#define ZLAYER_BULLETS      0.7f
+#define ZLAYER_PLAYER       0.8f
+
+#define MAPCHUNK_WIDTH      20
+#define MAPCHUNK_HEIGHT     20
+#define MAPCHUNK_TILESIZE   16
 
 enum faction {
 	FACTION_NEUTRAL,
@@ -39,6 +45,13 @@ enum reward_type {
 	REWARDOPTION_HEAL,
 };
 
+enum player_attack {
+	PLAYER_ATTACK_BULLETSHOT,
+	PLAYER_ATTACK_BULLETSHOT_DOUBLE,
+	PLAYER_ATTACK_HOMING_BURST,
+	PLAYER_ATTACK_MAX,
+};
+
 typedef struct {
 	char *title;
 	char *description;
@@ -48,15 +61,16 @@ typedef struct {
 		struct {
 			float shoot_cd;
 			float plane_speed;
+			float plane_turn_speed;
 			float bullet_damage;
 			float bullet_speed;
+				float bullet_spread;
 		} modify_stats;
 	} data;
 } reward_t;
 
 // components
 typedef struct {
-	int width, height;
 	int *tiles;
 } c_mapchunk;
 
@@ -100,6 +114,8 @@ typedef struct {
 	float plane_turn_speed;
 	float bullet_damage;
 	float bullet_speed;
+	float bullet_spread;
+	enum player_attack attack;
 } c_player;
 
 typedef struct {
@@ -121,6 +137,24 @@ typedef struct {
 	float max_hp;
 } c_health;
 
+typedef struct {
+	int current_frame;
+	int frames;
+	float secs_per_frame;
+	
+	// state
+	float elapsed;
+	int frame_offset;
+} c_animation;
+
+typedef struct {
+	ecs_entity_t entity;
+} c_target;
+
+typedef struct {
+	float turn_strength;
+} c_homing;
+
 //
 // private functions
 //
@@ -132,10 +166,12 @@ void system_despawn(ecs_iter_t *);
 void system_unsquish(ecs_iter_t *);
 void system_spawn_plane_effects(ecs_iter_t *);
 void system_spawn_enemies(ecs_iter_t *);
+void system_remove_mapchunks(ecs_iter_t *);
+void system_animate_sprites(ecs_iter_t *);
 void system_draw_sprites(ecs_iter_t *);
 void system_draw_map(ecs_iter_t *);
 
-void mapchunk_init(c_mapchunk *);
+void mapchunk_init(c_mapchunk *, int chunk_x, int chunk_y);
 void mapchunk_destroy(c_mapchunk *);
 
 void show_levelup_rewards(void);
@@ -144,6 +180,8 @@ void use_reward(reward_t *);
 void collect_xp(float xp);
 
 void hit_enemy(ecs_entity_t e_bullet, ecs_entity_t e_enemy, c_bullet *bullet, c_pos *pos_bullet, c_sprite *spr_enemy, c_health *hl_enemy, c_plane *pl_enemy);
+void spawn_bulletshot(vec2 p, float angle, enum faction faction, float spread, float dmg, float speed);
+void spawn_homing_shot(vec2 p, float angle, ecs_entity_t target, enum faction faction, float dmg, float speed);
 
 //
 // vars
@@ -161,17 +199,18 @@ static shader_t g_planes_shader;
 static pipeline_t g_pipeline;
 
 // state
+static int g_mapgen_seed;
 static int g_game_started;
 static double g_game_timer;
 static int g_picking_rewards;
 
-static int g_level = 0;
-static float g_xp = 0.0f;
-static const int g_xp_per_level[14] = { 12, 24, 32, 69, 72, 84, 101, 196, 420, 666, 1024, 2250, 5000, 999999999 };
+static int g_level;
+static float g_xp;
+static const int g_xp_per_level[] = { 10, 12, 16, 24, 32, 69, 72, 84, 101, 196, 420, 666, 1024, 2250, 5000, 999999999 };
 static reward_t g_levelup_rewards[3];
 
-static float enemy_spawn_rate = 1.5f;
-static float enemy_spawn_timer = 0.0f;
+static float g_enemy_spawn_rate;
+static float g_enemy_spawn_timer;
 
 // entities
 ecs_world_t *g_ecs;
@@ -179,17 +218,19 @@ ecs_query_t *g_enemies_query;
 ecs_entity_t g_player;
 
 // rewards
-static const int g_reward_pool_length = 5;
+static const int g_reward_pool_length = 6;
 static const reward_t g_reward_pool[] = {
 	(reward_t) {
 		.title = "Afterburner",
 		.description = "Increase speed by 20%",
 		.type = REWARDOPTION_STATS_MULT,
 		.data.modify_stats = {
-			.plane_speed   = 1.2f,
-			.shoot_cd      = 1.0f,
-			.bullet_damage = 1.0f,
-			.bullet_speed  = 1.0f,
+			.plane_speed      = 1.2f,
+			.plane_turn_speed = 1.1f,
+			.shoot_cd         = 1.0f,
+			.bullet_damage    = 1.0f,
+			.bullet_speed     = 1.0f,
+			.bullet_spread    = 1.0f,
 		},
 	},
 	(reward_t) {
@@ -198,9 +239,6 @@ static const reward_t g_reward_pool[] = {
 		.type = REWARDOPTION_STATS_ADD,
 		.data.modify_stats = {
 			.shoot_cd      = -0.333f,
-			.plane_speed   = 0.0f,
-			.bullet_damage = 0.0f,
-			.bullet_speed  = 0.0f,
 		},
 	},
 	(reward_t) {
@@ -208,10 +246,12 @@ static const reward_t g_reward_pool[] = {
 		.description = "Shoot fast, but less damage",
 		.type = REWARDOPTION_STATS_MULT,
 		.data.modify_stats = {
-			.shoot_cd      = 0.35f,
-			.plane_speed   = 1.0f,
-			.bullet_damage = 0.4f,
-			.bullet_speed  = 1.5f,
+			.shoot_cd         = 0.35f,
+			.plane_speed      = 1.0f,
+			.plane_turn_speed = 1.0f,
+			.bullet_damage    = 0.4f,
+			.bullet_speed     = 1.15f,
+			.bullet_spread    = 1.0f,
 		},
 	},
 	(reward_t) {
@@ -219,10 +259,12 @@ static const reward_t g_reward_pool[] = {
 		.description = "25% more damage",
 		.type = REWARDOPTION_STATS_MULT,
 		.data.modify_stats = {
-			.shoot_cd      = 1.0f,
-			.plane_speed   = 1.0f,
-			.bullet_damage = 1.25f,
-			.bullet_speed  = 1.0f,
+			.shoot_cd         = 1.0f,
+			.plane_speed      = 1.0f,
+			.plane_turn_speed = 1.0f,
+			.bullet_damage    = 1.25f,
+			.bullet_speed     = 1.0f,
+			.bullet_spread    = 1.0f,
 		},
 	},
 	(reward_t) {
@@ -230,7 +272,20 @@ static const reward_t g_reward_pool[] = {
 		.description = "Faster bullets",
 		.type = REWARDOPTION_STATS_ADD,
 		.data.modify_stats = {
-			.bullet_speed = +0.65f,
+			.bullet_speed = +1.0f,
+		},
+	},
+	(reward_t) {
+		.title = "Precision Scope",
+		.description = "Accuracy +18%",
+		.type = REWARDOPTION_STATS_MULT,
+		.data.modify_stats = {
+			.shoot_cd         = 1.0f,
+			.plane_speed      = 1.0f,
+			.plane_turn_speed = 1.0f,
+			.bullet_damage    = 1.25f,
+			.bullet_speed     = 1.0f,
+			.bullet_spread    = 0.82f,
 		},
 	},
 };
@@ -246,6 +301,9 @@ ECS_COMPONENT_DECLARE(c_despawn_after);
 ECS_COMPONENT_DECLARE(c_faction);
 ECS_COMPONENT_DECLARE(c_particle);
 ECS_COMPONENT_DECLARE(c_health);
+ECS_COMPONENT_DECLARE(c_animation);
+ECS_COMPONENT_DECLARE(c_target);
+ECS_COMPONENT_DECLARE(c_homing);
 
 ECS_SYSTEM_DECLARE(system_move_plane);
 ECS_SYSTEM_DECLARE(system_move_bullets);
@@ -254,6 +312,8 @@ ECS_SYSTEM_DECLARE(system_despawn);
 ECS_SYSTEM_DECLARE(system_unsquish);
 ECS_SYSTEM_DECLARE(system_spawn_plane_effects);
 ECS_SYSTEM_DECLARE(system_spawn_enemies);
+ECS_SYSTEM_DECLARE(system_remove_mapchunks);
+ECS_SYSTEM_DECLARE(system_animate_sprites);
 ECS_SYSTEM_DECLARE(system_draw_map);
 ECS_SYSTEM_DECLARE(system_draw_sprites);
 
@@ -266,18 +326,22 @@ static void load(struct scene_planes_s *scene, struct engine_s *engine) {
 	engine_set_clear_color(0.87f, 0.96f, 0.96f);
 	engine->console_visible = 0;
 	glm_mat4_identity(engine->u_view);
+	// seed rng
+	g_mapgen_seed = time(0);
+	srand(g_mapgen_seed);
 
 	// rendering
 	shader_init_from_dir(&g_planes_shader, "res/shader/planes/");
 	pipeline_init(&g_pipeline, &g_planes_shader, 2048);
-	g_pipeline.texture = &g_plane_tex;
 
 	// setup state
-	g_game_started    = 0;
-	g_game_timer      = 0.0;
-	g_picking_rewards = 0;
-	g_level           = 0;
-	g_xp              = 0.0f;
+	g_game_started      = 0;
+	g_game_timer        = 0.0;
+	g_picking_rewards   = 0;
+	g_level             = 0;
+	g_xp                = 0.0f;
+	g_enemy_spawn_rate  = 1.5f;
+	g_enemy_spawn_timer = 0.0f;
 
 	// assets
 	g_font = nvgCreateFont(engine->vg, "Baloo", "res/font/Baloo-Regular.ttf");
@@ -301,16 +365,21 @@ static void load(struct scene_planes_s *scene, struct engine_s *engine) {
 	ECS_COMPONENT_DEFINE(g_ecs, c_faction);
 	ECS_COMPONENT_DEFINE(g_ecs, c_particle);
 	ECS_COMPONENT_DEFINE(g_ecs, c_health);
+	ECS_COMPONENT_DEFINE(g_ecs, c_animation);
+	ECS_COMPONENT_DEFINE(g_ecs, c_target);
+	ECS_COMPONENT_DEFINE(g_ecs, c_homing);
 
 	ECS_SYSTEM_DEFINE(g_ecs, system_move_plane,          0, c_pos, c_plane);
-	ECS_SYSTEM_DEFINE(g_ecs, system_move_bullets,        0, c_pos, c_bullet, c_faction);
+	ECS_SYSTEM_DEFINE(g_ecs, system_move_bullets,        0, c_pos, c_bullet, c_faction, ?c_target, ?c_homing, ?c_sprite);
 	ECS_SYSTEM_DEFINE(g_ecs, system_move_particles,      0, c_pos, c_particle, c_sprite, ?c_shadow); dummy:
 	ECS_SYSTEM_DEFINE(g_ecs, system_despawn,             0, c_despawn_after);
 	ECS_SYSTEM_DEFINE(g_ecs, system_unsquish,            0, c_sprite);
 	ECS_SYSTEM_DEFINE(g_ecs, system_spawn_plane_effects, 0, c_pos, c_plane);
 	ECS_SYSTEM_DEFINE(g_ecs, system_spawn_enemies,       0, c_pos, c_player);
-	ECS_SYSTEM_DEFINE(g_ecs, system_draw_map,            0, c_pos, c_mapchunk);
+	ECS_SYSTEM_DEFINE(g_ecs, system_remove_mapchunks,    0, c_pos, c_mapchunk);
+	ECS_SYSTEM_DEFINE(g_ecs, system_animate_sprites,     0, c_sprite, c_animation);
 	ECS_SYSTEM_DEFINE(g_ecs, system_draw_sprites,        0, c_pos, c_sprite, ?c_shadow); dummy2: // fix weird query syyntax problems for my lsp
+	ECS_SYSTEM_DEFINE(g_ecs, system_draw_map,            0, c_pos, c_mapchunk);
 
 	g_enemies_query = ecs_query(g_ecs, {
 		.filter.terms = {
@@ -344,19 +413,25 @@ static void load(struct scene_planes_s *scene, struct engine_s *engine) {
 			.plane_turn_speed = 1.4f,
 			.bullet_damage = 1.0f,
 			.bullet_speed = 6.0f,
+			.bullet_spread = 30.0f,
+			.attack = PLAYER_ATTACK_HOMING_BURST,
 		});
 		ecs_set(g_ecs, e, c_faction, { .faction = FACTION_PLAYER });
 	}
 
-	{ // map
-		ecs_entity_t e = ecs_new_id(g_ecs);
-		ecs_set(g_ecs, e, c_pos, { .p.raw = {0.0f, 0.0f} });
-		ecs_set(g_ecs, e, c_mapchunk, { 0, 0, NULL });
-		
-		c_mapchunk *chunk = ecs_get_mut(g_ecs, e, c_mapchunk);
-		mapchunk_init(chunk);
-		ecs_modified(g_ecs, e, c_mapchunk);
-		
+	for (int x = 0; x < 3; ++x) { // map
+		for (int y = 0; y < 3; ++y) {
+			ecs_entity_t e = ecs_new_id(g_ecs);
+			ecs_set(g_ecs, e, c_pos, {
+				.p.x = x * MAPCHUNK_WIDTH * MAPCHUNK_TILESIZE,
+				.p.y = y * MAPCHUNK_HEIGHT * MAPCHUNK_TILESIZE,
+			});
+			ecs_set(g_ecs, e, c_mapchunk, { NULL });
+			
+			c_mapchunk *chunk = ecs_get_mut(g_ecs, e, c_mapchunk);
+			mapchunk_init(chunk, x, y);
+			ecs_modified(g_ecs, e, c_mapchunk);
+		}
 	}
 
 	// enemies
@@ -394,6 +469,24 @@ static void load(struct scene_planes_s *scene, struct engine_s *engine) {
 		});
 	}
 
+	// people
+	for (int i = 0; i < 10; ++i) {
+		ecs_entity_t e = ecs_new_id(g_ecs);
+		ecs_set(g_ecs, e, c_pos, { .p.raw = {150.0f, 150.0f + (float)i * 50.0f} });
+		ecs_set(g_ecs, e, c_sprite, {
+			.scale = 1.0f,
+			.tile = {24, 4},
+			.tile_size = {8, 8},
+			.z_layer = ZLAYER_ABOVE_GROUND,
+			.angle = glm_rad(-90.0f),
+		});
+		ecs_set(g_ecs, e, c_animation, {
+			.frames = 2,
+			.secs_per_frame = 0.3f,
+			.frame_offset = 24,
+		});
+	}
+
 }
 
 static void destroy(struct scene_planes_s *scene, struct engine_s *engine) {
@@ -420,6 +513,12 @@ static void destroy(struct scene_planes_s *scene, struct engine_s *engine) {
 	pipeline_destroy(&g_pipeline);
 }
 
+static void tick(struct scene_planes_s *scene, struct engine_s *engine, float dt) {
+	ecs_run(g_ecs, ecs_id(system_animate_sprites),     dt, NULL);
+	ecs_run(g_ecs, ecs_id(system_move_particles),      dt, NULL);
+	ecs_run(g_ecs, ecs_id(system_move_bullets),        dt, NULL);
+}
+
 static void update(struct scene_planes_s *scene, struct engine_s *engine, float dt) {
 	if (!g_game_started) {
 		if (engine->input_drag.state == INPUT_DRAG_BEGIN) {
@@ -441,11 +540,14 @@ static void update(struct scene_planes_s *scene, struct engine_s *engine, float 
 
 	// handle player controls
 	if (ecs_is_alive(g_ecs, g_player)) {
-		const c_pos *pp = ecs_get(g_ecs, g_player, c_pos);
+		c_pos *pp = ecs_get_mut(g_ecs, g_player, c_pos);
 		c_plane *pl = ecs_get_mut(g_ecs, g_player, c_plane);
 		c_sprite *spr = ecs_get_mut(g_ecs, g_player, c_sprite);
 		c_player *ply = ecs_get_mut(g_ecs, g_player, c_player);
 		ply->shoot_cd -= dt;
+
+		engine->u_view[3][0] = engine->window_width * 0.5f - pp->p.x;
+		engine->u_view[3][1] = engine->window_height * 0.5f - pp->p.y;
 
 		// turn player
 		if (engine->input_drag.state == INPUT_DRAG_IN_PROGRESS) {
@@ -473,40 +575,76 @@ static void update(struct scene_planes_s *scene, struct engine_s *engine, float 
 			ply->shoot_cd = ply->shoot_cd_max;
 
 			spr->squish = 1.0f;
+			
+			switch (ply->attack) {
+			case PLAYER_ATTACK_BULLETSHOT:
+				spawn_bulletshot(pp->p.raw, pl->angle, FACTION_PLAYER, ply->bullet_spread, ply->bullet_damage, ply->bullet_speed);
+				break;
+			case PLAYER_ATTACK_BULLETSHOT_DOUBLE:{
+				vec2s center = pp->p;
+				vec2 forward = { cosf(pl->angle), sinf(pl->angle) };
+				vec2 left, right;
+				glm_vec2_rotate(forward, glm_rad(-90.0f), left);
+				glm_vec2_rotate(forward, glm_rad(90.0f), right);
+				const float dist = 9.5f;
+				glm_vec2_scale_as(left, dist, left);
+				glm_vec2_scale_as(right, dist, right);
 
-			ecs_entity_t e = ecs_new_id(g_ecs);
-			ecs_set(g_ecs, e, c_pos, { {{pp->p.x, pp->p.y} }});
-			ecs_set(g_ecs, e, c_sprite, {
-				.tile = {10, 0},
-				.tile_size = {16, 16},
-				.angle = pl->angle,
-				.scale = 1.5f,
-				.z_layer = ZLAYER_BULLETS,
-			});
-			ecs_set(g_ecs, e, c_despawn_after, { .seconds = 5.0f });
-			ecs_set(g_ecs, e, c_bullet, {
-				.vel.raw = {
-					cosf(pl->angle), sinf(pl->angle)
-				},
-				.damage = ply->bullet_damage,
-				.speed = ply->bullet_speed,
-			});
-			ecs_set(g_ecs, e, c_faction, { .faction = FACTION_PLAYER });
+				vec2 left_gun, right_gun;
+				glm_vec2_add(center.raw, left, left_gun);
+				glm_vec2_add(center.raw, right, right_gun);
+
+				spawn_bulletshot(left_gun, pl->angle, FACTION_PLAYER, ply->bullet_spread, ply->bullet_damage, ply->bullet_speed);
+				spawn_bulletshot(right_gun, pl->angle, FACTION_PLAYER, ply->bullet_spread, ply->bullet_damage, ply->bullet_speed);
+				break;
+			}
+			case PLAYER_ATTACK_HOMING_BURST: {
+				ecs_filter_t *potential_targets = ecs_filter(g_ecs, {
+					.terms = { {ecs_id(c_pos)}, {ecs_id(c_plane)}, {ecs_id(c_faction)} },
+					});
+
+				ecs_entity_t targets[5] = {0};
+				ecs_iter_t it = ecs_filter_iter(g_ecs, potential_targets);
+				while (ecs_filter_next(&it)) {
+					for (int i = 0; i < it.count; ++i) {
+						if (i < 5) {
+							targets[i] = it.entities[i];
+						}
+					}
+				}
+
+				for (int i = 0; i < 5; ++i) {
+					if (targets[i] != 0 && ecs_is_alive(g_ecs, targets[i])) {
+						spawn_homing_shot(pp->p.raw, glm_rad(rand() % 360), targets[i], FACTION_PLAYER, ply->bullet_damage, ply->bullet_speed);
+					}
+				}
+			}
+			case PLAYER_ATTACK_MAX: break;
+			}
 		}
 	}
 
 	ecs_run(g_ecs, ecs_id(system_move_plane),          dt, NULL);
-	ecs_run(g_ecs, ecs_id(system_move_bullets),        dt, NULL);
-	ecs_run(g_ecs, ecs_id(system_move_particles),      dt, NULL);
 	ecs_run(g_ecs, ecs_id(system_despawn),             dt, NULL);
 	ecs_run(g_ecs, ecs_id(system_unsquish),            dt, NULL);
 	ecs_run(g_ecs, ecs_id(system_spawn_plane_effects), dt, NULL);
+	ecs_run(g_ecs, ecs_id(system_remove_mapchunks),    dt, NULL);
 
-	enemy_spawn_timer += dt;
-	while (enemy_spawn_timer >= enemy_spawn_rate) {
-		enemy_spawn_timer -= enemy_spawn_rate;
+	g_enemy_spawn_timer += dt;
+	while (g_enemy_spawn_timer >= g_enemy_spawn_rate) {
+		g_enemy_spawn_timer -= g_enemy_spawn_rate;
 		ecs_run(g_ecs, ecs_id(system_spawn_enemies), dt, NULL);
 	}
+
+	// tick 60x per second
+	const float tick_rate = 1.0f / 60.0f;
+	static float accu = 0.0f;
+	while (accu >= tick_rate) {
+		accu -= tick_rate;
+		tick(scene, engine, tick_rate);
+	}
+	accu += dt;
+	
 }
 
 static void draw(struct scene_planes_s *scene, struct engine_s *engine) {
@@ -558,25 +696,42 @@ static void draw(struct scene_planes_s *scene, struct engine_s *engine) {
 		nvgRect(vg, 30.0f, 110.0f, W - 2*30.0f, H - 2*110.0f);
 		nvgFill(vg);
 
-		for (int i = 0; i < 3; ++i) {
+		// TODO: hack.
+		for (int i = 0; i < 4; ++i) {
 			float bx = 30.0f + 15.0f;
 			float by = 110.0f + 15.0f + (80.0f + 15.0f) * i;
 			float bw = W - 2*30.0f - 2*15.0f;
 			float bh = 80.0f;
 			float mx = engine->input_drag.x;
 			float my = engine->input_drag.y;
+			if (i == 3) {
+				// TODO: hack.
+				by += bh * 0.5f;
+			}
 			int state = engine->input_drag.state;
 			int is_hovering = (mx >= bx && mx <= bx + bw && my >= by && my <= by + bh);
 			
 			if (state == INPUT_DRAG_END) {
 				if (is_hovering) {
-					// rewards!
-					use_reward(&g_levelup_rewards[i]);
+					// TODO: hack.
+					if (i < 3) {
+						use_reward(&g_levelup_rewards[i]);
+					}
 					close_levelup_rewards();
 				}
 			}
 
-			reward_t rew = g_levelup_rewards[i];
+			reward_t rew;
+			if (i < 3) {
+				rew = g_levelup_rewards[i];
+			} else {
+				// TODO: hack.
+				rew = (reward_t){
+					.title = "~ SKIP ~",
+					.description = "Don't use any reward.",
+					.type = REWARDOPTION_HEAL,
+				};
+			}
 			nvgBeginPath(vg);
 			if (is_hovering) {
 				nvgFillColor(vg, nvgRGBf(0.85f, 0.8f, 0.75f));
@@ -593,14 +748,14 @@ static void draw(struct scene_planes_s *scene, struct engine_s *engine) {
 
 			nvgFontFaceId(vg, g_font);
 			nvgTextAlign(vg, NVG_ALIGN_BOTTOM | NVG_ALIGN_LEFT);
-			nvgFontSize(vg, 30.0f);
+			nvgFontSize(vg, 32.0f);
 			nvgFillColor(vg, nvgRGBf(0.1f, 0.1f, 0.1f));
-			nvgText(vg, 30.0f + 15.0f + 20.0f, 110.0f + 15.0f + 50.0f + (80.0f + 15.0f) * i, rew.title, NULL);
+			nvgText(vg, bx + 10.0f, by + 50.0f, rew.title, NULL);
 
 			nvgFontSize(vg, 16.0f);
 			nvgTextAlign(vg, NVG_ALIGN_TOP | NVG_ALIGN_LEFT);
 			nvgFillColor(vg, nvgRGBf(0.3f, 0.3f, 0.3f));
-			nvgText(vg, 30.0f + 15.0f + 20.0f, 110.0f + 15.0f + 50.0f + (80.0f + 15.0f) * i, rew.description, NULL);
+			nvgText(vg, bx + 10.0f, by + 50.0f, rew.description, NULL);
 		}
 
 	} else {
@@ -631,7 +786,7 @@ static void draw(struct scene_planes_s *scene, struct engine_s *engine) {
 
 		// draw level
 		static char level[32];
-		struct { float x, y, w, h } bounds;
+		struct { float x, y, w, h; } bounds;
 		snprintf(level, 32, "lv.%d (%d/%d XP)", g_level, (int)g_xp, g_xp_per_level[g_level]);
 		nvgTextAlign(vg, NVG_ALIGN_RIGHT | NVG_ALIGN_TOP);
 		nvgFontSize(vg, 18.0f);
@@ -664,42 +819,40 @@ void scene_planes_init(struct scene_planes_s *scene, struct engine_s *engine) {
 //
 
 static void mapchunk_set(c_mapchunk *chunk, int x, int y, int tx, int ty) {
-	chunk->tiles[x + y * chunk->width] = tx + ty * 16;
+	chunk->tiles[x + y * MAPCHUNK_WIDTH] = tx + ty * MAPCHUNK_TILESIZE;
 }
 static int mapchunk_get(c_mapchunk *chunk, int x, int y, int *tx, int *ty) {
-	if (x < 0 || y < 0 || x >= chunk->width || y >= chunk->height) {
+	if (x < 0 || y < 0 || x >= MAPCHUNK_WIDTH || y >= MAPCHUNK_HEIGHT) {
 		return 0;
 	}
 
-	int id = chunk->tiles[x + y * chunk->width];
+	int id = chunk->tiles[x + y * MAPCHUNK_WIDTH];
 
 	if (tx != NULL) {
-		*tx = id % 16;
+		*tx = id % MAPCHUNK_TILESIZE;
 	}
 	if (ty != NULL) {
-		*ty = (int)(id / 16.0f);
+		*ty = (int)(id / (float)MAPCHUNK_TILESIZE);
 	}
 
 	return id;
 }
 
-void mapchunk_init(c_mapchunk *chunk) {
-	chunk->width = 36;
-	chunk->height = 54;
-	chunk->tiles = calloc(chunk->width * chunk->height, sizeof(chunk->tiles[0]));
+void mapchunk_init(c_mapchunk *chunk, int chunk_x, int chunk_y) {
+	chunk->tiles = malloc(MAPCHUNK_WIDTH * MAPCHUNK_HEIGHT * sizeof(chunk->tiles[0]));
 
-	int seed = time(0);
-	srand(seed);
+	for (int y = 0; y < MAPCHUNK_HEIGHT; ++y) {
+		for (int x = 0; x < MAPCHUNK_WIDTH; ++x) {
+			int global_x = chunk_x * MAPCHUNK_WIDTH + x;
+			int global_y = chunk_y * MAPCHUNK_HEIGHT + y;
 
-	for (int y = 0; y < chunk->height; ++y) {
-		for (int x = 0; x < chunk->width; ++x) {
 			// initialize all to water
 			mapchunk_set(chunk, x, y, -1, -1);
 
 			// islands
 			float v = (
-					  0.8f * stb_perlin_noise3_seed((float)x / 12.0f, (float)y / 12.0f, 0.0f, 0, 0, 0, seed)
-					+ 0.2f * stb_perlin_noise3_seed((float)x /  6.0f, (float)y /  8.0f, 0.0f, 0, 0, 0, seed)
+					  0.8f * stb_perlin_noise3_seed((float)global_x / 12.0f, (float)global_y / 12.0f, 0.0f, 0, 0, 0, g_mapgen_seed)
+					+ 0.2f * stb_perlin_noise3_seed((float)global_x /  6.0f, (float)global_y /  8.0f, 0.0f, 0, 0, 0, g_mapgen_seed)
 					);
 
 			int is_land = (v <= 0.1f);
@@ -708,21 +861,21 @@ void mapchunk_init(c_mapchunk *chunk) {
 				mapchunk_set(chunk, x, y, 2, 4);
 
 				// vegetation
-				float r = stb_perlin_noise3_seed((float)x / 8.0f, (float)y / 8.0f, 0.5f, 0, 0, 0, 256 * v);
+				float r = stb_perlin_noise3_seed((float)global_x / 8.0f, (float)global_y / 8.0f, 0.5f, 0, 0, 0, 256 * v);
 
 				if (r > 0.4f) {
 					mapchunk_set(chunk, x, y, 0, 4 + rand() % 2);
 				}
 
 				// houses
-				float h = stb_perlin_noise3_seed((float)x / 10.0f, (float)y / 10.0f, 0.0f, 0, 0, 0, seed);
+				float h = stb_perlin_noise3_seed((float)global_x / 10.0f, (float)global_y / 10.0f, 0.0f, 0, 0, 0, g_mapgen_seed);
 				int is_city = (h < -0.1f);
 
-				h *= stb_perlin_noise3_seed((float)x / 2.5f, (float)y / 1.5f, 0.0f, 0, 0, 0, seed);
+				h *= stb_perlin_noise3_seed((float)global_x / 2.5f, (float)global_y / 1.5f, 0.0f, 0, 0, 0, g_mapgen_seed);
 				int is_house = (h < -0.15f);
 
-				h = stb_perlin_noise3_seed((float)x / 10.0f, (float)y / 10.0f, 0.4f, 0, 0, 0, seed)
-					* stb_perlin_noise3_seed((float)x / 1.0f, (float)y / 3.0f + 0.5f, 0.4f, 0, 0, 0, seed);
+				h = stb_perlin_noise3_seed((float)global_x / 10.0f, (float)global_y / 10.0f, 0.4f, 0, 0, 0, g_mapgen_seed)
+					* stb_perlin_noise3_seed((float)global_x / 1.0f, (float)global_y / 3.0f + 0.5f, 0.4f, 0, 0, 0, g_mapgen_seed);
 				int is_field = (h < -0.1f);
 
 				if (is_land && is_city) {
@@ -738,8 +891,8 @@ void mapchunk_init(c_mapchunk *chunk) {
 	}
 	
 	// second pass, terrain outline
-	for (int y = 0; y < chunk->height; ++y) {
-		for (int x = 0; x < chunk->width; ++x) {
+	for (int y = 0; y < MAPCHUNK_HEIGHT; ++y) {
+		for (int x = 0; x < MAPCHUNK_WIDTH; ++x) {
 			int tx, ty, id;
 			id = mapchunk_get(chunk, x, y, &tx, &ty);
 			if (id < 0) continue;
@@ -758,12 +911,6 @@ void mapchunk_init(c_mapchunk *chunk) {
 				mapchunk_get(chunk, x    , y + 1, NULL, NULL) < 0,
 				mapchunk_get(chunk, x + 1, y + 1, NULL, NULL) < 0,
 			};
-			int tiles_count = tiles[0] + tiles[1] + tiles[2] + tiles[3] + tiles[5] + tiles[6] + tiles[7] + tiles[8];
-			int top_count    = tiles[0] + tiles[1] + tiles[2];
-			int left_count   = tiles[0] + tiles[3] + tiles[6];
-			int right_count  = tiles[2] + tiles[5] + tiles[8];
-			int bottom_count = tiles[6] + tiles[7] + tiles[8];
-
 			int top = tiles[1];
 			int left = tiles[3];
 			int right = tiles[5];
@@ -807,6 +954,51 @@ void mapchunk_destroy(c_mapchunk *chunk) {
 	chunk->tiles = NULL;
 }
 
+void spawn_bulletshot(vec2 p, float angle, enum faction faction, float spread, float dmg, float speed) {
+	float rnd_angle = glm_rad((rand() / (float)RAND_MAX) * spread - spread * 0.5f);
+	ecs_entity_t e = ecs_new_id(g_ecs);
+	ecs_set(g_ecs, e, c_pos, { .p.raw = {p[0], p[1]} });
+	ecs_set(g_ecs, e, c_sprite, {
+			.tile = {10, 0},
+			.tile_size = {16, 16},
+			.angle = angle + rnd_angle,
+			.scale = 1.5f,
+			.z_layer = ZLAYER_BULLETS,
+			});
+	ecs_set(g_ecs, e, c_despawn_after, { .seconds = 5.0f });
+	ecs_set(g_ecs, e, c_bullet, {
+			.vel.raw = {
+				cosf(angle + rnd_angle), sinf(angle + rnd_angle)
+			},
+			.damage = dmg,
+			.speed = speed,
+			});
+	ecs_set(g_ecs, e, c_faction, { .faction = faction });
+}
+
+void spawn_homing_shot(vec2 p, float angle, ecs_entity_t target, enum faction faction, float dmg, float speed) {
+	ecs_entity_t e = ecs_new_id(g_ecs);
+	ecs_set(g_ecs, e, c_pos, { .p.raw = {p[0], p[1]} });
+	ecs_set(g_ecs, e, c_sprite, {
+			.tile = {11, 1},
+			.tile_size = {16, 16},
+			.angle = angle,
+			.scale = 1.5f,
+			.z_layer = ZLAYER_BULLETS,
+			});
+	ecs_set(g_ecs, e, c_despawn_after, { .seconds = 5.0f });
+	ecs_set(g_ecs, e, c_bullet, {
+			.vel.raw = {
+				cosf(angle) * 2.0f, sinf(angle) * 2.0f
+			},
+			.damage = dmg,
+			.speed = speed * 0.5f,
+			});
+	ecs_set(g_ecs, e, c_faction, { .faction = faction });
+	ecs_set(g_ecs, e, c_target, { .entity = target });
+	ecs_set(g_ecs, e, c_homing, { .turn_strength=0.1f });
+}
+
 void show_levelup_rewards(void) {
 	g_picking_rewards = 1;
 
@@ -830,15 +1022,19 @@ void use_reward(reward_t *reward) {
 	switch (reward->type) {
 		case REWARDOPTION_STATS_ADD:
 			plane->speed = (player->plane_speed += reward->data.modify_stats.plane_speed);
+			player->plane_turn_speed += reward->data.modify_stats.plane_turn_speed;
 			player->shoot_cd_max += reward->data.modify_stats.shoot_cd;
 			player->bullet_damage += reward->data.modify_stats.bullet_damage;
 			player->bullet_speed += reward->data.modify_stats.bullet_speed;
+			player->bullet_spread += reward->data.modify_stats.bullet_spread;
 			break;
 		case REWARDOPTION_STATS_MULT:
 			plane->speed = (player->plane_speed *= reward->data.modify_stats.plane_speed);
+			player->plane_turn_speed *= reward->data.modify_stats.plane_turn_speed;
 			player->shoot_cd_max *= reward->data.modify_stats.shoot_cd;
 			player->bullet_damage *= reward->data.modify_stats.bullet_damage;
 			player->bullet_speed *= reward->data.modify_stats.bullet_speed;
+			player->bullet_spread *= reward->data.modify_stats.bullet_spread;
 			break;
 	}
 
@@ -921,11 +1117,45 @@ void system_move_bullets(ecs_iter_t *it_bullet) {
 	c_pos *p_bullets = ecs_field(it_bullet, c_pos, 1);
 	c_bullet *bullets = ecs_field(it_bullet, c_bullet, 2);
 	c_faction *fac_bullets = ecs_field(it_bullet, c_faction, 3);
+	c_target *trg_bullets = NULL;
+	c_homing *homing_bullets = NULL;
+	c_sprite *spr_bullets = NULL;
+
+	if (ecs_field_is_set(it_bullet, 4)) {
+		trg_bullets = ecs_field(it_bullet, c_target, 4);
+	}
+	if (ecs_field_is_set(it_bullet, 5)) {
+		homing_bullets = ecs_field(it_bullet, c_homing, 5);
+	}
+	if (ecs_field_is_set(it_bullet, 6)) {
+		spr_bullets = ecs_field(it_bullet, c_sprite, 6);
+	}
+
 
 	for (int i = 0; i < it_bullet->count; ++i) {
-		vec2 dir;
-		glm_vec2_scale(bullets[i].vel.raw, bullets[i].speed * it_bullet->delta_time * 60.0f, dir);
-		glm_vec2_add(p_bullets[i].p.raw, dir, p_bullets[i].p.raw);
+		// get target position, if it exists
+		const c_pos *target_pos = NULL;
+		if (trg_bullets && ecs_is_alive(g_ecs, trg_bullets[i].entity)) {
+			target_pos = ecs_get(g_ecs, trg_bullets[i].entity, c_pos);
+		}
+		c_homing *is_homing = (homing_bullets ? &homing_bullets[i] : NULL);
+
+		if (is_homing && target_pos) {
+			vec2s to_target;
+			glm_vec2_sub(target_pos->p.raw, p_bullets[i].p.raw, to_target.raw);
+			glm_vec2_normalize(to_target.raw);
+			glm_vec2_scale(to_target.raw, is_homing->turn_strength * it_bullet->delta_time * 60.0f, to_target.raw);
+
+			glm_vec2_add(bullets[i].vel.raw, to_target.raw, bullets[i].vel.raw);
+			//glm_vec2(to_target.raw, bullets[i].vel.raw);
+
+			if (spr_bullets) {
+				spr_bullets[i].angle = atan2f(bullets[i].vel.y, bullets[i].vel.x);
+			}
+		}
+		vec2s dir;
+		glm_vec2_scale(bullets[i].vel.raw, bullets[i].speed * it_bullet->delta_time * 60.0f, dir.raw);
+		glm_vec2_add(p_bullets[i].p.raw, dir.raw, p_bullets[i].p.raw);
 
 		// collide with enemies
 		ecs_iter_t it_enemy = ecs_query_iter(g_ecs, g_enemies_query);
@@ -1028,7 +1258,7 @@ void system_spawn_plane_effects(ecs_iter_t *it) {
 				ecs_set(g_ecs, e, c_despawn_after, { .seconds = 2.0f });
 				ecs_set(g_ecs, e, c_sprite, {
 					.scale = 1.0f,
-					.tile = {4, 0},
+					.tile = {4, rand() % 3},
 					.tile_size = {32, 32},
 					.z_layer = ZLAYER_PARTICLES,
 				});
@@ -1045,27 +1275,41 @@ void system_spawn_plane_effects(ecs_iter_t *it) {
 }
 
 void system_spawn_enemies(ecs_iter_t *it) {
-	c_pos *ps = ecs_field(it, c_pos, 1);
-	c_player *players = ecs_field(it, c_player, 2);
+	//c_pos *ps = ecs_field(it, c_pos, 1);
+	//c_player *players = ecs_field(it, c_player, 2);
 
 	for (int i = 0; i < it->count; ++i) {
-		c_pos *pos = &ps[i];
-		c_player *player = &players[i];
+		//c_pos *pos = &ps[i];
+		//c_player *player = &players[i];
 
 		// spawn enemies for each player?
 		
 		float y = (rand() / (double)RAND_MAX) * g_engine->window_height * 0.5f;
+		int plane_type = rand() % 4;
+
+		float hp = 2.0f;
+		float speed = 1.0f;
+		switch (plane_type) {
+		case 0:
+			hp = 6.0f;
+			speed = 0.9f;
+			break;
+		case 2:
+			hp = 1.25f;
+			speed = 1.1f;
+			break;
+		};
 
 		ecs_entity_t e = ecs_new_id(g_ecs);
 		ecs_set(g_ecs, e, c_pos, { .p.raw = {10.0f, y} });
 		ecs_set(g_ecs, e, c_plane, {
-			.angle = 0.3f,
-			.speed = 1.0f,
+			.angle = 0.2f,
+			.speed = speed,
 			.poof_cd = 0.0f,
 			.poof_cd_max = 0.7f,
 		});
 		ecs_set(g_ecs, e, c_sprite, {
-			.tile = {rand() % 4, 5},
+			.tile = {plane_type, 5},
 			.tile_size = {32, 32},
 			.scale = 2.0f,
 			.angle = 0.2f,
@@ -1074,7 +1318,52 @@ void system_spawn_enemies(ecs_iter_t *it) {
 		ecs_set(g_ecs, e, c_shadow, { .distance = 32.0f });
 		ecs_set(g_ecs, e, c_faction, { .faction = FACTION_ENEMY });
 		ecs_set(g_ecs, e, c_despawn_after, { .seconds=30.0f });
-		ecs_set(g_ecs, e, c_health, { .hp = 2.0f, .max_hp = 2.0f });
+		ecs_set(g_ecs, e, c_health, { .hp = hp, .max_hp = hp });
+	}
+}
+
+void system_remove_mapchunks(ecs_iter_t *it) {
+	if (!ecs_is_alive(g_ecs, g_player)) {
+		return;
+	}
+
+	c_pos *chunk_positions = ecs_field(it, c_pos, 1);
+	c_mapchunk *chunks = ecs_field(it, c_mapchunk, 2);
+
+	float wx = -g_engine->u_view[3][0];
+	float wy = -g_engine->u_view[3][1];
+	float ww = g_engine->window_width;
+	float wh = g_engine->window_height;
+	for (int i = 0; i < it->count; ++i) {
+		c_pos *chunk_pos = &chunk_positions[i];
+		c_mapchunk *chunk = &chunks[i];
+
+		float x = chunk_pos->p.x;
+		float y = chunk_pos->p.y;
+		float w = MAPCHUNK_WIDTH * MAPCHUNK_TILESIZE;
+		float h = MAPCHUNK_HEIGHT * MAPCHUNK_TILESIZE;
+
+		if (x + w < wx || x > wx + ww || y + h < wy || y > wy + wh) {
+			ecs_delete(g_ecs, it->entities[i]);
+		}
+	}
+}
+
+void system_animate_sprites(ecs_iter_t *it) {
+	c_sprite *sprites = ecs_field(it, c_sprite, 1);
+	c_animation *animations = ecs_field(it, c_animation, 2);
+
+	for (int i = 0; i < it->count; ++i) {
+		c_sprite *spr = &sprites[i];
+		c_animation *anim = &animations[i];
+
+		spr->tile[0] = anim->frame_offset + anim->current_frame;
+		while (anim->elapsed >= anim->secs_per_frame) {
+			anim->current_frame = ++anim->current_frame % anim->frames;
+			anim->elapsed -= anim->secs_per_frame;
+		}
+
+		anim->elapsed += it->delta_time;
 	}
 }
 
@@ -1092,12 +1381,11 @@ void system_draw_sprites(ecs_iter_t *it) {
 			shadow = ecs_field(it, c_shadow, 3);
 		}
 
-		ecs_field(it, c_shadow, 3);
 		const float w = sprite[i].tile_size[0] * sprite[i].scale;
 		const float h = sprite[i].tile_size[1] * sprite[i].scale;
 
 		// squish
-		float sq_amount = 0.3f;
+		float sq_amount = 0.2f;
 		float sq_amount_inv = (1.0f - sq_amount);
 		float sqw = w * sq_amount_inv + w * sq_amount * glm_ease_elast_out(1.0f - sprite[i].squish);
 		float sqh = h * sq_amount_inv + h * sq_amount * glm_ease_elast_out(1.0f - sprite[i].squish);
@@ -1118,12 +1406,13 @@ void system_draw_sprites(ecs_iter_t *it) {
 
 			cmd.position.x = pos[i].p.x - sqw * 0.5f + ox;
 			cmd.position.y = pos[i].p.y - sqh * 0.5f + oy;
-			cmd.position.z = ZLAYER_ON_GROUND;
+			cmd.position.z = ZLAYER_SHADOW;
 			glm_vec3_zero(cmd.color_mult);
 			cmd.color_mult[3] = 0.25f;
 			pipeline_emit(&g_pipeline, &cmd);
 		}
 
+		// draw plane
 		cmd.position.x = pos[i].p.x - sqw * 0.5f;
 		cmd.position.y = pos[i].p.y - sqh * 0.5f;
 		cmd.position.z = sprite[i].z_layer;
@@ -1132,42 +1421,39 @@ void system_draw_sprites(ecs_iter_t *it) {
 		pipeline_emit(&g_pipeline, &cmd);
 	}
 
-
 	// test drawing planes
 	glEnable(GL_DEPTH_TEST);
 	pipeline_draw(&g_pipeline, g_engine);
 }
 
 void system_draw_map(ecs_iter_t *it) {
-	float alpha = cosf(g_engine->time_elapsed * 0.2f) * 0.08f;
-
-	pipeline_reset(&g_pipeline);
-	g_pipeline.texture = &g_tiles_tex;
-
 	c_pos *ps = ecs_field(it, c_pos, 1);
 	c_mapchunk *cs = ecs_field(it, c_mapchunk, 2);
 	for (int i = 0; i < it->count; ++i) {
+		pipeline_reset(&g_pipeline);
+		g_pipeline.texture = &g_tiles_tex;
 
+		// TODO: store pipeline in c_mapchunk
 		drawcmd_t cmd = DRAWCMD_INIT;
-		for (int y = 0; y < cs[i].height; ++y) {
-			for (int x = 0; x < cs[i].width; ++x) {
-				int id = cs[i].tiles[x + y * cs[i].width];
+		for (int y = 0; y < MAPCHUNK_HEIGHT; ++y) {
+			for (int x = 0; x < MAPCHUNK_WIDTH; ++x) {
+				int id = cs[i].tiles[x + y * MAPCHUNK_WIDTH];
 				if (id < 0) {
 					continue;
 				}
 
-				int tx = id % 16;
-				int ty = (int)(id / 16);
+				int tx = id % MAPCHUNK_TILESIZE;
+				int ty = (int)(id / MAPCHUNK_TILESIZE);
 
-				cmd.position.x = ps[i].p.x + (x * 16);
-				cmd.position.y = ps[i].p.y + (y * 16);
-				cmd.size.x = cmd.size.y = 16.0f;
-				drawcmd_set_texture_subrect_tile(&cmd, g_pipeline.texture, 16, 16, tx, ty);
+				cmd.position.x = ps[i].p.x + (x * MAPCHUNK_TILESIZE);
+				cmd.position.y = ps[i].p.y + (y * MAPCHUNK_TILESIZE);
+				cmd.size.x = cmd.size.y = MAPCHUNK_TILESIZE;
+				drawcmd_set_texture_subrect_tile(&cmd, g_pipeline.texture, MAPCHUNK_TILESIZE, MAPCHUNK_TILESIZE, tx, ty);
 				pipeline_emit(&g_pipeline, &cmd);
 			}
 		}
-	}
 
-	pipeline_draw(&g_pipeline, g_engine);
+		pipeline_draw(&g_pipeline, g_engine);
+	}
 }
 
