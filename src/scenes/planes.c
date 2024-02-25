@@ -71,6 +71,7 @@ typedef struct {
 
 // components
 typedef struct {
+	ivec2s chunk;
 	int *tiles;
 } c_mapchunk;
 
@@ -331,7 +332,7 @@ static void load(struct scene_planes_s *scene, struct engine_s *engine) {
 	srand(g_mapgen_seed);
 
 	// rendering
-	shader_init_from_dir(&g_planes_shader, "res/shader/planes/");
+	shader_init_from_dir(&g_planes_shader, "res/shader/sprite/");
 	pipeline_init(&g_pipeline, &g_planes_shader, 2048);
 
 	// setup state
@@ -423,10 +424,12 @@ static void load(struct scene_planes_s *scene, struct engine_s *engine) {
 		for (int y = 0; y < 3; ++y) {
 			ecs_entity_t e = ecs_new_id(g_ecs);
 			ecs_set(g_ecs, e, c_pos, {
-				.p.x = x * MAPCHUNK_WIDTH * MAPCHUNK_TILESIZE,
-				.p.y = y * MAPCHUNK_HEIGHT * MAPCHUNK_TILESIZE,
-			});
-			ecs_set(g_ecs, e, c_mapchunk, { NULL });
+					.p.x = x * MAPCHUNK_WIDTH * MAPCHUNK_TILESIZE,
+					.p.y = y * MAPCHUNK_HEIGHT * MAPCHUNK_TILESIZE,
+					});
+			ecs_set(g_ecs, e, c_mapchunk, {
+					.chunk = { .x = x, .y = y },
+					.tiles = NULL });
 			
 			c_mapchunk *chunk = ecs_get_mut(g_ecs, e, c_mapchunk);
 			mapchunk_init(chunk, x, y);
@@ -1344,6 +1347,7 @@ void system_remove_mapchunks(ecs_iter_t *it) {
 		float h = MAPCHUNK_HEIGHT * MAPCHUNK_TILESIZE;
 
 		if (x + w < wx || x > wx + ww || y + h < wy || y > wy + wh) {
+			mapchunk_destroy(chunk);
 			ecs_delete(g_ecs, it->entities[i]);
 		}
 	}

@@ -14,9 +14,8 @@
 #include "engine.h"
 #include "gl/texture.h"
 #include "gl/shader.h"
-#include "gl/vbuffer.h"
+#include "gl/graphics2d.h"
 #include "game/isoterrain.h"
-#include "game/cards.h"
 #include "game/background.h"
 #include "gui/console.h"
 #include "ecs/components.h"
@@ -30,7 +29,6 @@
 // private functions
 //
 
-static void reload_shader(struct engine_s *engine);
 
 //
 // vars
@@ -38,7 +36,9 @@ static void reload_shader(struct engine_s *engine);
 
 // game state
 struct isoterrain_s *g_terrain;
-struct cardrenderer_s *g_cardrenderer;
+static texture_t g_cards_texture;
+static shader_t g_cards_shader;
+static pipeline_t g_cards_pipeline;
 
 ecs_world_t *g_world;
 ecs_query_t *g_q_handcards;
@@ -55,9 +55,6 @@ static Mix_Chunk *sound;
 static void load(struct scene_battle_s *scene, struct engine_s *engine) {
 	engine_set_clear_color(0.34f, 0.72f, 0.98f);
 
-	// TODO: remove, debug only
-	stbds_arrput(engine->on_notify_callbacks, reload_shader);
-	
 	// ecs
 	g_world = ecs_init();
 	ECS_COMPONENT(g_world, c_card);
@@ -115,8 +112,12 @@ static void load(struct scene_battle_s *scene, struct engine_s *engine) {
 	isoterrain_init_from_file(g_terrain, "res/data/levels/winter.json");
 
 	// card renderer
-	g_cardrenderer = malloc(sizeof(struct cardrenderer_s));
-	cardrenderer_init(g_cardrenderer, "res/image/cards.png");
+	struct texture_settings_s settings = TEXTURE_SETTINGS_INIT;
+	texture_init_from_image(&g_cards_texture, "res/image/cards.png", &settings);
+	shader_init_from_dir(&g_cards_shader, "res/shader/sprite/");
+
+	pipeline_init(&g_cards_pipeline, &g_cards_shader, 128);
+	g_cards_pipeline.texture = &g_cards_texture;
 
 	// background
 	background_set_parallax("res/image/bg-glaciers/%d.png", 4);
@@ -129,9 +130,9 @@ static void destroy(struct scene_battle_s *scene, struct engine_s *engine) {
 	background_destroy();
 	isoterrain_destroy(g_terrain);
 	free(g_terrain);
-	cardrenderer_destroy(g_cardrenderer);
-	free(g_cardrenderer);
-
+	texture_destroy(&g_cards_texture);
+	shader_destroy(&g_cards_shader);
+	pipeline_destroy(&g_cards_pipeline);
 	ecs_fini(g_world);
 }
 
@@ -191,25 +192,23 @@ static void update(struct scene_battle_s *scene, struct engine_s *engine, float 
 	// map transform
 	const float mw = g_terrain->width * 16.0f;
 	glm_mat4_identity(engine->u_view);
-	glm_translate(engine->u_view, (vec3){ 0.0f, 140.0f, 0.0f });
-	glm_scale(engine->u_view, (vec3){ engine->window_width / mw, -(engine->window_width / mw), 1.0f});
 }
 
 static void draw(struct scene_battle_s *scene, struct engine_s *engine) {
 	background_draw(engine);
 
 	// draw terrain
-	isoterrain_draw(g_terrain, engine->u_projection, engine->u_view);
+	const float t_padding = 40.0f;
+	const float t_scale = ((engine->window_width - t_padding) / (float)g_terrain->projected_width);
+	glm_mat4_identity(engine->u_view);
+	glm_translate_x(engine->u_view, t_padding * 0.5f);
+	glm_scale(engine->u_view, (float[]){t_scale, t_scale, t_scale});
+	isoterrain_draw(g_terrain, engine);
 
 	// draw cards
-	glUseProgram(g_cardrenderer->shader.program);
-	shader_set_uniform_mat4(&g_cardrenderer->shader, "u_projection", (float *)engine->u_projection);
-	//shader_set_uniform_mat4(&g_cardrenderer->shader, "u_view", (float *)engine->u_view);
-	shader_set_uniform_texture(&g_cardrenderer->shader, "u_texture", GL_TEXTURE0, &g_cardrenderer->texture_atlas);
+	glm_mat4_identity(engine->u_view);
+	pipeline_reset(&g_cards_pipeline);
 
-	glEnable(GL_DEPTH_TEST);
-	glDepthFunc(GL_LEQUAL);
-	// TODO: z-sorting
 	ecs_iter_t it = ecs_query_iter(g_world, g_q_handcards);
 	while (ecs_query_next(&it)) {
 		c_card *cards = ecs_field(&it, c_card, 1);
@@ -218,9 +217,9 @@ static void draw(struct scene_battle_s *scene, struct engine_s *engine) {
 		float card_z = 0.0f;
 		for (int i = 0; i < it.count; ++i) {
 			const float p = ((float)i / glm_max(it.count - 1, 1));
-			const float angle = p * glm_rad(120.0f) - glm_rad(60.0f);
+			const float angle = p * glm_rad(30.0f) - glm_rad(15.0f);
 			const float x = (engine->window_width - 140.0f) * p + 70.0f;
-			const float y = engine->window_height - 70.0f + 20.0f * fabsf(p - 0.5f) * 2.0f;
+			const float y = engine->window_height - 70.0f + 30.0f * fabsf(p - 0.5f) * 2.0f;
 			float z_offset = 0.0f;
 			
 			card_z += 0.01f;
@@ -231,26 +230,55 @@ static void draw(struct scene_battle_s *scene, struct engine_s *engine) {
 				card_scale = 120.0f;
 			}
 
-			mat4 u_model;
-			glm_mat4_identity(u_model);
-			if (handcards[i].selected) {
-				glm_translate(u_model, (vec3){ handcards[i].drag_x, handcards[i].drag_y, card_z + z_offset});
-				glm_scale(u_model, (vec3){ card_scale, -card_scale, 1.0f });
-			} else {
-				glm_translate(u_model, (vec3){ x, y, card_z});
-				glm_rotate(u_model, angle * 0.2f, (vec3){0.0f, 0.0f, 1.0f});
-				glm_scale(u_model, (vec3){ card_scale, -card_scale, 1.0f });
-			}
-			shader_set_uniform_mat4(&g_cardrenderer->shader, "u_model", (float *)u_model);
-
 			const float step = 1.0f / 8.0f;
 			const float tx = cards[i].image_id % 8;
 			const float ty = floorf((float)cards[i].image_id / 8.0f);
-			shader_set_uniform_vec4(&g_cardrenderer->shader, "u_cardwindow_offset", (vec4){tx * step, (ty + 1.0f) * step, step, -step});
+			//shader_set_uniform_vec4(g_cards_pipeline.shader, "u_cardwindow_offset", (vec4){tx * step, (ty + 1.0f) * step, step, -step});
 
-			vbuffer_draw(&g_cardrenderer->vbo, 6);
+			drawcmd_t cmd_card = DRAWCMD_INIT;
+			cmd_card.size.x = 90;
+			cmd_card.size.y = 128;
+			drawcmd_t cmd_img = DRAWCMD_INIT;
+			cmd_img.size.x = 90;
+			cmd_img.size.y = 67;
+			if (handcards[i].selected) {
+				// card
+				cmd_card.size.x *= 2.0f;
+				cmd_card.size.y *= 2.0f;
+				cmd_card.position.x = handcards[i].drag_x;
+				cmd_card.position.y = y - cmd_card.size.y + handcards[i].drag_y * 0.1f;
+				// img
+				cmd_img.size.x *= 2.0f;
+				cmd_img.size.y *= 2.0f;
+			} else {
+				cmd_card.position.x = x;
+				cmd_card.position.y = y;
+				cmd_card.angle = angle;
+			}
+			// card
+			cmd_card.position.x -= cmd_card.size.x * 0.5f;
+			cmd_card.position.y -= cmd_card.size.y * 0.5f;
+			cmd_card.position.z = card_z + z_offset;
+			// img
+			glm_vec3_dup(cmd_card.position.raw, cmd_img.position.raw);
+			cmd_img.angle = cmd_card.angle;
+			cmd_img.position.x = cmd_card.position.x;
+			cmd_img.position.y = cmd_card.position.y;
+			cmd_img.position.z = cmd_card.position.z;
+			cmd_img.origin.x = 0.5f;
+			cmd_img.origin.y = 0.0f;
+			cmd_img.origin.z = 0.0f;
+			cmd_img.origin.w = cmd_card.size.y * 0.5f;
+			drawcmd_set_texture_subrect(&cmd_img, g_cards_pipeline.texture, 90 * 2, 0, 90, 67);
+			pipeline_emit(&g_cards_pipeline, &cmd_img);
+			drawcmd_set_texture_subrect_tile(&cmd_card, g_cards_pipeline.texture, 90, 128, 0, 0);
+			pipeline_emit(&g_cards_pipeline, &cmd_card);
 		}
 	}
+
+	glEnable(GL_DEPTH_TEST);
+	glDepthFunc(GL_LEQUAL);
+	pipeline_draw(&g_cards_pipeline, engine);
 	glDisable(GL_DEPTH_TEST);
 }
 
@@ -269,9 +297,4 @@ void scene_battle_init(struct scene_battle_s *scene_battle, struct engine_s *eng
 //
 // private implementations
 //
-
-static void reload_shader(struct engine_s *engine) {
-	struct scene_battle_s *scene = (struct scene_battle_s *)engine->scene;
-	shader_init(&g_terrain->shader, "res/shader/isoterrain/vertex.glsl", "res/shader/isoterrain/fragment.glsl");
-}
 

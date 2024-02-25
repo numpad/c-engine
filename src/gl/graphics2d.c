@@ -166,6 +166,13 @@ static void update_model_matrix(primitive2d_t *pri) {
 
 // pipeline
 
+void drawcmd_set_texture_subrect(drawcmd_t *cmd, texture_t *tex, int x, int y, int width, int height) {
+	cmd->texture_subrect[0] = (float)x      / tex->width;
+	cmd->texture_subrect[1] = (float)y      / tex->height;
+	cmd->texture_subrect[2] = (float)width  / tex->width;
+	cmd->texture_subrect[3] = (float)height / tex->height;
+}
+
 void drawcmd_set_texture_subrect_tile(drawcmd_t *cmd, texture_t *tex, int tile_width, int tile_height, int tile_x, int tile_y) {
 	const float uv_w = (float)tile_width / tex->width;
 	const float uv_h = (float)tile_height / tex->height;
@@ -202,8 +209,8 @@ void pipeline_destroy(pipeline_t *pl) {
 	glDeleteBuffers(1, &pl->vertex_buffer);
 	glDisableVertexAttribArray(pl->a_pos);
 	glDisableVertexAttribArray(pl->a_texcoord);
-	glDisableVertexAttribArray(pl->a_color_mult);
-	glDisableVertexAttribArray(pl->a_color_add);
+	if (pl->a_color_mult != -1) glDisableVertexAttribArray(pl->a_color_mult);
+	if (pl->a_color_add != -1) glDisableVertexAttribArray(pl->a_color_add);
 }
 
 void pipeline_reset(pipeline_t *pl) {
@@ -227,8 +234,8 @@ void pipeline_emit(pipeline_t *pl, drawcmd_t *cmd) {
 
 	float angle_cos = cosf(cmd->angle);
 	float angle_sin = sinf(cmd->angle);
-	float cx = px + 0.5f * w;
-	float cy = py + 0.5f * h;
+	float cx = px + cmd->origin.x * w + cmd->origin.z;
+	float cy = py + cmd->origin.y * h + cmd->origin.w;
 
 	float colm[4] = { cmd->color_mult[0], cmd->color_mult[1], cmd->color_mult[2], cmd->color_mult[3] };
 	float cola[4] = { cmd->color_add[0], cmd->color_add[1], cmd->color_add[2], cmd->color_add[3] };
@@ -280,10 +287,14 @@ void pipeline_draw(pipeline_t *pl, engine_t *engine) {
 	glVertexAttribPointer    (pl->a_pos, 3, GL_FLOAT, GL_FALSE, pl->components_per_vertex * sizeof       (GLfloat), (void*)0);
 	glEnableVertexAttribArray(pl->a_texcoord);
 	glVertexAttribPointer    (pl->a_texcoord, 2, GL_FLOAT, GL_FALSE, pl->components_per_vertex * sizeof  (GLfloat), (void*)(3 * sizeof(GLfloat)));
-	glEnableVertexAttribArray(pl->a_color_mult);
-	glVertexAttribPointer    (pl->a_color_mult, 4, GL_FLOAT, GL_FALSE, pl->components_per_vertex * sizeof(GLfloat), (void*)(5 * sizeof(GLfloat)));
-	glEnableVertexAttribArray(pl->a_color_add);
-	glVertexAttribPointer    (pl->a_color_add, 4, GL_FLOAT, GL_FALSE, pl->components_per_vertex * sizeof (GLfloat), (void*)(9 * sizeof(GLfloat)));
+	if (pl->a_color_mult != -1) {
+		glEnableVertexAttribArray(pl->a_color_mult);
+		glVertexAttribPointer    (pl->a_color_mult, 4, GL_FLOAT, GL_FALSE, pl->components_per_vertex * sizeof(GLfloat), (void*)(5 * sizeof(GLfloat)));
+	}
+	if (pl->a_color_add != -1) {
+		glEnableVertexAttribArray(pl->a_color_add);
+		glVertexAttribPointer    (pl->a_color_add, 4, GL_FLOAT, GL_FALSE, pl->components_per_vertex * sizeof (GLfloat), (void*)(9 * sizeof(GLfloat)));
+	}
 
 	glDrawArrays(GL_TRIANGLES, 0, pl->vertices_per_primitive * pl->commands_count);
 }

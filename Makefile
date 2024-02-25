@@ -34,7 +34,7 @@ endif
 SRC = main.c src/engine.c src/platform.c \
 	  src/ecs/components.c \
 	  src/gui/console.c src/gui/ugui.c \
-	  src/game/background.c src/game/terrain.c src/game/isoterrain.c src/game/cards.c \
+	  src/game/background.c src/game/terrain.c src/game/isoterrain.c \
 	  src/util/easing.c src/util/fs.c src/util/util.c \
 	  src/gl/shader.c src/gl/texture.c src/gl/vbuffer.c src/gl/graphics2d.c \
 	  src/net/message.c \

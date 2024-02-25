@@ -2,9 +2,11 @@
 #define ISOTERRAIN_H
 
 #include <cglm/cglm.h>
+#include "engine.h"
 #include "gl/texture.h"
 #include "gl/vbuffer.h"
 #include "gl/shader.h"
+#include "gl/graphics2d.h"
 
 typedef int iso_block;
 typedef struct cJSON cJSON;
@@ -20,7 +22,8 @@ struct isoterrain_s {
 
 	shader_t shader;
 	texture_t tileset_texture;
-	vbuffer_t *vbuf;
+
+	pipeline_t pipeline;
 };
 
 // create & destroy
@@ -32,7 +35,7 @@ void isoterrain_destroy(struct isoterrain_s *);
 cJSON *isoterrain_to_json(struct isoterrain_s *);
 
 // logic
-void isoterrain_draw(struct isoterrain_s *, const mat4 proj, const mat4 view);
+void isoterrain_draw(struct isoterrain_s *, engine_t *engine);
 
 // api
 void isoterrain_get_projected_size(struct isoterrain_s *, int *width, int *height);

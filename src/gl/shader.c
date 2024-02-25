@@ -26,8 +26,11 @@ static GLint uniform_location(shader_t *shader, const char *uniform_name);
 void shader_init(shader_t *shader, const char *vert_path, const char *frag_path) {
 	int vs = shader_stage_new(GL_VERTEX_SHADER, vert_path);
 	int fs = shader_stage_new(GL_FRAGMENT_SHADER, frag_path);
+	assert(vs >= 0);
+	assert(fs >= 0);
 	
 	shader->program = shader_program_new(vs, fs);
+	assert(shader->program >= 0);
 }
 
 void shader_init_from_dir(shader_t *program, const char *dir_path) {
@@ -134,6 +137,7 @@ static int shader_stage_new(GLenum type, const char *path) {
 	GLchar *shadersrc;
 	long shadersrc_len;
 	if (fs_readfile(path, &shadersrc, &shadersrc_len) != FS_OK) {
+		fprintf(stderr, "error: failed reading shader \"%s\"...\n", path);
 		return -1;
 	}
 
@@ -151,6 +155,7 @@ static int shader_stage_new(GLenum type, const char *path) {
 		glGetShaderInfoLog(shader, log_len, NULL, log);
 
 		fprintf(stderr, "error compiling shader \"%s\":\n%s\n", path, log);
+		shader = -1;
 	}
 
 	free(shadersrc);
@@ -174,6 +179,7 @@ static int shader_program_new(int vertex_shader, int fragment_shader) {
 		glGetProgramInfoLog(program, log_len, NULL, log);
 
 		fprintf(stderr, "error linking shader program:\n%s\n", log);
+		return -1;
 	}
 
 	return program;

@@ -6,7 +6,7 @@
 #include "util/fs.h"
 #include "gl/shader.h"
 #include "gl/texture.h"
-#include "gl/vbuffer.h"
+#include "gl/graphics2d.h"
 
 //
 // vars
@@ -56,31 +56,12 @@ void isoterrain_init(struct isoterrain_s *terrain, int w, int h, int layers) {
 
 	isoterrain_get_projected_size(terrain, &terrain->projected_width, &terrain->projected_height);
 
-
 	shader_init(&terrain->shader, "res/shader/isoterrain/vertex.glsl", "res/shader/isoterrain/fragment.glsl");
-	texture_init_from_image(&terrain->tileset_texture, "res/environment/tiles.png", NULL);
+	struct texture_settings_s settings = TEXTURE_SETTINGS_INIT;
+	texture_init_from_image(&terrain->tileset_texture, "res/environment/tiles.png", &settings);
 
-	terrain->vbuf = malloc(sizeof(struct vbuffer_s));
-	GLfloat vertices[] = {
-		0.0f,               0.0f,                0.0f, 0.0f,
-		texture_tile_width, 0.0f,                1.0f, 0.0f,
-		0.0f,               texture_tile_height, 0.0f, 1.0f,
-		0.0f,               texture_tile_height, 0.0f, 1.0f,
-		texture_tile_width, 0.0f,                1.0f, 0.0f,
-		texture_tile_width, texture_tile_height, 1.0f, 1.0f,
-	};
-	vbuffer_init(terrain->vbuf);
-	vbuffer_set_data(terrain->vbuf, sizeof(vertices), vertices);
-	vbuffer_set_attrib(terrain->vbuf, &terrain->shader, "a_position", 2, GL_FLOAT, 4 * sizeof(float), 0);
-	vbuffer_set_attrib(terrain->vbuf, &terrain->shader, "a_texcoord", 2, GL_FLOAT, 4 * sizeof(float), (void*)(2 * sizeof(float)));
-	
-	glUseProgram(terrain->shader.program);
-	shader_set_uniform_texture(&terrain->shader, "u_texture", GL_TEXTURE0, &terrain->tileset_texture);
-	shader_set_uniform_vec2(&terrain->shader, "u_tilesize", (vec2){
-		(1.0f / terrain->tileset_texture.width) * (float)texture_tile_width,
-		(1.0f / terrain->tileset_texture.height) * (float)texture_tile_height,
-	});
-
+	pipeline_init(&terrain->pipeline, &terrain->shader, 1024);
+	terrain->pipeline.texture = &terrain->tileset_texture;
 }
 
 void isoterrain_init_from_file(struct isoterrain_s *terrain, const char *path_to_script) {
@@ -124,8 +105,7 @@ void isoterrain_init_from_file(struct isoterrain_s *terrain, const char *path_to
 
 void isoterrain_destroy(struct isoterrain_s *terrain) {
 	free(terrain->blocks);
-	vbuffer_destroy(terrain->vbuf);
-	free(terrain->vbuf);
+	pipeline_destroy(&terrain->pipeline);
 }
 
 //
@@ -156,14 +136,9 @@ cJSON *isoterrain_to_json(struct isoterrain_s *terrain) {
 // logic
 //
 
-void isoterrain_draw(struct isoterrain_s *terrain, const mat4 proj, const mat4 view) {
-	glUseProgram(terrain->shader.program);
-	shader_set_uniform_mat4(&terrain->shader, "u_projection", proj);
-	shader_set_uniform_mat4(&terrain->shader, "u_view", view);
-	shader_set_uniform_texture(&terrain->shader, "u_texture", GL_TEXTURE0, &terrain->tileset_texture);
+void isoterrain_draw(struct isoterrain_s *terrain, engine_t *engine) {
+	pipeline_reset(&terrain->pipeline);
 
-	glEnable(GL_BLEND);
-	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 	// draw left to right, top to bottom
 	for (int iz = 0; iz < terrain->layers; ++iz) {
 		for (int ix = 0; ix < terrain->width; ++ix) {
@@ -172,27 +147,26 @@ void isoterrain_draw(struct isoterrain_s *terrain, const mat4 proj, const mat4 v
 				if (*block == -1) continue;
 
 				// blockid to texcoord
-				vec2 tile_uv = { *block % 16, floor(*block / 15.0f) };
+				ivec2s tile_uv = { .x = *block % 16, .y = floor(*block / 15.0f) };
 				vec3 block_pos = GLM_VEC3_ZERO_INIT;
 				isoterrain_pos_block_to_screen(terrain, ix, iy, iz, block_pos);
 
-				shader_set_uniform_vec2(&terrain->shader, "u_tilepos", tile_uv);
-				shader_set_uniform_vec3(&terrain->shader, "u_pos", block_pos);
-
-				vbuffer_draw(terrain->vbuf, 6);
-
-				/*
-				struct draw_cmd_s cmd = draw_cmd_new();
-				cmd.vertices = terrain->vbuf;
-				cmd.vertices_count = 6;
-				cmd.shader = terrain->shader;
-				cmd.texture[0] = terrain->texture;
-
-				draw_cmd_queue(engine, cmd);
-				*/
+				drawcmd_t cmd = DRAWCMD_INIT;
+				cmd.size.x = texture_tile_width;
+				cmd.size.y = texture_tile_height;
+				cmd.position.x = block_pos[0];
+				cmd.position.y = (terrain->projected_height - block_pos[1]);
+				cmd.position.z = block_pos[2];
+				drawcmd_set_texture_subrect_tile(&cmd, &terrain->tileset_texture, 16, 17, tile_uv.x, tile_uv.y); // tile_uv
+				pipeline_emit(&terrain->pipeline, &cmd);
 			}
 		}
 	}
+
+	glDisable(GL_DEPTH_TEST);
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+	pipeline_draw(&terrain->pipeline, engine);
 }
 
 //
@@ -219,7 +193,7 @@ void isoterrain_set_block(struct isoterrain_s *terrain, int x, int y, int z, iso
 
 void isoterrain_pos_block_to_screen(struct isoterrain_s *terrain, int x, int y, int z, vec2 OUT_pos) {
 	OUT_pos[0] = (x + y) * 8.0f;
-	OUT_pos[1] = ((y + 2.0f * z) - x) * 4.0f - (float)terrain->projected_height;
+	OUT_pos[1] = ((y + 2.0f * z) - x) * 4.0f;
 }
 
 void isoterrain_pos_screen_to_block(struct isoterrain_s *terrain, vec2 pos, int *OUT_x, int *OUT_y, int *OUT_z) {

@@ -19,6 +19,7 @@
 #include "gl/texture.h"
 #include "gl/graphics2d.h"
 #include "net/message.h"
+#include "util/fs.h"
 #include "util/util.h"
 #include "platform.h"
 
@@ -62,7 +63,9 @@ static const char *g_search_friends_texts[] = {"(Both Users Hold Button)", "Sear
 static const char *g_search_friends_text = NULL;
 static vec2s g_menu_camera;
 static float g_menu_camera_target_y = 0.0f;
-static primitive2d_t g_entity_rect = {0};
+static struct isoterrain_s g_terrain;
+static shader_t g_shader_entities;
+static pipeline_t g_pipeline_entities;
 
 // sfx
 static Mix_Chunk *g_sound_click = NULL;
@@ -131,13 +134,14 @@ static void menu_load(struct menu_s *menu, struct engine_s *engine) {
 	if (g_music == NULL) g_music = Mix_LoadMUS("res/music/menu-song.ogg");
 
 
-	menu->terrain = malloc(sizeof(struct isoterrain_s));
-	isoterrain_init_from_file(menu->terrain, "res/data/levels/winter.json");
+	isoterrain_init_from_file(&g_terrain, "res/data/levels/winter.json");
 
 	struct texture_settings_s settings = TEXTURE_SETTINGS_INIT;
-	settings.flip_y = 1;
 	texture_init_from_image(&g_entity_tex, "res/sprites/entities-outline.png", &settings);
-	graphics2d_init_rect(&g_entity_rect, 0.0f, 0.0f, 16.0f, 17.0f);
+
+	shader_init_from_dir(&g_shader_entities, "res/shader/sprite/");
+	pipeline_init(&g_pipeline_entities, &g_shader_entities, 128);
+	g_pipeline_entities.texture = &g_entity_tex;
 
 	background_set_parallax("res/image/bg-glaciers/%d.png", 4);
 
@@ -149,24 +153,25 @@ static void menu_load(struct menu_s *menu, struct engine_s *engine) {
 	g_entities[0].pos[1] = 4;
 	g_entities[0].pos[2] = 1;
 	g_entities[0].tile[0] = 0;
-	g_entities[0].tile[1] = 1;
+	g_entities[0].tile[1] = 0;
 
 	g_entities[1].pos[0] = 1;
 	g_entities[1].pos[1] = 8;
 	g_entities[1].pos[2] = 2;
 	g_entities[1].tile[0] = 4;
-	g_entities[1].tile[1] = 7;
+	g_entities[1].tile[1] = 3;
 
 	g_entities[2].pos[0] = 7;
 	g_entities[2].pos[1] = 6;
 	g_entities[2].pos[2] = 1;
-	g_entities[2].tile[0] = 12;
-	g_entities[2].tile[1] = 7;
+	g_entities[2].tile[0] = 4;
+	g_entities[2].tile[1] = 4;
 }
 
 static void menu_destroy(struct menu_s *menu, struct engine_s *engine) {
-	isoterrain_destroy(menu->terrain);
-	free(menu->terrain);
+	pipeline_destroy(&g_pipeline_entities);
+	shader_destroy(&g_shader_entities);
+	isoterrain_destroy(&g_terrain);
 	background_destroy();
 	nvgDeleteImage(engine->vg, g_menuicon_play); g_menuicon_play = -1;
 	nvgDeleteImage(engine->vg, g_menuicon_cards); g_menuicon_cards = -1;
@@ -193,14 +198,14 @@ static void menu_draw(struct menu_s *menu, struct engine_s *engine) {
 
 	// draw terrain
 	const float t_padding = 50.0f;
-	int t_width = menu->terrain->projected_width;
+	int t_width = g_terrain.projected_width;
 
 	// build matrix
 	glm_mat4_identity(engine->u_view);
 	const float t_scale = ((engine->window_width - t_padding) / (float)t_width);
-	glm_translate(engine->u_view, (vec3){ 25.0f + g_menu_camera.x, 160.0f + fabsf(sinf(engine->time_elapsed)) * -30.0f, 0.0f });
-	glm_scale(engine->u_view, (vec3){ t_scale, -t_scale, t_scale });
-	isoterrain_draw(menu->terrain, engine->u_projection, engine->u_view);
+	glm_translate(engine->u_view, (vec3){ t_padding * 0.5f, 100.0f + fabsf(sinf(engine->time_elapsed)) * -30.0f, 0.0f });
+	glm_scale(engine->u_view, (vec3){ t_scale, t_scale, t_scale });
+	isoterrain_draw(&g_terrain, engine);
 
 	//draw_menu(engine, engine->nk);
 
@@ -376,17 +381,23 @@ static void menu_draw(struct menu_s *menu, struct engine_s *engine) {
 	static float entity_anim = 0.0f;
 	entity_anim = fmodf(entity_anim + engine->dt, 1.0f);
 
+	pipeline_reset(&g_pipeline_entities);
 	for (size_t i = 0; i < g_entities_len; ++i) {
 		entity_t *e = &g_entities[i];
 		vec2s bp = GLMS_VEC2_ZERO_INIT;
-		isoterrain_pos_block_to_screen(menu->terrain, e->pos[0], e->pos[1], e->pos[2], bp.raw);
+		isoterrain_pos_block_to_screen(&g_terrain, e->pos[0], e->pos[1], e->pos[2], bp.raw);
 		
 		// draw sprite
-		graphics2d_set_position(&g_entity_rect, bp.x, bp.y);
-		graphics2d_set_texture_tile(&g_entity_rect, &g_entity_tex, 16.0f, 17.0f, e->tile[0] + (entity_anim < 0.5f), e->tile[1]);
-		graphics2d_set_scale(&g_entity_rect, 16.0f, 17.0f);
-		graphics2d_draw_primitive2d(engine, &g_entity_rect);
+		drawcmd_t cmd = DRAWCMD_INIT;
+		cmd.size.x = 16;
+		cmd.size.y = 17;
+		glm_vec2(bp.raw, cmd.position.raw);
+		cmd.position.y = g_terrain.projected_height - cmd.position.y;
+		drawcmd_set_texture_subrect_tile(&cmd, &g_entity_tex, 16, 17, e->tile[0] + (entity_anim < 0.5f), e->tile[1]);
+		pipeline_emit(&g_pipeline_entities, &cmd);
 	}
+
+	pipeline_draw(&g_pipeline_entities, engine);
 }
 
 static void menu_on_message(struct menu_s *menu, struct engine_s *engine, struct message_header *msg) {
@@ -677,6 +688,20 @@ static float menuitem_active(float menu_x, float bookmark_x, float bookmark_tx) 
 
 void on_begin_search_friends(struct engine_s *engine) {
 	g_search_friends_text = g_search_friends_texts[1];
+
+	// TODO: remove
+	if (engine->gameserver_tcp == NULL) {
+		if (engine_gameserver_connect(engine, "localhost") == 0) {
+			printf("\x1b[32mConnected to Server!\x1b[0m\n");
+		} else {
+			printf("\x1b[31mFailed connecting to Server...\x1b[0m\n");
+		}
+	} else {
+		printf("Sent something...\n");
+		struct lobby_list_request req;
+		message_header_init((struct message_header *)&req, LOBBY_LIST_REQUEST);
+		engine_gameserver_send(engine, (struct message_header *)&req);
+	}
 }
 
 void on_end_search_friends(struct engine_s *engine) {

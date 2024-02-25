@@ -51,19 +51,22 @@ void graphics2d_draw_primitive2d(engine_t *, primitive2d_t *);
 	.texture_subrect = {0.0f, 0.0f, 1.0f, 1.0f}, \
 	.size.raw        = {1.0f, 1.0f},             \
 	.angle           = 0.0f,                     \
+	.origin          = {0.5f, 0.5f, 0.0f, 0.0f}, \
 	.color_mult      = {1.0f, 1.0f, 1.0f, 1.0f}, \
 	.color_add       = {0.0f, 0.0f, 0.0f, 0.0f}, \
 }
 
 typedef struct {
-	vec3s position;
-	vec4 texture_subrect;
-	vec2s size;
-	float angle;
+	vec3s position;       // screen coordinates
+	vec4 texture_subrect; // use with drawcmd_set_texture_subrect*()
+	vec2s size;           // size
+	float angle;          // rotation angle (radians)
+	vec4s origin;         // rotation origin (x&y is percentage of size, z&w is offset)
 	vec4 color_mult;
 	vec4 color_add;
 } drawcmd_t;
 
+void drawcmd_set_texture_subrect(drawcmd_t *, texture_t *, int x, int y, int width, int height);
 void drawcmd_set_texture_subrect_tile(drawcmd_t *, texture_t *, int tile_width, int tile_height, int tile_x, int tile_y);
 
 typedef struct {
