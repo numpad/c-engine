@@ -51,7 +51,7 @@ void graphics2d_draw_primitive2d(engine_t *, primitive2d_t *);
 	.texture_subrect = {0.0f, 0.0f, 1.0f, 1.0f}, \
 	.size.raw        = {1.0f, 1.0f},             \
 	.angle           = 0.0f,                     \
-	.origin          = {0.5f, 0.5f, 0.0f, 0.0f}, \
+	.origin.raw      = {0.5f, 0.5f, 0.0f, 0.0f}, \
 	.color_mult      = {1.0f, 1.0f, 1.0f, 1.0f}, \
 	.color_add       = {0.0f, 0.0f, 0.0f, 0.0f}, \
 }

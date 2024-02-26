@@ -12,7 +12,7 @@
 #include <cJSON.h>
 #include "scenes/intro.h"
 #include "scenes/menu.h"
-#include "scenes/planes.h"
+#include "scenes/scene_battle.h"
 #include "gui/console.h"
 #include "net/message.h"
 #include "util/util.h"
@@ -105,13 +105,14 @@ struct engine_s *engine_new(void) {
 
 	// OpenGL config
     SDL_SetHint(SDL_HINT_VIDEO_HIGHDPI_DISABLED, "0");
+	SDL_SetHint(SDL_HINT_VIDEO_ALLOW_SCREENSAVER, "1");
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 2);
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
 	SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
 	SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
-	//SDL_GL_SetAttribute(SDL_GL_MULTISAMPLEBUFFERS, 1);
-	//SDL_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES, 4);
+	SDL_GL_SetAttribute(SDL_GL_MULTISAMPLEBUFFERS, 1);
+	SDL_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES, 4);
 	engine->gl_ctx = SDL_GL_CreateContext(engine->window);
 	if (SDL_GL_SetSwapInterval(1) != 0) {
 		fprintf(stderr, "warning: failed enabling v-sync: %s\n", SDL_GetError());

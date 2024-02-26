@@ -64,32 +64,32 @@ static void load(struct scene_battle_s *scene, struct engine_s *engine) {
 	// add some debug cards
 	{
 		ecs_entity_t e = ecs_new_id(g_world);
-		ecs_set(g_world, e, c_card, { "Move Forward", 40 });
+		ecs_set(g_world, e, c_card, { "Attack", 0 });
 		ecs_set(g_world, e, c_handcard, { 0 });
 	}
 	{
 		ecs_entity_t e = ecs_new_id(g_world);
-		ecs_set(g_world, e, c_card, { "Move Forward", 40 });
+		ecs_set(g_world, e, c_card, { "Attack", 0 });
 		ecs_set(g_world, e, c_handcard, { 0 });
 	}
 	{
 		ecs_entity_t e = ecs_new_id(g_world);
-		ecs_set(g_world, e, c_card, { "Meal", 41 });
+		ecs_set(g_world, e, c_card, { "Fire Spell", 4 });
 		ecs_set(g_world, e, c_handcard, { 0 });
 	}
 	{
 		ecs_entity_t e = ecs_new_id(g_world);
-		ecs_set(g_world, e, c_card, { "Move Forward", 40 });
+		ecs_set(g_world, e, c_card, { "Defend", 2 });
 		ecs_set(g_world, e, c_handcard, { 0 });
 	}
 	{
 		ecs_entity_t e = ecs_new_id(g_world);
-		ecs_set(g_world, e, c_card, { "Meal", 41 });
+		ecs_set(g_world, e, c_card, { "Meal", 1 });
 		ecs_set(g_world, e, c_handcard, { 0 });
 	}
 	{
 		ecs_entity_t e = ecs_new_id(g_world);
-		ecs_set(g_world, e, c_card, { "Meal", 41 });
+		ecs_set(g_world, e, c_card, { "Corruption", 5 });
 		ecs_set(g_world, e, c_handcard, { 0 });
 	}
 	
@@ -113,6 +113,8 @@ static void load(struct scene_battle_s *scene, struct engine_s *engine) {
 
 	// card renderer
 	struct texture_settings_s settings = TEXTURE_SETTINGS_INIT;
+	settings.filter_min = GL_LINEAR;
+	settings.filter_mag = GL_NEAREST;
 	texture_init_from_image(&g_cards_texture, "res/image/cards.png", &settings);
 	shader_init_from_dir(&g_cards_shader, "res/shader/sprite/");
 
@@ -142,7 +144,7 @@ static void update(struct scene_battle_s *scene, struct engine_s *engine, float 
 
 	const struct input_drag_s *drag = &(engine->input_drag);
 
-	if ((drag->state == INPUT_DRAG_BEGIN && drag->begin_y > engine->window_height * 0.7f) || drag->state == INPUT_DRAG_END) {
+	if (((drag->state == INPUT_DRAG_BEGIN || drag->state == INPUT_DRAG_IN_PROGRESS) && drag->begin_y > engine->window_height * 0.7f) || drag->state == INPUT_DRAG_END) {
 		ecs_iter_t it = ecs_query_iter(g_world, g_q_handcards);
 		while (ecs_query_next(&it)) {
 			c_card *cards = ecs_field(&it, c_card, 1);
@@ -165,8 +167,8 @@ static void update(struct scene_battle_s *scene, struct engine_s *engine, float 
 
 				handcards[i].selected = 0;
 				
-				if (drag->state == INPUT_DRAG_BEGIN) {
-					const int id = ((drag->begin_x / (float)engine->window_width)) * it.count;
+				if (drag->state == INPUT_DRAG_BEGIN || drag->state == INPUT_DRAG_IN_PROGRESS) {
+					const int id = ((drag->x / (float)engine->window_width)) * it.count;
 					if (i == id) {
 						handcards[i].selected = 1;
 					}
@@ -188,10 +190,6 @@ static void update(struct scene_battle_s *scene, struct engine_s *engine, float 
 			}
 		}
 	}
-
-	// map transform
-	const float mw = g_terrain->width * 16.0f;
-	glm_mat4_identity(engine->u_view);
 }
 
 static void draw(struct scene_battle_s *scene, struct engine_s *engine) {
@@ -200,8 +198,10 @@ static void draw(struct scene_battle_s *scene, struct engine_s *engine) {
 	// draw terrain
 	const float t_padding = 40.0f;
 	const float t_scale = ((engine->window_width - t_padding) / (float)g_terrain->projected_width);
+	const float t_y = engine->window_height * 0.5f - g_terrain->projected_height * t_scale * 0.5f;
 	glm_mat4_identity(engine->u_view);
 	glm_translate_x(engine->u_view, t_padding * 0.5f);
+	glm_translate_y(engine->u_view, t_y);
 	glm_scale(engine->u_view, (float[]){t_scale, t_scale, t_scale});
 	isoterrain_draw(g_terrain, engine);
 
@@ -240,7 +240,7 @@ static void draw(struct scene_battle_s *scene, struct engine_s *engine) {
 			cmd_card.size.y = 128;
 			drawcmd_t cmd_img = DRAWCMD_INIT;
 			cmd_img.size.x = 90;
-			cmd_img.size.y = 67;
+			cmd_img.size.y = 64;
 			if (handcards[i].selected) {
 				// card
 				cmd_card.size.x *= 2.0f;
@@ -250,6 +250,13 @@ static void draw(struct scene_battle_s *scene, struct engine_s *engine) {
 				// img
 				cmd_img.size.x *= 2.0f;
 				cmd_img.size.y *= 2.0f;
+
+				// keep card in window
+				if (cmd_card.position.x - cmd_card.size.x * 0.5f < 0.0f) {
+					cmd_card.position.x = cmd_card.size.x * 0.5f;
+				} else if (cmd_card.position.x + cmd_card.size.x * 0.5f > engine->window_width) {
+					cmd_card.position.x = engine->window_width - cmd_card.size.x * 0.5f;
+				}
 			} else {
 				cmd_card.position.x = x;
 				cmd_card.position.y = y;
@@ -269,8 +276,10 @@ static void draw(struct scene_battle_s *scene, struct engine_s *engine) {
 			cmd_img.origin.y = 0.0f;
 			cmd_img.origin.z = 0.0f;
 			cmd_img.origin.w = cmd_card.size.y * 0.5f;
-			drawcmd_set_texture_subrect(&cmd_img, g_cards_pipeline.texture, 90 * 2, 0, 90, 67);
+			// img
+			drawcmd_set_texture_subrect(&cmd_img, g_cards_pipeline.texture, 90 * (1 + cards[i].image_id % 4), 64 * floorf(cards[i].image_id / 4.0f), 90, 64);
 			pipeline_emit(&g_cards_pipeline, &cmd_img);
+			// card
 			drawcmd_set_texture_subrect_tile(&cmd_card, g_cards_pipeline.texture, 90, 128, 0, 0);
 			pipeline_emit(&g_cards_pipeline, &cmd_card);
 		}
