@@ -77,6 +77,17 @@ struct engine_s *engine_new(void) {
 		return NULL;
 	}
 
+	// OpenGL config
+	SDL_SetHint(SDL_HINT_VIDEO_HIGHDPI_DISABLED, "0");
+	SDL_SetHint(SDL_HINT_VIDEO_ALLOW_SCREENSAVER, "1");
+	SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
+	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 2);
+	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
+	SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
+	SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
+	SDL_GL_SetAttribute(SDL_GL_MULTISAMPLEBUFFERS, 1);
+	SDL_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES, 4);
+
 	struct engine_s *engine = calloc(1, sizeof(struct engine_s));
 	engine->window_width = 550;
 	engine->window_height = 800;
@@ -103,22 +114,13 @@ struct engine_s *engine_new(void) {
 		return NULL;
 	}
 
-	// OpenGL config
-    SDL_SetHint(SDL_HINT_VIDEO_HIGHDPI_DISABLED, "0");
-	SDL_SetHint(SDL_HINT_VIDEO_ALLOW_SCREENSAVER, "1");
-	SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
-	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 2);
-	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
-	SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
-	SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
-	SDL_GL_SetAttribute(SDL_GL_MULTISAMPLEBUFFERS, 1);
-	SDL_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES, 4);
 	engine->gl_ctx = SDL_GL_CreateContext(engine->window);
 	if (SDL_GL_SetSwapInterval(1) != 0) {
 		fprintf(stderr, "warning: failed enabling v-sync: %s\n", SDL_GetError());
 	}
 	
 	// libs
+	// TODO: _STENCIL_STROKES is a bit slower, check if needed
 	engine->vg = nvgCreateGLES2(NVG_ANTIALIAS | NVG_STENCIL_STROKES);
 	engine->font_monospace = nvgCreateFont(engine->vg, "NotoSansMono", "res/font/NotoSansMono-Regular.ttf");
 
