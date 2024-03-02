@@ -182,6 +182,18 @@ void drawcmd_set_texture_subrect_tile(drawcmd_t *cmd, texture_t *tex, int tile_w
 	cmd->texture_subrect[3] = uv_h;
 }
 
+void drawcmd_flip_texture_subrect(drawcmd_t *cmd, int flip_x, int flip_y) {
+	if (flip_x) {
+		cmd->texture_subrect[0] += cmd->texture_subrect[2];
+		cmd->texture_subrect[2] = -cmd->texture_subrect[2];
+	}
+
+	if (flip_y) {
+		cmd->texture_subrect[1] += cmd->texture_subrect[3];
+		cmd->texture_subrect[3] = -cmd->texture_subrect[3];
+	}
+}
+
 void pipeline_init(pipeline_t *pl, shader_t *shader, int commands_max) {
 	// config
 	pl->components_per_vertex = 3 + 2 + 4 + 4; // pos + texcoord + color_mult + color_add
@@ -272,11 +284,11 @@ void pipeline_emit(pipeline_t *pl, drawcmd_t *cmd) {
 	++pl->commands_count;
 }
 
-void pipeline_draw(pipeline_t *pl, engine_t *engine) {
+static void draw_pipeline(pipeline_t *pl, mat4 u_projection, mat4 u_view) {
 	shader_use(pl->shader);
 
-	shader_set_uniform_mat4(pl->shader, "u_projection", (float *)engine->u_projection);
-	shader_set_uniform_mat4(pl->shader, "u_view",       (float *)engine->u_view);
+	shader_set_uniform_mat4(pl->shader, "u_projection", (float *)u_projection);
+	shader_set_uniform_mat4(pl->shader, "u_view",       (float *)u_view);
 	if (pl->texture != NULL) {
 		shader_set_uniform_texture(pl->shader, "u_texture", GL_TEXTURE0, pl->texture);
 	}
@@ -299,3 +311,15 @@ void pipeline_draw(pipeline_t *pl, engine_t *engine) {
 	glDrawArrays(GL_TRIANGLES, 0, pl->vertices_per_primitive * pl->commands_count);
 }
 
+void pipeline_draw(pipeline_t *pl, engine_t *engine) {
+	draw_pipeline(pl, engine->u_projection, engine->u_view);
+}
+
+void pipeline_draw_ortho(pipeline_t *pl, float w, float h) {
+	mat4 view;
+	glm_mat4_identity(view);
+	mat4 proj;
+	glm_ortho(0.0f, w, h, 0.0f, -1.0f, 1.0f, proj);
+
+	draw_pipeline(pl, proj, view);
+}

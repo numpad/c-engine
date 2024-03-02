@@ -68,6 +68,7 @@ typedef struct {
 
 void drawcmd_set_texture_subrect(drawcmd_t *, texture_t *, int x, int y, int width, int height);
 void drawcmd_set_texture_subrect_tile(drawcmd_t *, texture_t *, int tile_width, int tile_height, int tile_x, int tile_y);
+void drawcmd_flip_texture_subrect(drawcmd_t *, int flip_x, int flip_y);
 
 typedef struct {
 	// config
@@ -95,6 +96,7 @@ void pipeline_reset(pipeline_t *);
 void pipeline_emit(pipeline_t *, drawcmd_t *);
 
 void pipeline_draw(pipeline_t *, engine_t *);
+void pipeline_draw_ortho(pipeline_t *, float w, float h);
 
 #endif
 

@@ -32,11 +32,10 @@ ifeq ($(CC), emcc)
 endif
 
 SRC = main.c src/engine.c src/platform.c \
-	  src/ecs/components.c \
 	  src/gui/console.c src/gui/ugui.c \
 	  src/game/background.c src/game/terrain.c src/game/isoterrain.c \
 	  src/util/easing.c src/util/fs.c src/util/util.c \
-	  src/gl/shader.c src/gl/texture.c src/gl/vbuffer.c src/gl/graphics2d.c \
+	  src/gl/shader.c src/gl/texture.c src/gl/vbuffer.c src/gl/graphics2d.c src/gl/canvas.c \
 	  src/net/message.c \
 	  lib/nanovg/src/nanovg.c \
 	  lib/stb/stb_ds.c lib/stb/stb_perlin.c lib/stb/stb_image.c lib/stb/stb_rect_pack.c lib/stb/stb_truetype.c \
