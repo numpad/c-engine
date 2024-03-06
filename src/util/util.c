@@ -6,6 +6,16 @@ int point_in_rect(float px, float py, float x, float y, float w, float h) {
 	return (px >= x && py >= y && px <= x + w && py <= y + h);
 }
 
+int nearest_pow2(int value) {
+	assert(value >= 1);
+
+	int power = 1;
+	while (power < value) {
+		power *= 2;
+	}
+	return power;
+}
+
 const char *str_match_bracket(const char *str, size_t len, char open, char close) {
 	assert(str[0] == open);
 

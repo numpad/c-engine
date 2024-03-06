@@ -20,20 +20,17 @@
 #include "game/background.h"
 #include "gui/console.h"
 #include "scenes/menu.h"
+#include "util/util.h"
 
 //
 // structs & enums
 //
 
-enum is_selected {
-	SELECTED_NONE = 0,
-	SELECTED_HOVER,
-	SELECTED_DRAGGING,
-};
-
 // 
 // private functions
 //
+
+static void recalculate_handcards(void);
 
 //
 // ecs
@@ -49,8 +46,8 @@ typedef struct {
 
 // a cards state when held in hand
 typedef struct {
-	enum is_selected selected;
-	float drag_x, drag_y;
+	vec2s hand_target_pos;
+	float hand_space;
 } c_handcard;
 
 // position on the isoterrain grid
@@ -62,8 +59,13 @@ ECS_COMPONENT_DECLARE(c_card);
 ECS_COMPONENT_DECLARE(c_handcard);
 ECS_COMPONENT_DECLARE(c_blockpos);
 
+// queries
+static ecs_query_t *g_ordered_handcards;
+static int g_handcards_updated;
+
 // systems
 static void system_draw_cards(ecs_iter_t *);
+static void observer_on_update_handcards(ecs_iter_t *);
 
 ECS_SYSTEM_DECLARE(system_draw_cards);
 
@@ -77,11 +79,9 @@ struct isoterrain_s *g_terrain;
 static texture_t g_cards_texture;
 static shader_t g_cards_shader;
 static pipeline_t g_cards_pipeline;
-static canvas_t g_canvas;
 
 static ecs_world_t *g_world;
-
-
+static int g_cards_to_add = 0;
 
 // testing
 static Mix_Chunk *sound;
@@ -91,9 +91,11 @@ static Mix_Chunk *sound;
 // scene functions
 //
 
-
 static void load(struct scene_battle_s *scene, struct engine_s *engine) {
 	g_engine = engine;
+	g_cards_to_add = 5;
+	g_handcards_updated = 0;
+
 	// ecs
 	g_world = ecs_init();
 	ECS_COMPONENT_DEFINE(g_world, c_card);
@@ -101,38 +103,34 @@ static void load(struct scene_battle_s *scene, struct engine_s *engine) {
 	ECS_COMPONENT_DEFINE(g_world, c_blockpos);
 	ECS_SYSTEM_DEFINE(g_world, system_draw_cards, 0, c_card, c_handcard);
 
+	g_ordered_handcards = ecs_query(g_world, {
+		.filter.terms = { {ecs_id(c_card)}, {ecs_id(c_handcard)} },
+		//.order_by_component = ecs_id(c_handcard),
+		//.order_by = order_handcards,
+		});
+	
+	ecs_observer(g_world, {
+		.filter.terms = { {ecs_id(c_card)}, {ecs_id(c_handcard)}, },
+		.events = { EcsOnAdd, EcsOnRemove },
+		.callback = observer_on_update_handcards,
+		});
+
 	// add some debug cards
 	{
 		ecs_entity_t e = ecs_new_id(g_world);
 		ecs_set(g_world, e, c_card, { "Attack", 0 });
-		ecs_set(g_world, e, c_handcard, { .selected = SELECTED_NONE, });
-	}
-	{
-		ecs_entity_t e = ecs_new_id(g_world);
+		e = ecs_new_id(g_world);
 		ecs_set(g_world, e, c_card, { "Attack", 0 });
-		ecs_set(g_world, e, c_handcard, { .selected = SELECTED_NONE, });
-	}
-	{
-		ecs_entity_t e = ecs_new_id(g_world);
+		e = ecs_new_id(g_world);
 		ecs_set(g_world, e, c_card, { "Fire Spell", 4 });
-		ecs_set(g_world, e, c_handcard, { .selected = SELECTED_NONE, });
-	}
-	{
-		ecs_entity_t e = ecs_new_id(g_world);
+		e = ecs_new_id(g_world);
 		ecs_set(g_world, e, c_card, { "Defend", 2 });
-		ecs_set(g_world, e, c_handcard, { .selected = SELECTED_NONE, });
-	}
-	{
-		ecs_entity_t e = ecs_new_id(g_world);
+		e = ecs_new_id(g_world);
 		ecs_set(g_world, e, c_card, { "Meal", 1 });
-		ecs_set(g_world, e, c_handcard, { .selected = SELECTED_NONE, });
-	}
-	{
-		ecs_entity_t e = ecs_new_id(g_world);
+		e = ecs_new_id(g_world);
 		ecs_set(g_world, e, c_card, { "Corruption", 5 });
-		ecs_set(g_world, e, c_handcard, { .selected = SELECTED_NONE, });
 	}
-	
+
 	// add some debug entities
 	{
 		ecs_entity_t e = ecs_new_id(g_world);
@@ -156,15 +154,12 @@ static void load(struct scene_battle_s *scene, struct engine_s *engine) {
 	background_set_parallax("res/image/bg-glaciers/%d.png", 4);
 	background_set_parallax_offset(-0.4f);
 
-	// canvas
-	canvas_init(&g_canvas, 1024, 1024, NULL);
-
 	// audio
 	sound = Mix_LoadWAV("res/sounds/test.wav");
 }
 
 static void destroy(struct scene_battle_s *scene, struct engine_s *engine) {
-	canvas_destroy(&g_canvas);
+	ecs_query_fini(g_ordered_handcards);
 	background_destroy();
 	isoterrain_destroy(g_terrain);
 	free(g_terrain);
@@ -176,68 +171,39 @@ static void destroy(struct scene_battle_s *scene, struct engine_s *engine) {
 
 static void update(struct scene_battle_s *scene, struct engine_s *engine, float dt) {
 	const struct input_drag_s *drag = &(engine->input_drag);
-	const int hover_area_height = 150;
 
-	NVGcontext *vg = engine->vg;
+	// add cards
+	static float card_add_accum = 0.0f;
+	card_add_accum += dt;
+	if (card_add_accum >= 0.5f) {
+		card_add_accum -= 0.5f;
+		
+		ecs_filter_t *filter = ecs_filter_init(g_world, &(ecs_filter_desc_t){
+			.terms = {
+				{ .id = ecs_id(c_card) },
+				{ .id = ecs_id(c_handcard), .oper = EcsNot }
+			},
+		});
 
-	int n_cards = (int)(engine->time_elapsed * 2.0f) % 6;
-	nvgFillColor(vg, nvgRGB(255, 0, 0));
-	for (int i = 0; i < n_cards; ++i) {
-		vec2s p = { .x = 50.0f + i * 10.0f, .y = 100.0f };
-		nvgBeginPath(vg);
-		nvgCircle(vg, p.x, p.y, 3.0f);
-		nvgFill(vg);
-	}
-
-	/*
-	if (((drag->state == INPUT_DRAG_BEGIN || drag->state == INPUT_DRAG_IN_PROGRESS) && drag->begin_y > engine->window_height - hover_area_height) || drag->state == INPUT_DRAG_END) {
-		ecs_iter_t it = ecs_query_iter(g_world, g_q_handcards);
-		while (ecs_query_next(&it)) {
-			c_card *cards = ecs_field(&it, c_card, 1);
-			c_handcard *handcards = ecs_field(&it, c_handcard, 2);
-
-			for (int i = 0; i < it.count; ++i) {
-				if (drag->state == INPUT_DRAG_END && handcards[i].selected == SELECTED_HOVER) {
-					// dropped card anywhere
-
-					if (drag->y > engine->window_height - hover_area_height) {
-						console_add_message(engine->console, (struct console_msg_s) { "Card put pack into hand..." });
-					} else {
-						char msg[64]; // console_add_message makes a copy, so we can use a temporary buffer
-						sprintf(msg, "Played '%s'", cards[i].name);
-						console_add_message(engine->console, (struct console_msg_s) { msg });
-						ecs_delete(g_world, it.entities[i]);
-						Mix_PlayChannel(-1, sound, 0);
-					}
-				}
-
-				handcards[i].selected = SELECTED_NONE;
-				
-				if (drag->state == INPUT_DRAG_BEGIN || drag->state == INPUT_DRAG_IN_PROGRESS) {
-					const int id = ((drag->x / (float)engine->window_width)) * it.count;
-					if (i == id) {
-						handcards[i].selected = SELECTED_HOVER;
-					}
-				}
-			}
+		ecs_iter_t it = ecs_filter_iter(g_world, filter);
+		if (ecs_filter_next(&it)) {
+			ecs_set(g_world, it.entities[0], c_handcard, { .hand_space = 1.0f, .hand_target_pos = {0} });
 		}
+		while (ecs_filter_next(&it));
+		ecs_filter_fini(filter);
 	}
-	if (drag->state == INPUT_DRAG_BEGIN || drag->state == INPUT_DRAG_IN_PROGRESS) {
-		ecs_iter_t it = ecs_query_iter(g_world, g_q_handcards);
-		while (ecs_query_next(&it)) {
-			c_card *cards = ecs_field(&it, c_card, 1);
-			c_handcard *handcards = ecs_field(&it, c_handcard, 2);
 
-			for (int i = 0; i < it.count; ++i) {
-				if (handcards[i].selected == SELECTED_HOVER) {
-					handcards[i].drag_x = drag->x;
-					handcards[i].drag_y = drag->y;
-				}
-			}
-		}
+	static int last_width = -1;
+	static int last_height = -1;
+	if (g_handcards_updated || last_width != engine->window_width || last_height != engine->window_height) {
+		g_handcards_updated = 0;
+		last_width = engine->window_width;
+		last_height = engine->window_height;
+
+		recalculate_handcards();
 	}
-	*/
 }
+
 
 static void draw(struct scene_battle_s *scene, struct engine_s *engine) {
 	engine_set_clear_color(0.34f, 0.72f, 0.98f);
@@ -275,6 +241,55 @@ void scene_battle_init(struct scene_battle_s *scene_battle, struct engine_s *eng
 // private implementations
 //
 
+static void recalculate_handcards(void) {
+	// count number of cards
+	int cards_count = 0;
+	{
+		ecs_iter_t it = ecs_query_iter(g_world, g_ordered_handcards);
+		while (ecs_query_next(&it)) {
+			cards_count += it.count;
+		}
+	}
+	const float hand_max_width = fminf(g_engine->window_width - 60.0f, 500.0f);
+	const float card_width = fminf(hand_max_width / fmaxf(cards_count, 1.0f), 75.0f);
+
+	// calculate width of hand cards
+	float stacked_cards_width = card_width;
+	{
+		float previous_card_width = card_width;
+		ecs_iter_t it = ecs_query_iter(g_world, g_ordered_handcards);
+		while (ecs_query_next(&it)) {
+			c_handcard *handcards = ecs_field(&it, c_handcard, 2);
+			for (int i = 0; i < it.count; ++i) {
+				stacked_cards_width += (previous_card_width * 0.5f) + (card_width * handcards[i].hand_space * 0.5f);
+			}
+		}
+	}
+
+	// set handcard positions
+	const float hand_center = g_engine->window_width * 0.5f;
+	float previous_card_width = card_width;
+	float current_x = 0.0f;
+
+	int card_i = 0;
+	ecs_iter_t it = ecs_query_iter(g_world, g_ordered_handcards);
+	while (ecs_query_next(&it)) {
+		//c_card *cards = ecs_field(&it, c_card, 1);
+		c_handcard *handcards = ecs_field(&it, c_handcard, 2);
+
+		for (int i = 0; i < it.count; ++i) {
+			current_x += (previous_card_width * 0.5f) + (card_width * handcards[i].hand_space * 0.5f);
+
+			const float p = 1.0f - fabsf((card_i / glm_max(cards_count - 1.0f, 1.0f)) * 2.0f - 1.0f);
+			handcards[i].hand_target_pos.x = hand_center - (stacked_cards_width * 0.5f) + current_x;
+			handcards[i].hand_target_pos.y = g_engine->window_height - 50.0f - p * 20.0f;
+
+			++card_i;
+			previous_card_width = card_width * handcards[i].hand_space;
+		}
+	}
+}
+
 // systems
 
 static void system_draw_cards(ecs_iter_t *it) {
@@ -292,54 +307,22 @@ static void system_draw_cards(ecs_iter_t *it) {
 	for (int i = 0; i < cards_count; ++i) {
 		const float p = ((float)i / glm_max(cards_count - 1, 1));
 		const float angle = p * glm_rad(30.0f) - glm_rad(15.0f);
-		const float x = (g_engine->window_width - 140.0f) * p + 70.0f;
-		const float y = g_engine->window_height - 70.0f + 30.0f * fabsf(p - 0.5f) * 2.0f;
 		float z_offset = 0.0f;
 		
 		card_z += 0.01f;
 
-		float card_scale = 100.0f;
-		if (handcards[i].selected == SELECTED_HOVER) {
-			z_offset = 0.8f;
-			card_scale = 120.0f;
-		}
-
-		const float step = 1.0f / 8.0f;
-		const float tx = cards[i].image_id % 8;
-		const float ty = floorf((float)cards[i].image_id / 8.0f);
-
 		drawcmd_t cmd_card = DRAWCMD_INIT;
 		cmd_card.size.x = 90;
 		cmd_card.size.y = 128;
-		drawcmd_t cmd_img = DRAWCMD_INIT;
-		cmd_img.size.x = 90;
-		cmd_img.size.y = 64;
-		if (handcards[i].selected == SELECTED_HOVER) {
-			// card
-			cmd_card.size.x *= 2.0f;
-			cmd_card.size.y *= 2.0f;
-			cmd_card.position.x = handcards[i].drag_x;
-			cmd_card.position.y = y - cmd_card.size.y + handcards[i].drag_y * 0.1f;
-			// img
-			cmd_img.size.x *= 2.0f;
-			cmd_img.size.y *= 2.0f;
-
-			// keep card in window
-			if (cmd_card.position.x - cmd_card.size.x * 0.5f < 0.0f) {
-				cmd_card.position.x = cmd_card.size.x * 0.5f;
-			} else if (cmd_card.position.x + cmd_card.size.x * 0.5f > g_engine->window_width) {
-				cmd_card.position.x = g_engine->window_width - cmd_card.size.x * 0.5f;
-			}
-		} else {
-			cmd_card.position.x = x;
-			cmd_card.position.y = y;
-			cmd_card.angle = angle;
-		}
-		// card
+		cmd_card.position.x = handcards[i].hand_target_pos.x; //x;
+		cmd_card.position.y = handcards[i].hand_target_pos.y; //y;
+		cmd_card.angle = angle;
 		cmd_card.position.x -= cmd_card.size.x * 0.5f;
 		cmd_card.position.y -= cmd_card.size.y * 0.5f;
 		cmd_card.position.z = card_z + z_offset;
-		// img
+		drawcmd_t cmd_img = DRAWCMD_INIT;
+		cmd_img.size.x = 90;
+		cmd_img.size.y = 64;
 		glm_vec3_dup(cmd_card.position.raw, cmd_img.position.raw);
 		cmd_img.angle = cmd_card.angle;
 		cmd_img.position.x = cmd_card.position.x;
@@ -361,5 +344,14 @@ static void system_draw_cards(ecs_iter_t *it) {
 	glDepthFunc(GL_LEQUAL);
 	pipeline_draw(&g_cards_pipeline, g_engine);
 	glDisable(GL_DEPTH_TEST);
+}
+
+static void observer_on_update_handcards(ecs_iter_t *it) {
+	c_card *changed_cards = ecs_field(it, c_card, 1);
+	c_handcard *changed_handcards = ecs_field(it, c_handcard, 2);
+
+	if (it->event == EcsOnAdd) {
+		g_handcards_updated = 1;
+	}
 }
 
