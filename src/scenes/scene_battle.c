@@ -51,6 +51,7 @@ typedef struct {
 typedef struct {
 	vec2s hand_target_pos;
 	float hand_space;
+	int is_selected;
 } c_handcard;
 
 // position on the isoterrain grid
@@ -87,6 +88,7 @@ static shader_t g_cards_shader;
 static pipeline_t g_cards_pipeline;
 
 static ecs_world_t *g_world;
+static ecs_entity_t g_selected_card;
 
 // testing
 static Mix_Chunk *sound;
@@ -99,6 +101,7 @@ static Mix_Chunk *sound;
 static void load(struct scene_battle_s *scene, struct engine_s *engine) {
 	g_engine = engine;
 	g_handcards_updated = 0;
+	g_selected_card = 0;
 
 	// ecs
 	g_world = ecs_init();
@@ -117,7 +120,7 @@ static void load(struct scene_battle_s *scene, struct engine_s *engine) {
 	
 	ecs_observer(g_world, {
 		.filter.terms = { {ecs_id(c_card)}, {ecs_id(c_handcard)}, {ecs_id(c_position)}, },
-		.events = { EcsOnAdd, EcsOnRemove },
+		.events = { EcsOnAdd, EcsOnRemove, EcsOnSet },
 		.callback = observer_on_update_handcards,
 		});
 
@@ -180,8 +183,8 @@ static void update(struct scene_battle_s *scene, struct engine_s *engine, float 
 	// find closest handcard
 	if (drag->state == INPUT_DRAG_BEGIN) {
 		vec2s cursor_pos = { .x = drag->begin_x, .y = drag->begin_y };
-		ecs_entity_t e;
-		float closest = 999999.0f;
+		ecs_entity_t e = 0;
+		float closest = FLT_MAX;
 
 		ecs_iter_t it = ecs_query_iter(g_world, g_ordered_handcards);
 		while (ecs_query_next(&it)) {
@@ -197,9 +200,28 @@ static void update(struct scene_battle_s *scene, struct engine_s *engine, float 
 			}
 		}
 
-		c_handcard *hc = ecs_get_mut(g_world, e, c_handcard);
-		hc->hand_target_pos.x = cursor_pos.x;
-		hc->hand_target_pos.y = cursor_pos.y;
+		g_selected_card = e;
+		if (g_selected_card != 0 && ecs_is_valid(g_world, g_selected_card)) {
+			c_handcard *hc = ecs_get_mut(g_world, g_selected_card, c_handcard);
+			hc->hand_space = 0.4f;
+			hc->is_selected = 1;
+			ecs_modified(g_world, g_selected_card, c_handcard);
+		}
+	}
+	if (drag->state == INPUT_DRAG_END) {
+		if (g_selected_card != 0 && ecs_is_valid(g_world, g_selected_card)) {
+			c_handcard *hc = ecs_get_mut(g_world, g_selected_card, c_handcard);
+			hc->hand_space = 1.0f;
+			hc->is_selected = 0;
+			ecs_modified(g_world, g_selected_card, c_handcard);
+			g_selected_card = 0;
+		}
+	}
+
+	if (drag->state == INPUT_DRAG_IN_PROGRESS && g_selected_card != 0 && ecs_is_valid(g_world, g_selected_card)) {
+		c_position *pos = ecs_get_mut(g_world, g_selected_card, c_position);
+		pos->x = drag->x;
+		pos->y = drag->y;
 	}
 
 	// add cards
@@ -220,7 +242,7 @@ static void update(struct scene_battle_s *scene, struct engine_s *engine, float 
 		while (ecs_filter_next(&it)) {
 			for (int i = 0; i < it.count; ++i) {
 				ecs_entity_t e = it.entities[i];
-				ecs_set(g_world, e, c_handcard, { .hand_space = 1.0f, .hand_target_pos = {0} });
+				ecs_set(g_world, e, c_handcard, { .hand_space = 1.0f, .hand_target_pos = {0}, .is_selected = 0, });
 				ecs_set(g_world, e, c_position, { .x = engine->window_width, .y = engine->window_height * 0.9f });
 				goto end;
 			}
@@ -346,16 +368,19 @@ static void system_draw_cards(ecs_iter_t *it) {
 	for (int i = 0; i < cards_count; ++i) {
 		vec2s *card_pos = &positions[i];
 		const float p = ((float)i / glm_max(cards_count - 1, 1));
-		const float angle = p * glm_rad(30.0f) - glm_rad(15.0f);
-		float z_offset = 0.0f;
+		float angle = p * glm_rad(30.0f) - glm_rad(15.0f);
+		if (handcards[i].is_selected) {
+			angle = 0.0f;
+		}
+		float z_offset = handcards[i].is_selected * 0.1f;
 		
 		card_z += 0.01f;
 
 		drawcmd_t cmd_card = DRAWCMD_INIT;
 		cmd_card.size.x = 90;
 		cmd_card.size.y = 128;
-		cmd_card.position.x = card_pos->x; //handcards[i].hand_target_pos.x; //x;
-		cmd_card.position.y = card_pos->y; //handcards[i].hand_target_pos.y; //y;
+		cmd_card.position.x = card_pos->x;
+		cmd_card.position.y = card_pos->y;
 		cmd_card.position.z = card_z + z_offset;
 		cmd_card.angle = angle;
 		cmd_card.position.x -= cmd_card.size.x * 0.5f;
@@ -388,6 +413,10 @@ static void system_move_cards(ecs_iter_t *it) {
 	c_handcard *handcards = ecs_field(it, c_handcard, 2);
 
 	for (int i = 0; i < it->count; ++i) {
+		if (it->entities[i] == g_selected_card) {
+			continue;
+		}
+
 		vec2s *p = &positions[i];
 		vec2s *target = &handcards[i].hand_target_pos;
 
@@ -399,8 +428,6 @@ static void observer_on_update_handcards(ecs_iter_t *it) {
 	c_card *changed_cards = ecs_field(it, c_card, 1);
 	c_handcard *changed_handcards = ecs_field(it, c_handcard, 2);
 
-	if (it->event == EcsOnAdd) {
-		g_handcards_updated = 1;
-	}
+	g_handcards_updated = 1;
 }
 
