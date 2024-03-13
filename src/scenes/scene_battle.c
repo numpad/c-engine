@@ -15,12 +15,10 @@
 #include "gl/texture.h"
 #include "gl/shader.h"
 #include "gl/graphics2d.h"
-#include "gl/canvas.h"
 #include "game/isoterrain.h"
 #include "game/background.h"
 #include "gui/console.h"
 #include "scenes/menu.h"
-#include "util/util.h"
 
 //
 // structs & enums
@@ -31,6 +29,8 @@
 //
 
 static void recalculate_handcards(void);
+static ecs_entity_t find_closest_handcard(float x, float y, float max_distance);
+static int order_handcards(ecs_entity_t e1, const void *data1, ecs_entity_t e2, const void *data2);
 
 //
 // ecs
@@ -45,13 +45,15 @@ typedef vec2s c_position;
 typedef struct {
 	char *name;
 	int image_id;
-} c_card ;
+} c_card;
 
 // a cards state when held in hand
 typedef struct {
 	vec2s hand_target_pos;
 	float hand_space;
 	int is_selected;
+	int can_be_placed;
+	float added_at_time;
 } c_handcard;
 
 // position on the isoterrain grid
@@ -60,11 +62,10 @@ typedef struct {
 } c_blockpos;
 
 typedef struct {
-	int id;
 	int tile_width;
 	int tile_height;
-	int tileset_width;
-	int tileset_height;
+	int tile_x;
+	int tile_y;
 } c_tileset_tile;
 
 ECS_COMPONENT_DECLARE(c_position);
@@ -131,8 +132,8 @@ static void load(struct scene_battle_s *scene, struct engine_s *engine) {
 
 	g_ordered_handcards = ecs_query(g_world, {
 		.filter.terms = { {ecs_id(c_card)}, {ecs_id(c_handcard)} },
-		//.order_by_component = ecs_id(c_handcard),
-		//.order_by = order_handcards,
+		.order_by_component = ecs_id(c_handcard),
+		.order_by = order_handcards,
 		});
 	
 	ecs_observer(g_world, {
@@ -161,18 +162,17 @@ static void load(struct scene_battle_s *scene, struct engine_s *engine) {
 	{
 		ecs_entity_t e = ecs_new_id(g_world);
 		ecs_set(g_world, e, c_blockpos, { 4, 4, 1 });
-		ecs_set(g_world, e, c_tileset_tile, { .id=0, .tile_width=16, .tile_height=0, .tileset_width=256, .tileset_height=256 });
+		ecs_set(g_world, e, c_tileset_tile, { .tile_width=16, .tile_height=17, .tile_x=0, .tile_y=0 });
 		e = ecs_new_id(g_world);
 		ecs_set(g_world, e, c_blockpos, { 1, 8, 2 });
-		ecs_set(g_world, e, c_tileset_tile, { .id=0, .tile_width=16, .tile_height=0, .tileset_width=256, .tileset_height=256 });
+		ecs_set(g_world, e, c_tileset_tile, { .tile_width=16, .tile_height=17, .tile_x=0, .tile_y=4 });
 		e = ecs_new_id(g_world);
 		ecs_set(g_world, e, c_blockpos, { 7, 6, 1 });
-		ecs_set(g_world, e, c_tileset_tile, { .id=0, .tile_width=16, .tile_height=0, .tileset_width=256, .tileset_height=256 });
+		ecs_set(g_world, e, c_tileset_tile, { .tile_width=16, .tile_height=17, .tile_x=0, .tile_y=0 });
 	}
 
 	// isoterrain
-	g_terrain = malloc(sizeof(struct isoterrain_s));
-	isoterrain_init_from_file(g_terrain, "res/data/levels/winter.json");
+	isoterrain_init_from_file(&g_terrain, "res/data/levels/winter.json");
 
 	// card renderer
 	{
@@ -208,9 +208,9 @@ static void load(struct scene_battle_s *scene, struct engine_s *engine) {
 static void destroy(struct scene_battle_s *scene, struct engine_s *engine) {
 	Mix_FreeChunk(g_place_card_sfx);
 	Mix_FreeChunk(g_pick_card_sfx);
+	Mix_FreeChunk(g_slide_card_sfx);
 	background_destroy();
-	isoterrain_destroy(g_terrain);
-	free(g_terrain);
+	isoterrain_destroy(&g_terrain);
 	texture_destroy(&g_cards_texture);
 	texture_destroy(&g_entities_texture);
 	shader_destroy(&g_sprite_shader);
@@ -222,27 +222,11 @@ static void destroy(struct scene_battle_s *scene, struct engine_s *engine) {
 
 static void update(struct scene_battle_s *scene, struct engine_s *engine, float dt) {
 	const struct input_drag_s *drag = &(engine->input_drag);
-	// find closest handcard
+
+	// pick up card
 	if (drag->state == INPUT_DRAG_BEGIN) {
-		vec2s cursor_pos = { .x = drag->begin_x, .y = drag->begin_y };
-		ecs_entity_t e = 0;
-		float closest = glm_pow2(110.0f); // max distance 110px
+		g_selected_card = find_closest_handcard(drag->begin_x, drag->begin_y, 110.0f);
 
-		ecs_iter_t it = ecs_query_iter(g_world, g_ordered_handcards);
-		while (ecs_query_next(&it)) {
-			//c_card *cards = ecs_field(&it, c_card, 1);
-			c_handcard *handcards = ecs_field(&it, c_handcard, 2);
-
-			for (int i = 0; i < it.count; ++i) {
-				float d2 = glm_vec2_distance2(handcards[i].hand_target_pos.raw, cursor_pos.raw);
-				if (d2 < closest) {
-					closest = d2;
-					e = it.entities[i];
-				}
-			}
-		}
-
-		g_selected_card = e;
 		if (g_selected_card != 0 && ecs_is_valid(g_world, g_selected_card)) {
 			c_handcard *hc = ecs_get_mut(g_world, g_selected_card, c_handcard);
 			hc->hand_space = 0.4f;
@@ -252,29 +236,41 @@ static void update(struct scene_battle_s *scene, struct engine_s *engine, float 
 			Mix_PlayChannel(-1, g_pick_card_sfx, 0);
 		}
 	}
+
+	// place/drop card
 	if (drag->state == INPUT_DRAG_END) {
 		if (g_selected_card != 0 && ecs_is_valid(g_world, g_selected_card)) {
 			c_handcard *hc = ecs_get_mut(g_world, g_selected_card, c_handcard);
-			hc->hand_space = 1.0f;
-			hc->is_selected = 0;
-			ecs_modified(g_world, g_selected_card, c_handcard);
-			g_selected_card = 0;
+
+			if (hc->can_be_placed) {
+				ecs_delete(g_world, g_selected_card);
+				g_selected_card = 0;
+			} else {
+				hc->hand_space = 1.0f;
+				hc->is_selected = 0;
+				ecs_modified(g_world, g_selected_card, c_handcard);
+				g_selected_card = 0;
+			}
 
 			Mix_PlayChannel(-1, g_slide_card_sfx, 0);
 		}
 	}
 
+	// move card
 	if (drag->state == INPUT_DRAG_IN_PROGRESS && g_selected_card != 0 && ecs_is_valid(g_world, g_selected_card)) {
 		c_position *pos = ecs_get_mut(g_world, g_selected_card, c_position);
+		c_handcard *hc = ecs_get_mut(g_world, g_selected_card, c_handcard);
 		pos->x = drag->x;
 		pos->y = drag->y;
+		hc->can_be_placed = (pos->y < engine->window_height - 250.0f);
 	}
 
 	// add cards
-	static float card_add_accum = 0.0f;
+	static float card_add_accum = -0.5f; // wait half a second before starting
+	const float card_add_speed = 0.25f;
 	card_add_accum += dt;
-	if (card_add_accum >= 0.3f) {
-		card_add_accum -= 0.3f;
+	if (card_add_accum >= card_add_speed) {
+		card_add_accum -= card_add_speed;
 		
 		ecs_filter_t *filter = ecs_filter_init(g_world, &(ecs_filter_desc_t){
 			.terms = {
@@ -288,7 +284,7 @@ static void update(struct scene_battle_s *scene, struct engine_s *engine, float 
 		while (ecs_filter_next(&it)) {
 			for (int i = 0; i < it.count; ++i) {
 				ecs_entity_t e = it.entities[i];
-				ecs_set(g_world, e, c_handcard, { .hand_space = 1.0f, .hand_target_pos = {0}, .is_selected = 0, });
+				ecs_set(g_world, e, c_handcard, { .hand_space = 1.0f, .hand_target_pos = {0}, .is_selected = 0, .added_at_time=engine->time_elapsed });
 				ecs_set(g_world, e, c_position, { .x = engine->window_width, .y = engine->window_height * 0.9f });
 				Mix_PlayChannel(-1, g_place_card_sfx, 0);
 				goto end;
@@ -320,13 +316,13 @@ static void draw(struct scene_battle_s *scene, struct engine_s *engine) {
 
 	// draw terrain
 	const float t_padding = 40.0f;
-	const float t_scale = ((engine->window_width - t_padding) / (float)g_terrain->projected_width);
-	const float t_y = engine->window_height * 0.5f - g_terrain->projected_height * t_scale * 0.5f;
+	const float t_scale = ((engine->window_width - t_padding) / (float)g_terrain.projected_width);
+	const float t_y = engine->window_height * 0.5f - g_terrain.projected_height * t_scale * 0.5f;
 	glm_mat4_identity(engine->u_view);
 	glm_translate_x(engine->u_view, t_padding * 0.5f);
 	glm_translate_y(engine->u_view, t_y);
 	glm_scale(engine->u_view, (float[]){t_scale, t_scale, t_scale});
-	isoterrain_draw(g_terrain, engine);
+	isoterrain_draw(&g_terrain, engine);
 
 	// drawing systems
 	pipeline_reset(&g_entities_pipeline);
@@ -412,6 +408,36 @@ static void recalculate_handcards(void) {
 	}
 }
 
+static ecs_entity_t find_closest_handcard(float x, float y, float max_distance) {
+	vec2 cursor_pos = {x, y};
+
+	ecs_entity_t e = 0;
+	float closest = glm_pow2(max_distance); // max distance 110px
+
+	ecs_iter_t it = ecs_query_iter(g_world, g_ordered_handcards);
+	while (ecs_query_next(&it)) {
+		//c_card *cards = ecs_field(&it, c_card, 1);
+		c_handcard *handcards = ecs_field(&it, c_handcard, 2);
+
+		for (int i = 0; i < it.count; ++i) {
+			float d2 = glm_vec2_distance2(handcards[i].hand_target_pos.raw, cursor_pos);
+			if (d2 < closest) {
+				closest = d2;
+				e = it.entities[i];
+			}
+		}
+	}
+
+	return e;
+}
+
+static int order_handcards(ecs_entity_t e1, const void *data1, ecs_entity_t e2, const void *data2) {
+	const c_handcard *c1 = data1;
+	const c_handcard *c2 = data2;
+
+	return (c1->added_at_time > c2->added_at_time) - (c1->added_at_time < c2->added_at_time);
+}
+
 //
 // systems implementation
 //
@@ -439,6 +465,9 @@ static void system_draw_cards(ecs_iter_t *it) {
 		drawcmd_t cmd_card = DRAWCMD_INIT;
 		cmd_card.size.x = 90;
 		cmd_card.size.y = 128;
+		if (handcards[i].can_be_placed) {
+			angle = cosf(g_engine->time_elapsed * 18.0f) * 0.1f;
+		}
 		cmd_card.position.x = card_pos->x;
 		cmd_card.position.y = card_pos->y;
 		cmd_card.position.z = card_z + z_offset;
@@ -446,8 +475,8 @@ static void system_draw_cards(ecs_iter_t *it) {
 		cmd_card.position.x -= cmd_card.size.x * 0.5f;
 		cmd_card.position.y -= cmd_card.size.y * 0.5f;
 		drawcmd_t cmd_img = DRAWCMD_INIT;
-		cmd_img.size.x = 90;
-		cmd_img.size.y = 64;
+		cmd_img.size.x = cmd_card.size.x;
+		cmd_img.size.y = cmd_card.size.y * 0.5f;
 		glm_vec3_dup(cmd_card.position.raw, cmd_img.position.raw);
 		cmd_img.angle = cmd_card.angle;
 		cmd_img.origin.x = 0.5f;
@@ -460,6 +489,19 @@ static void system_draw_cards(ecs_iter_t *it) {
 		// card
 		drawcmd_set_texture_subrect_tile(&cmd_card, g_cards_pipeline.texture, 90, 128, 0, 0);
 		pipeline_emit(&g_cards_pipeline, &cmd_card);
+		// icon
+		drawcmd_t cmd_icon = DRAWCMD_INIT;
+		cmd_icon.position.x = cmd_card.position.x + 7;
+		cmd_icon.position.y = cmd_card.position.y - 6;
+		cmd_icon.position.z = cmd_card.position.z;
+		cmd_icon.size.x = cmd_icon.size.y = 20;
+		cmd_icon.origin.x = cmd_icon.origin.y = 0.0f;
+		cmd_icon.origin.z = 45 - 7;
+		cmd_icon.origin.w = 64 + 6;
+		cmd_icon.angle = cmd_card.angle;
+		drawcmd_set_texture_subrect_tile(&cmd_icon, g_cards_pipeline.texture, 32, 32, 1, 6);
+		pipeline_emit(&g_cards_pipeline, &cmd_icon);
+
 	}
 }
 
@@ -470,14 +512,16 @@ static void system_draw_entities(ecs_iter_t *it) {
 	for (int i = 0; i < it->count; ++i) {
 		vec2 screen_pos;
 		c_blockpos blockpos = positions[i];
-		isoterrain_pos_block_to_screen(g_terrain, blockpos.x, blockpos.y, blockpos.z, screen_pos);
+		isoterrain_pos_block_to_screen(&g_terrain, blockpos.x, blockpos.y, blockpos.z, screen_pos);
+
+		c_tileset_tile *tile = &tiles[i];
 
 		drawcmd_t cmd = DRAWCMD_INIT;
 		cmd.size.x = 16;
 		cmd.size.y = 16;
 		glm_vec2(screen_pos, cmd.position.raw);
-		cmd.position.y = g_terrain->projected_height - cmd.position.y;
-		drawcmd_set_texture_subrect_tile(&cmd, g_entities_pipeline.texture, 16, 17, 0, 0);
+		cmd.position.y = g_terrain.projected_height - cmd.position.y;
+		drawcmd_set_texture_subrect_tile(&cmd, g_entities_pipeline.texture, tile->tile_width, tile->tile_height, tile->tile_x, tile->tile_y);
 
 		pipeline_emit(&g_entities_pipeline, &cmd);
 		

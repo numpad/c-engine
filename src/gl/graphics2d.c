@@ -167,6 +167,9 @@ static void update_model_matrix(primitive2d_t *pri) {
 // pipeline
 
 void drawcmd_set_texture_subrect(drawcmd_t *cmd, texture_t *tex, int x, int y, int width, int height) {
+	assert(cmd != NULL);
+	assert(tex != NULL);
+
 	cmd->texture_subrect[0] = (float)x      / tex->width;
 	cmd->texture_subrect[1] = (float)y      / tex->height;
 	cmd->texture_subrect[2] = (float)width  / tex->width;
@@ -174,6 +177,9 @@ void drawcmd_set_texture_subrect(drawcmd_t *cmd, texture_t *tex, int x, int y, i
 }
 
 void drawcmd_set_texture_subrect_tile(drawcmd_t *cmd, texture_t *tex, int tile_width, int tile_height, int tile_x, int tile_y) {
+	assert(cmd != NULL);
+	assert(tex != NULL);
+
 	const float uv_w = (float)tile_width / tex->width;
 	const float uv_h = (float)tile_height / tex->height;
 	cmd->texture_subrect[0] = uv_w * tile_x;
@@ -183,6 +189,8 @@ void drawcmd_set_texture_subrect_tile(drawcmd_t *cmd, texture_t *tex, int tile_w
 }
 
 void drawcmd_flip_texture_subrect(drawcmd_t *cmd, int flip_x, int flip_y) {
+	assert(cmd != NULL);
+
 	if (flip_x) {
 		cmd->texture_subrect[0] += cmd->texture_subrect[2];
 		cmd->texture_subrect[2] = -cmd->texture_subrect[2];
