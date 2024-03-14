@@ -19,10 +19,14 @@
 #include "game/background.h"
 #include "gui/console.h"
 #include "scenes/menu.h"
+#include "util/util.h"
 
 //
 // structs & enums
 //
+
+#define BLOCK_AIR -1
+#define BLOCK_ICE 33
 
 // 
 // private functions
@@ -44,15 +48,15 @@ typedef vec2s c_position;
 // general information about a card
 typedef struct {
 	char *name;
-	int image_id;
+	int   image_id;
 } c_card;
 
 // a cards state when held in hand
 typedef struct {
 	vec2s hand_target_pos;
 	float hand_space;
-	int is_selected;
-	int can_be_placed;
+	int   is_selected;
+	int   can_be_placed;
 	float added_at_time;
 } c_handcard;
 
@@ -62,16 +66,23 @@ typedef struct {
 } c_blockpos;
 
 typedef struct {
+	int x, y, z;
+} c_move_direction;
+
+typedef struct {
 	int tile_width;
 	int tile_height;
 	int tile_x;
 	int tile_y;
+	int flip_x;
+	int backside;
 } c_tileset_tile;
 
 ECS_COMPONENT_DECLARE(c_position);
 ECS_COMPONENT_DECLARE(c_card);
 ECS_COMPONENT_DECLARE(c_handcard);
 ECS_COMPONENT_DECLARE(c_blockpos);
+ECS_COMPONENT_DECLARE(c_move_direction);
 ECS_COMPONENT_DECLARE(c_tileset_tile);
 
 // queries
@@ -79,35 +90,37 @@ static ecs_query_t *g_ordered_handcards;
 static int g_handcards_updated;
 
 // systems
-static void system_draw_cards(ecs_iter_t *);
-static void system_draw_entities(ecs_iter_t *);
-static void system_move_cards(ecs_iter_t *);
+static void system_turn_move_entities   (ecs_iter_t *);
+static void system_move_cards           (ecs_iter_t *);
+static void system_draw_cards           (ecs_iter_t *);
+static void system_draw_entities        (ecs_iter_t *);
 static void observer_on_update_handcards(ecs_iter_t *);
 
+ECS_SYSTEM_DECLARE(system_turn_move_entities);
+ECS_SYSTEM_DECLARE(system_move_cards);
 ECS_SYSTEM_DECLARE(system_draw_cards);
 ECS_SYSTEM_DECLARE(system_draw_entities);
-ECS_SYSTEM_DECLARE(system_move_cards);
 
 //
 // vars
 //
-static engine_t *g_engine;
+static engine_t     *g_engine;
 
 // game state
-struct isoterrain_s *g_terrain;
-static texture_t g_cards_texture;
-static texture_t g_entities_texture;
-static shader_t g_sprite_shader;
-static pipeline_t g_cards_pipeline;
-static pipeline_t g_entities_pipeline;
-
-static ecs_world_t *g_world;
+struct isoterrain_s g_terrain;
+static texture_t    g_cards_texture;
+static texture_t    g_entities_texture;
+static shader_t     g_sprite_shader;
+static pipeline_t   g_cards_pipeline;
+static pipeline_t   g_entities_pipeline;
+static ecs_world_t  *g_world;
 static ecs_entity_t g_selected_card;
+static int          g_next_turn;
 
 // testing
-static Mix_Chunk *g_place_card_sfx;
-static Mix_Chunk *g_pick_card_sfx;
-static Mix_Chunk *g_slide_card_sfx;
+static Mix_Chunk    *g_place_card_sfx;
+static Mix_Chunk    *g_pick_card_sfx;
+static Mix_Chunk    *g_slide_card_sfx;
 
 
 //
@@ -118,6 +131,7 @@ static void load(struct scene_battle_s *scene, struct engine_s *engine) {
 	g_engine = engine;
 	g_handcards_updated = 0;
 	g_selected_card = 0;
+	g_next_turn = 0;
 
 	// ecs
 	g_world = ecs_init();
@@ -125,10 +139,12 @@ static void load(struct scene_battle_s *scene, struct engine_s *engine) {
 	ECS_COMPONENT_DEFINE(g_world, c_card);
 	ECS_COMPONENT_DEFINE(g_world, c_handcard);
 	ECS_COMPONENT_DEFINE(g_world, c_blockpos);
+	ECS_COMPONENT_DEFINE(g_world, c_move_direction);
 	ECS_COMPONENT_DEFINE(g_world, c_tileset_tile);
+	ECS_SYSTEM_DEFINE(g_world, system_turn_move_entities, 0, c_blockpos, c_move_direction);
+	ECS_SYSTEM_DEFINE(g_world, system_move_cards, 0, c_position, c_handcard);
 	ECS_SYSTEM_DEFINE(g_world, system_draw_cards, 0, c_card, c_handcard, c_position);
 	ECS_SYSTEM_DEFINE(g_world, system_draw_entities, 0, c_blockpos, c_tileset_tile);
-	ECS_SYSTEM_DEFINE(g_world, system_move_cards, 0, c_position, c_handcard);
 
 	g_ordered_handcards = ecs_query(g_world, {
 		.filter.terms = { {ecs_id(c_card)}, {ecs_id(c_handcard)} },
@@ -161,14 +177,15 @@ static void load(struct scene_battle_s *scene, struct engine_s *engine) {
 	// add some debug entities
 	{
 		ecs_entity_t e = ecs_new_id(g_world);
+		ecs_set_name(g_world, e, "player");
 		ecs_set(g_world, e, c_blockpos, { 4, 4, 1 });
 		ecs_set(g_world, e, c_tileset_tile, { .tile_width=16, .tile_height=17, .tile_x=0, .tile_y=0 });
 		e = ecs_new_id(g_world);
 		ecs_set(g_world, e, c_blockpos, { 1, 8, 2 });
-		ecs_set(g_world, e, c_tileset_tile, { .tile_width=16, .tile_height=17, .tile_x=0, .tile_y=4 });
+		ecs_set(g_world, e, c_tileset_tile, { .tile_width=16, .tile_height=17, .tile_x=8, .tile_y=6 });
 		e = ecs_new_id(g_world);
 		ecs_set(g_world, e, c_blockpos, { 7, 6, 1 });
-		ecs_set(g_world, e, c_tileset_tile, { .tile_width=16, .tile_height=17, .tile_x=0, .tile_y=0 });
+		ecs_set(g_world, e, c_tileset_tile, { .tile_width=16, .tile_height=17, .tile_x=4, .tile_y=0, .flip_x=1 });
 	}
 
 	// isoterrain
@@ -237,8 +254,8 @@ static void update(struct scene_battle_s *scene, struct engine_s *engine, float 
 		}
 	}
 
-	// place/drop card
 	if (drag->state == INPUT_DRAG_END) {
+		// if card is selected: place/drop card
 		if (g_selected_card != 0 && ecs_is_valid(g_world, g_selected_card)) {
 			c_handcard *hc = ecs_get_mut(g_world, g_selected_card, c_handcard);
 
@@ -254,6 +271,59 @@ static void update(struct scene_battle_s *scene, struct engine_s *engine, float 
 
 			Mix_PlayChannel(-1, g_slide_card_sfx, 0);
 		}
+		else {
+			// if not, assume movement swipe
+			float swipe_angle;
+			float swipe_dist;
+			{
+				vec2 begin = { drag->begin_x, drag->begin_y };
+				vec2 end = { drag->end_x, drag->end_y };
+				vec2 swipe_dir;
+				glm_vec2_sub(end, begin, swipe_dir);
+				swipe_dist = glm_vec2_norm(swipe_dir);
+				glm_vec2_normalize(swipe_dir);
+				swipe_angle = atan2f(swipe_dir[1], swipe_dir[0]);
+			}
+
+			if (swipe_dist > 10.0f) {
+				enum {
+					NE = 3,
+					SE = 0,
+					SW = 1,
+					NW = 2,
+				} segment = calculate_angle_segment(swipe_angle, 4);
+
+				int flip_x = 0;
+				int backside = 0;
+				ecs_entity_t e = ecs_lookup(g_world, "player");
+				switch (segment) {
+				case NE:
+					e = ecs_set(g_world, e, c_move_direction, { .x=0, .y=1, .z=0 });
+					backside = 1;
+					break;
+				case SE:
+					e = ecs_set(g_world, e, c_move_direction, { .x=1, .y=0, .z=0 });
+					break;
+				case SW:
+					e = ecs_set(g_world, e, c_move_direction, { .x=0, .y=-1, .z=0 });
+					flip_x = 1;
+					break;
+				case NW:
+					e = ecs_set(g_world, e, c_move_direction, { .x=-1, .y=0, .z=0 });
+					flip_x = 1;
+					backside = 1;
+					break;
+				}
+
+				c_tileset_tile *tile = ecs_get_mut(g_world, e, c_tileset_tile);
+				tile->flip_x = flip_x;
+				tile->backside = backside;
+				ecs_modified(g_world, e, c_tileset_tile);
+
+
+				g_next_turn = 1;
+			}
+		}
 	}
 
 	// move card
@@ -262,7 +332,13 @@ static void update(struct scene_battle_s *scene, struct engine_s *engine, float 
 		c_handcard *hc = ecs_get_mut(g_world, g_selected_card, c_handcard);
 		pos->x = drag->x;
 		pos->y = drag->y;
-		hc->can_be_placed = (pos->y < engine->window_height - 250.0f);
+		const int new_can_be_placed = (pos->y < g_engine->window_height - 128.0f);
+		const int can_be_placed_changed = (new_can_be_placed != hc->can_be_placed);
+		if (can_be_placed_changed) {
+			hc->hand_space = new_can_be_placed ? 0.4f : 1.0f;
+			hc->can_be_placed = new_can_be_placed;
+			ecs_modified(g_world, g_selected_card, c_handcard);
+		}
 	}
 
 	// add cards
@@ -282,16 +358,14 @@ static void update(struct scene_battle_s *scene, struct engine_s *engine, float 
 
 		ecs_iter_t it = ecs_filter_iter(g_world, filter);
 		while (ecs_filter_next(&it)) {
-			for (int i = 0; i < it.count; ++i) {
-				ecs_entity_t e = it.entities[i];
+			if (it.count > 0) {
+				ecs_entity_t e = it.entities[0];
 				ecs_set(g_world, e, c_handcard, { .hand_space = 1.0f, .hand_target_pos = {0}, .is_selected = 0, .added_at_time=engine->time_elapsed });
 				ecs_set(g_world, e, c_position, { .x = engine->window_width, .y = engine->window_height * 0.9f });
 				Mix_PlayChannel(-1, g_place_card_sfx, 0);
-				goto end;
 			}
 		}
-end:
-		while (ecs_filter_next(&it));
+		while (ecs_filter_next(&it)); // exhaust iterator. TODO: better way?
 		ecs_filter_fini(filter);
 	}
 
@@ -317,7 +391,7 @@ static void draw(struct scene_battle_s *scene, struct engine_s *engine) {
 	// draw terrain
 	const float t_padding = 40.0f;
 	const float t_scale = ((engine->window_width - t_padding) / (float)g_terrain.projected_width);
-	const float t_y = engine->window_height * 0.5f - g_terrain.projected_height * t_scale * 0.5f;
+	const float t_y = engine->window_height - g_terrain.projected_height * t_scale * 2.0f - 128.0f;
 	glm_mat4_identity(engine->u_view);
 	glm_translate_x(engine->u_view, t_padding * 0.5f);
 	glm_translate_y(engine->u_view, t_y);
@@ -331,6 +405,10 @@ static void draw(struct scene_battle_s *scene, struct engine_s *engine) {
 	pipeline_reset(&g_cards_pipeline);
 	g_cards_pipeline.texture = &g_cards_texture;
 
+	if (g_next_turn) {
+		g_next_turn = 0;
+		ecs_run(g_world, ecs_id(system_turn_move_entities), engine->dt, NULL);
+	}
 	ecs_run(g_world, ecs_id(system_move_cards), engine->dt, NULL);
 	ecs_run(g_world, ecs_id(system_draw_cards), engine->dt, NULL);
 	ecs_run(g_world, ecs_id(system_draw_entities), engine->dt, NULL);
@@ -442,6 +520,56 @@ static int order_handcards(ecs_entity_t e1, const void *data1, ecs_entity_t e2, 
 // systems implementation
 //
 
+static void system_turn_move_entities(ecs_iter_t *it) {
+	c_blockpos *positions = ecs_field(it, c_blockpos, 1);
+	c_move_direction *moves = ecs_field(it, c_move_direction, 2);
+	
+	for (int i = 0; i < it->count; ++i) {
+		c_blockpos *pos = &positions[i];
+		c_move_direction *move = &moves[i];
+		assert(abs(move->x) <= 1);
+		assert(abs(move->y) <= 1);
+		assert(abs(move->z) <= 1);
+
+		iso_block *next_surface = isoterrain_get_block(&g_terrain, pos->x + move->x, pos->y + move->y, pos->z + move->z - 1);
+		iso_block *next_block = isoterrain_get_block(&g_terrain, pos->x + move->x, pos->y + move->y, pos->z + move->z);
+		if (next_block && *next_block == BLOCK_AIR) {
+			// slide on ice
+			while (next_block != NULL && next_surface != NULL && *next_surface == BLOCK_ICE) {
+				pos->x += move->x;
+				pos->y += move->y;
+				pos->z += move->z;
+				next_surface = isoterrain_get_block(&g_terrain, pos->x + move->x, pos->y + move->y, pos->z + move->z - 1);
+				next_block = isoterrain_get_block(&g_terrain, pos->x + move->x, pos->y + move->y, pos->z + move->z);
+			}
+			// normal move
+			if (next_block != NULL || (next_block && *next_block == BLOCK_AIR)) {
+				pos->x += move->x;
+				pos->y += move->y;
+				pos->z += move->z;
+			}
+		}
+
+		ecs_remove(g_world, it->entities[i], c_move_direction);
+	}
+}
+
+static void system_move_cards(ecs_iter_t *it) {
+	c_position *positions = ecs_field(it, c_position, 1);
+	c_handcard *handcards = ecs_field(it, c_handcard, 2);
+
+	for (int i = 0; i < it->count; ++i) {
+		if (it->entities[i] == g_selected_card) {
+			continue;
+		}
+
+		vec2s *p = &positions[i];
+		vec2s *target = &handcards[i].hand_target_pos;
+
+		glm_vec2_lerp(p->raw, target->raw, it->delta_time * 9.0f, p->raw);
+	}
+}
+
 static void system_draw_cards(ecs_iter_t *it) {
 	c_card *cards = ecs_field(it, c_card, 1);
 	c_handcard *handcards = ecs_field(it, c_handcard, 2);
@@ -521,26 +649,13 @@ static void system_draw_entities(ecs_iter_t *it) {
 		cmd.size.y = 16;
 		glm_vec2(screen_pos, cmd.position.raw);
 		cmd.position.y = g_terrain.projected_height - cmd.position.y;
-		drawcmd_set_texture_subrect_tile(&cmd, g_entities_pipeline.texture, tile->tile_width, tile->tile_height, tile->tile_x, tile->tile_y);
+		drawcmd_set_texture_subrect_tile(&cmd, g_entities_pipeline.texture,
+			tile->tile_width, tile->tile_height,
+			tile->tile_x, tile->tile_y + tile->backside);
+		drawcmd_flip_texture_subrect(&cmd, tile->flip_x, 0);
 
 		pipeline_emit(&g_entities_pipeline, &cmd);
 		
-	}
-}
-
-static void system_move_cards(ecs_iter_t *it) {
-	c_position *positions = ecs_field(it, c_position, 1);
-	c_handcard *handcards = ecs_field(it, c_handcard, 2);
-
-	for (int i = 0; i < it->count; ++i) {
-		if (it->entities[i] == g_selected_card) {
-			continue;
-		}
-
-		vec2s *p = &positions[i];
-		vec2s *target = &handcards[i].hand_target_pos;
-
-		glm_vec2_lerp(p->raw, target->raw, it->delta_time * 9.0f, p->raw);
 	}
 }
 

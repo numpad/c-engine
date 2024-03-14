@@ -14,6 +14,8 @@ typedef size_t usize;
 // math
 int point_in_rect(float px, float py, float x, float y, float w, float h);
 int nearest_pow2(int value);
+// angle in radians, segments are clockwise.
+float calculate_angle_segment(float angle, int segments);
 
 // string utils
 const char *str_match_bracket(const char *str, size_t len, char open, char close);

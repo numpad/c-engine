@@ -1,5 +1,6 @@
 #include "util.h"
 
+#include <math.h>
 #include <assert.h>
 
 int point_in_rect(float px, float py, float x, float y, float w, float h) {
@@ -34,5 +35,19 @@ const char *str_match_bracket(const char *str, size_t len, char open, char close
 	assert(depth == 0);
 
 	return NULL;
+}
+
+float calculate_angle_segment(float angle, int segments) {
+	assert(segments > 0);
+
+	angle = fmodf(angle, 2.0f * M_PI);
+	while (angle < 0.0f) {
+		angle += 2.0f * M_PI;
+	}
+
+	float segment = (2.0f * M_PI) / segments;
+	int div = (int)(angle / segment);
+
+	return div;
 }
 
