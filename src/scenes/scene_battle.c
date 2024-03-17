@@ -200,6 +200,7 @@ static void load(struct scene_battle_s *scene, struct engine_s *engine) {
 		shader_init_from_dir(&g_sprite_shader, "res/shader/sprite/");
 
 		pipeline_init(&g_cards_pipeline, &g_sprite_shader, 128);
+		g_cards_pipeline.z_sorting_enabled = 1;
 	}
 
 	// entity renderer
@@ -319,7 +320,6 @@ static void update(struct scene_battle_s *scene, struct engine_s *engine, float 
 				tile->flip_x = flip_x;
 				tile->backside = backside;
 				ecs_modified(g_world, e, c_tileset_tile);
-
 
 				g_next_turn = 1;
 			}
@@ -649,6 +649,7 @@ static void system_draw_entities(ecs_iter_t *it) {
 		cmd.size.y = 16;
 		glm_vec2(screen_pos, cmd.position.raw);
 		cmd.position.y = g_terrain.projected_height - cmd.position.y;
+		cmd.position.z = 0.0f;
 		drawcmd_set_texture_subrect_tile(&cmd, g_entities_pipeline.texture,
 			tile->tile_width, tile->tile_height,
 			tile->tile_x, tile->tile_y + tile->backside);

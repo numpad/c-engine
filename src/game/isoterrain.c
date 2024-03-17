@@ -179,7 +179,7 @@ void isoterrain_get_projected_size(struct isoterrain_s *terrain, int *width, int
 	}
 	if (height != NULL) {
 		// FIXME: this was determined empirically
-		*height = terrain->height * 17.0f * 0.334f + terrain->layers * 4.0f;
+		*height = terrain->height * 17.0f * (1.0/3.0f) + terrain->layers * 4.0f;
 	}
 }
 

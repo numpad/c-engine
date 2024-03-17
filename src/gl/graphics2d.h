@@ -74,6 +74,7 @@ typedef struct {
 	// config
 	int components_per_vertex;
 	int vertices_per_primitive;
+	int z_sorting_enabled;
 
 	// state
 	unsigned int vertex_buffer;
@@ -82,11 +83,15 @@ typedef struct {
 	texture_t *texture;
 	shader_t *shader;
 
+	drawcmd_t *cmd_buffer;
+
 	// attribs
-	int a_pos;
-	int a_texcoord;
-	int a_color_mult;
-	int a_color_add;
+	struct {
+		int a_pos;
+		int a_texcoord;
+		int a_color_mult;
+		int a_color_add;
+	} attribs;
 } pipeline_t;
 
 void pipeline_init(pipeline_t *, shader_t *, int commands_max);
