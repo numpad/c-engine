@@ -1,12 +1,14 @@
 #include "scene_battle.h"
 
 #include <math.h>
+#include <time.h>
 #include <SDL_opengles2.h>
 #include <SDL_net.h>
 #include <SDL_mixer.h>
 #include <nanovg.h>
 #include <stb_ds.h>
 #include <stb_image.h>
+#include <stb_perlin.h>
 #include <cglm/cglm.h>
 #include <flecs.h>
 #include <cglm/cglm.h>
@@ -25,8 +27,22 @@
 // structs & enums
 //
 
-#define BLOCK_AIR -1
-#define BLOCK_ICE 33
+enum block_type {
+	BLOCK_AIR = -1,
+	BLOCK_DIRT = 0,
+	BLOCK_GRASS = 1,
+	BLOCK_STONE = 2,
+	BLOCK_ICE = 33,
+};
+
+enum event_type {
+	EVENT_PLAY_CARD,
+	EVENT_TYPE_MAX,
+};
+
+typedef struct event_info {
+	ecs_entity_t entity;
+} event_info_t;
 
 // 
 // private functions
@@ -35,6 +51,8 @@
 static void recalculate_handcards(void);
 static ecs_entity_t find_closest_handcard(float x, float y, float max_distance);
 static int order_handcards(ecs_entity_t e1, const void *data1, ecs_entity_t e2, const void *data2);
+static void on_game_event(enum event_type, event_info_t *);
+static void on_game_event_play_card(event_info_t *info);
 
 //
 // ecs
@@ -49,6 +67,8 @@ typedef vec2s c_position;
 typedef struct {
 	char *name;
 	int   image_id;
+	int   icon_ids[8];
+	int   icon_ids_count;
 } c_card;
 
 // a cards state when held in hand
@@ -143,7 +163,7 @@ static void load(struct scene_battle_s *scene, struct engine_s *engine) {
 	ECS_COMPONENT_DEFINE(g_world, c_tileset_tile);
 	ECS_SYSTEM_DEFINE(g_world, system_turn_move_entities, 0, c_blockpos, c_move_direction);
 	ECS_SYSTEM_DEFINE(g_world, system_move_cards, 0, c_position, c_handcard);
-	ECS_SYSTEM_DEFINE(g_world, system_draw_cards, 0, c_card, c_handcard, c_position);
+	ECS_SYSTEM_DEFINE(g_world, system_draw_cards, 0, c_card, ?c_handcard, c_position); _syntax_fix_label:
 	ECS_SYSTEM_DEFINE(g_world, system_draw_entities, 0, c_blockpos, c_tileset_tile);
 
 	g_ordered_handcards = ecs_query(g_world, {
@@ -161,35 +181,72 @@ static void load(struct scene_battle_s *scene, struct engine_s *engine) {
 	// add some debug cards
 	{
 		ecs_entity_t e = ecs_new_id(g_world);
-		ecs_set(g_world, e, c_card, { .name="Attack",     .image_id=0 });
+		ecs_set(g_world, e, c_card, { .name="Attack",     .image_id=0, .icon_ids_count=1, .icon_ids={1} });
 		e = ecs_new_id(g_world);
-		ecs_set(g_world, e, c_card, { .name="Attack",     .image_id=0 });
+		ecs_set(g_world, e, c_card, { .name="Attack",     .image_id=0, .icon_ids_count=1, .icon_ids={1} });
 		e = ecs_new_id(g_world);
-		ecs_set(g_world, e, c_card, { .name="Fire Spell", .image_id=4 });
+		ecs_set(g_world, e, c_card, { .name="Fire Spell", .image_id=4, .icon_ids_count=1, .icon_ids={3} });
 		e = ecs_new_id(g_world);
-		ecs_set(g_world, e, c_card, { .name="Defend",     .image_id=2 });
+		ecs_set(g_world, e, c_card, { .name="Defend",     .image_id=2, .icon_ids_count=1, .icon_ids={2} });
 		e = ecs_new_id(g_world);
-		ecs_set(g_world, e, c_card, { .name="Meal",       .image_id=1 });
+		ecs_set(g_world, e, c_card, { .name="Meal",       .image_id=1, .icon_ids_count=1, .icon_ids={5} });
 		e = ecs_new_id(g_world);
-		ecs_set(g_world, e, c_card, { .name="Corruption", .image_id=5 });
+		ecs_set(g_world, e, c_card, { .name="Corruption", .image_id=5, .icon_ids_count=3, .icon_ids={3, 3, 4} });
 	}
 
 	// add some debug entities
 	{
 		ecs_entity_t e = ecs_new_id(g_world);
 		ecs_set_name(g_world, e, "player");
-		ecs_set(g_world, e, c_blockpos, { 4, 4, 1 });
+		ecs_set(g_world, e, c_blockpos, { 4, 4, 19 });
 		ecs_set(g_world, e, c_tileset_tile, { .tile_width=16, .tile_height=17, .tile_x=0, .tile_y=0 });
 		e = ecs_new_id(g_world);
-		ecs_set(g_world, e, c_blockpos, { 1, 8, 2 });
+		ecs_set(g_world, e, c_blockpos, { 1, 8, 20 });
 		ecs_set(g_world, e, c_tileset_tile, { .tile_width=16, .tile_height=17, .tile_x=8, .tile_y=6 });
 		e = ecs_new_id(g_world);
-		ecs_set(g_world, e, c_blockpos, { 7, 6, 1 });
+		ecs_set(g_world, e, c_blockpos, { 7, 6, 19 });
 		ecs_set(g_world, e, c_tileset_tile, { .tile_width=16, .tile_height=17, .tile_x=4, .tile_y=0, .flip_x=1 });
 	}
 
 	// isoterrain
-	isoterrain_init_from_file(&g_terrain, "res/data/levels/winter.json");
+	//isoterrain_init_from_file(&g_terrain, "res/data/levels/winter.json");
+	isoterrain_init(&g_terrain, 15, 15, 20);
+	for (int z = 0; z < g_terrain.layers; ++z) {
+		for (int y = 0; y < g_terrain.height; ++y) {
+			for (int x = 0; x < g_terrain.width; ++x) {
+				isoterrain_set_block(&g_terrain, x, y, z, -1);
+
+				if (x == g_terrain.width - 1 || y == 0) {
+					enum block_type b = BLOCK_AIR;
+					if (z < 12) {
+						b = BLOCK_STONE;
+					}
+					else if (z <= 17) {
+						float noise = stb_perlin_noise3_seed(x / 10.0f, y / 10.0f, z / 10.0f, 0, 0, 0, time(NULL))
+									+ stb_perlin_noise3_seed(x /  3.0f, y /  3.0f, z /  3.0f, 0, 0, 0, time(NULL));
+						if (noise > 0.0f) {
+							b = BLOCK_STONE;
+						} else {
+							b = BLOCK_DIRT;
+						}
+					}
+					isoterrain_set_block(&g_terrain, x, y, z, b);
+				}
+
+				if (z == 18) {
+					isoterrain_set_block(&g_terrain, x, y, z, BLOCK_GRASS);
+				}
+				else if (z == 19) {
+					float noise = stb_perlin_noise3_seed(x / 10.0f, y / 10.0f, z / 10.0f, 0, 0, 0, time(NULL))
+								+ stb_perlin_noise3_seed(x /  3.0f, y /  3.0f, z /  3.0f, 0, 0, 0, time(NULL));
+					if (noise > 0.0f) {
+						isoterrain_set_block(&g_terrain, x, y, z, BLOCK_DIRT);
+					}
+				}
+			}
+		}
+	}
+
 
 	// card renderer
 	{
@@ -261,16 +318,14 @@ static void update(struct scene_battle_s *scene, struct engine_s *engine, float 
 			c_handcard *hc = ecs_get_mut(g_world, g_selected_card, c_handcard);
 
 			if (hc->can_be_placed) {
-				ecs_delete(g_world, g_selected_card);
-				g_selected_card = 0;
+				on_game_event(EVENT_PLAY_CARD, &(event_info_t){ .entity = g_selected_card });
 			} else {
 				hc->hand_space = 1.0f;
 				hc->is_selected = 0;
 				ecs_modified(g_world, g_selected_card, c_handcard);
 				g_selected_card = 0;
+				Mix_PlayChannel(-1, g_slide_card_sfx, 0);
 			}
-
-			Mix_PlayChannel(-1, g_slide_card_sfx, 0);
 		}
 		else {
 			// if not, assume movement swipe
@@ -389,12 +444,12 @@ static void draw(struct scene_battle_s *scene, struct engine_s *engine) {
 	background_draw(engine);
 
 	// draw terrain
-	const float t_padding = 40.0f;
+	const int t_padding = 40.0f;
 	const float t_scale = ((engine->window_width - t_padding) / (float)g_terrain.projected_width);
-	const float t_y = engine->window_height - g_terrain.projected_height * t_scale * 2.0f - 128.0f;
+	const int t_y = engine->window_height * 0.5f - g_terrain.projected_height * 0.5f;
 	glm_mat4_identity(engine->u_view);
-	glm_translate_x(engine->u_view, t_padding * 0.5f);
-	glm_translate_y(engine->u_view, t_y);
+	glm_translate_x(engine->u_view, (int)(t_padding * 0.5f));
+	glm_translate_y(engine->u_view, (int)(t_y));
 	glm_scale(engine->u_view, (float[]){t_scale, t_scale, t_scale});
 	isoterrain_draw(&g_terrain, engine);
 
@@ -516,6 +571,32 @@ static int order_handcards(ecs_entity_t e1, const void *data1, ecs_entity_t e2, 
 	return (c1->added_at_time > c2->added_at_time) - (c1->added_at_time < c2->added_at_time);
 }
 
+static void on_game_event(enum event_type type, event_info_t *info) {
+	switch (type) {
+	case EVENT_PLAY_CARD:
+		on_game_event_play_card(info);
+		break;
+	case EVENT_TYPE_MAX:
+		assert(type != EVENT_TYPE_MAX);
+		break;
+	};
+}
+
+static void on_game_event_play_card(event_info_t *info) {
+	assert(info != NULL);
+	assert(info->entity != 0);
+	assert(ecs_is_valid(g_world, info->entity));
+
+	ecs_entity_t e = info->entity;
+
+	c_card *card = ecs_get(g_world, e, c_card);
+	printf("played card '%s'\n", card->name);
+
+	// remove card
+	ecs_delete(g_world, g_selected_card);
+	g_selected_card = 0;
+}
+
 //
 // systems implementation
 //
@@ -572,8 +653,12 @@ static void system_move_cards(ecs_iter_t *it) {
 
 static void system_draw_cards(ecs_iter_t *it) {
 	c_card *cards = ecs_field(it, c_card, 1);
-	c_handcard *handcards = ecs_field(it, c_handcard, 2);
+	c_handcard *handcards = NULL;
 	c_position *positions = ecs_field(it, c_position, 3);
+
+	if (ecs_field_is_set(it, 2)) {
+		handcards = ecs_field(it, c_handcard, 2);
+	}
 
 	// TODO: this only works for a single archetype
 	const int cards_count = it->count;
@@ -583,17 +668,20 @@ static void system_draw_cards(ecs_iter_t *it) {
 		vec2s *card_pos = &positions[i];
 		const float p = ((float)i / glm_max(cards_count - 1, 1));
 		float angle = p * glm_rad(30.0f) - glm_rad(15.0f);
-		if (handcards[i].is_selected) {
+
+		int is_selected = (handcards && handcards[i].is_selected);
+		int can_be_placed = (handcards && handcards[i].can_be_placed);
+		if (is_selected) {
 			angle = 0.0f;
 		}
-		float z_offset = handcards[i].is_selected * 0.1f;
+		float z_offset = is_selected * 0.1f;
 		
 		card_z += 0.01f;
 
 		drawcmd_t cmd_card = DRAWCMD_INIT;
 		cmd_card.size.x = 90;
 		cmd_card.size.y = 128;
-		if (handcards[i].can_be_placed) {
+		if (can_be_placed) {
 			angle = cosf(g_engine->time_elapsed * 18.0f) * 0.1f;
 		}
 		cmd_card.position.x = card_pos->x;
@@ -617,18 +705,22 @@ static void system_draw_cards(ecs_iter_t *it) {
 		// card
 		drawcmd_set_texture_subrect_tile(&cmd_card, g_cards_pipeline.texture, 90, 128, 0, 0);
 		pipeline_emit(&g_cards_pipeline, &cmd_card);
-		// icon
-		drawcmd_t cmd_icon = DRAWCMD_INIT;
-		cmd_icon.position.x = cmd_card.position.x + 7;
-		cmd_icon.position.y = cmd_card.position.y - 6;
-		cmd_icon.position.z = cmd_card.position.z;
-		cmd_icon.size.x = cmd_icon.size.y = 20;
-		cmd_icon.origin.x = cmd_icon.origin.y = 0.0f;
-		cmd_icon.origin.z = 45 - 7;
-		cmd_icon.origin.w = 64 + 6;
-		cmd_icon.angle = cmd_card.angle;
-		drawcmd_set_texture_subrect_tile(&cmd_icon, g_cards_pipeline.texture, 32, 32, 1, 6);
-		pipeline_emit(&g_cards_pipeline, &cmd_icon);
+		// icon TODO: multiple icons
+		for (int icon_i = 0; icon_i < cards[i].icon_ids_count; ++icon_i) {
+			int icon_tex_x = cards[i].icon_ids[icon_i] % 2;
+			int icon_tex_y = 4 + cards[i].icon_ids[icon_i] / 2.0f;
+			drawcmd_t cmd_icon = DRAWCMD_INIT;
+			cmd_icon.position.x = cmd_card.position.x + 7 + 12 * icon_i;
+			cmd_icon.position.y = cmd_card.position.y - 6;
+			cmd_icon.position.z = cmd_card.position.z;
+			cmd_icon.size.x = cmd_icon.size.y = 20;
+			cmd_icon.origin.x = cmd_icon.origin.y = 0.0f;
+			cmd_icon.origin.z = 45 - 7 - 12 * icon_i;
+			cmd_icon.origin.w = 64 + 6;
+			cmd_icon.angle = cmd_card.angle;
+			drawcmd_set_texture_subrect_tile(&cmd_icon, g_cards_pipeline.texture, 32, 32, icon_tex_x, icon_tex_y);
+			pipeline_emit(&g_cards_pipeline, &cmd_icon);
+		}
 
 	}
 }
