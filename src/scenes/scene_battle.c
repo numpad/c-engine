@@ -130,9 +130,11 @@ static engine_t     *g_engine;
 struct isoterrain_s g_terrain;
 static texture_t    g_cards_texture;
 static texture_t    g_entities_texture;
+static texture_t    g_ui_texture;
 static shader_t     g_sprite_shader;
 static pipeline_t   g_cards_pipeline;
 static pipeline_t   g_entities_pipeline;
+static pipeline_t   g_ui_pipeline;
 static ecs_world_t  *g_world;
 static ecs_entity_t g_selected_card;
 static int          g_next_turn;
@@ -270,6 +272,14 @@ static void load(struct scene_battle_s *scene, struct engine_s *engine) {
 		pipeline_init(&g_entities_pipeline, &g_sprite_shader, 128);
 	}
 
+	// ui
+	{
+		struct texture_settings_s settings = TEXTURE_SETTINGS_INIT;
+		texture_init_from_image(&g_ui_texture, "res/image/ui.png", &settings);
+		pipeline_init(&g_ui_pipeline, &g_sprite_shader, 128);
+		g_ui_pipeline.texture = &g_ui_texture;
+	}
+
 	// background
 	background_set_parallax("res/image/bg-glaciers/%d.png", 4);
 	background_set_parallax_offset(-0.4f);
@@ -288,9 +298,11 @@ static void destroy(struct scene_battle_s *scene, struct engine_s *engine) {
 	isoterrain_destroy(&g_terrain);
 	texture_destroy(&g_cards_texture);
 	texture_destroy(&g_entities_texture);
+	texture_destroy(&g_ui_texture);
 	shader_destroy(&g_sprite_shader);
 	pipeline_destroy(&g_cards_pipeline);
 	pipeline_destroy(&g_entities_pipeline);
+	pipeline_destroy(&g_ui_pipeline);
 	ecs_query_fini(g_ordered_handcards);
 	ecs_fini(g_world);
 }
@@ -446,7 +458,8 @@ static void draw(struct scene_battle_s *scene, struct engine_s *engine) {
 	// draw terrain
 	const int t_padding = 40.0f;
 	const float t_scale = ((engine->window_width - t_padding) / (float)g_terrain.projected_width);
-	const int t_y = engine->window_height * 0.5f - g_terrain.projected_height * 0.5f;
+	const int t_y = engine->window_height - g_terrain.projected_height * t_scale - 50.0f;
+
 	glm_mat4_identity(engine->u_view);
 	glm_translate_x(engine->u_view, (int)(t_padding * 0.5f));
 	glm_translate_y(engine->u_view, (int)(t_y));
@@ -474,6 +487,38 @@ static void draw(struct scene_battle_s *scene, struct engine_s *engine) {
 	glDepthFunc(GL_LEQUAL);
 	pipeline_draw_ortho(&g_cards_pipeline, g_engine->window_width, g_engine->window_height);
 	glDisable(GL_DEPTH_TEST);
+
+	// draw ui
+	pipeline_reset(&g_ui_pipeline);
+	{
+		drawcmd_t cmd = DRAWCMD_INIT;
+		cmd.size.x = 96 - 16;
+		cmd.size.y = 96 - 16;
+		cmd.position.x = 8.0f;
+		cmd.position.y = 8.0f;
+		cmd.position.z = 0.0f;
+		drawcmd_set_texture_subrect(&cmd, g_ui_pipeline.texture, ((int)engine->time_elapsed % 2) ? 0 : ((int)engine->time_elapsed % 7 == 0) ? 64 : 96, 112, 32, 32);
+		pipeline_emit(&g_ui_pipeline, &cmd);
+
+		cmd = DRAWCMD_INIT;
+		cmd.size.x = 96;
+		cmd.size.y = 96;
+		cmd.position.x = 0.0f;
+		cmd.position.y = 0.0f;
+		cmd.position.z = 0.0f;
+		drawcmd_set_texture_subrect(&cmd, g_ui_pipeline.texture, 0, 0, 96, 96);
+		pipeline_emit(&g_ui_pipeline, &cmd);
+
+		float hp = fabsf(cosf(engine->time_elapsed));
+		cmd = DRAWCMD_INIT;
+		cmd.size.x = 112 * hp;
+		cmd.size.y = 16;
+		cmd.position.x = -6;
+		cmd.position.y = 90;
+		drawcmd_set_texture_subrect(&cmd, g_ui_pipeline.texture, 96, 0, 112 * hp, 16);
+		pipeline_emit(&g_ui_pipeline, &cmd);
+	}
+	pipeline_draw_ortho(&g_ui_pipeline, g_engine->window_width, g_engine->window_height);
 }
 
 void scene_battle_init(struct scene_battle_s *scene_battle, struct engine_s *engine) {
@@ -705,7 +750,7 @@ static void system_draw_cards(ecs_iter_t *it) {
 		// card
 		drawcmd_set_texture_subrect_tile(&cmd_card, g_cards_pipeline.texture, 90, 128, 0, 0);
 		pipeline_emit(&g_cards_pipeline, &cmd_card);
-		// icon TODO: multiple icons
+		// icons
 		for (int icon_i = 0; icon_i < cards[i].icon_ids_count; ++icon_i) {
 			int icon_tex_x = cards[i].icon_ids[icon_i] % 2;
 			int icon_tex_y = 4 + cards[i].icon_ids[icon_i] / 2.0f;

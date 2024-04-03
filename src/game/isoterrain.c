@@ -58,6 +58,8 @@ void isoterrain_init(struct isoterrain_s *terrain, int w, int h, int layers) {
 
 	shader_init(&terrain->shader, "res/shader/isoterrain/vertex.glsl", "res/shader/isoterrain/fragment.glsl");
 	struct texture_settings_s settings = TEXTURE_SETTINGS_INIT;
+	settings.filter_min = GL_NEAREST;
+	settings.filter_mag = GL_NEAREST;
 	texture_init_from_image(&terrain->tileset_texture, "res/environment/tiles.png", &settings);
 
 	pipeline_init(&terrain->pipeline, &terrain->shader, 1024);
@@ -156,7 +158,7 @@ void isoterrain_draw(struct isoterrain_s *terrain, engine_t *engine) {
 				cmd.size.y = texture_tile_height;
 				cmd.position.x = block_pos[0];
 				cmd.position.y = (terrain->projected_height - block_pos[1]);
-				cmd.position.z = block_pos[2];
+				cmd.position.z = 0.0f;
 				drawcmd_set_texture_subrect_tile(&cmd, &terrain->tileset_texture, 16, 17, tile_uv.x, tile_uv.y); // tile_uv
 				pipeline_emit(&terrain->pipeline, &cmd);
 			}
@@ -175,11 +177,11 @@ void isoterrain_draw(struct isoterrain_s *terrain, engine_t *engine) {
 
 void isoterrain_get_projected_size(struct isoterrain_s *terrain, int *width, int *height) {
 	if (width != NULL) {
-		*width = terrain->width * 16.0f;
+		*width = terrain->width * 16 / 2 + terrain->height * 16 / 2;
 	}
 	if (height != NULL) {
 		// FIXME: this was determined empirically
-		*height = terrain->height * 17.0f * (1.0/3.0f) + terrain->layers * 4.0f;
+		*height = terrain->layers * 17;
 	}
 }
 

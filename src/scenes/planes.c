@@ -160,29 +160,30 @@ typedef struct {
 // private functions
 //
 
-void system_move_plane(ecs_iter_t *);
-void system_move_bullets(ecs_iter_t *);
-void system_move_particles(ecs_iter_t *);
-void system_despawn(ecs_iter_t *);
-void system_unsquish(ecs_iter_t *);
-void system_spawn_plane_effects(ecs_iter_t *);
-void system_spawn_enemies(ecs_iter_t *);
-void system_remove_mapchunks(ecs_iter_t *);
-void system_animate_sprites(ecs_iter_t *);
-void system_draw_sprites(ecs_iter_t *);
-void system_draw_map(ecs_iter_t *);
+static void system_move_plane(ecs_iter_t *);
+static void system_move_bullets(ecs_iter_t *);
+static void system_move_particles(ecs_iter_t *);
+static void system_despawn(ecs_iter_t *);
+static void system_unsquish(ecs_iter_t *);
+static void system_spawn_plane_effects(ecs_iter_t *);
+static void system_spawn_enemies(ecs_iter_t *);
+static void system_remove_mapchunks(ecs_iter_t *);
+static void system_animate_sprites(ecs_iter_t *);
+static void system_draw_sprites(ecs_iter_t *);
+static void system_draw_map(ecs_iter_t *);
 
-void mapchunk_init(c_mapchunk *, int chunk_x, int chunk_y);
-void mapchunk_destroy(c_mapchunk *);
+static void mapchunk_init(c_mapchunk *, int chunk_x, int chunk_y);
+static void mapchunk_destroy(c_mapchunk *);
 
-void show_levelup_rewards(void);
-void close_levelup_rewards(void);
-void use_reward(reward_t *);
-void collect_xp(float xp);
+static void show_levelup_rewards(void);
+static void close_levelup_rewards(void);
+static void use_reward(reward_t *);
+static void collect_xp(float xp);
+static void player_shoot(c_pos *pp, c_player *ply, c_plane *pl);
 
-void hit_enemy(ecs_entity_t e_bullet, ecs_entity_t e_enemy, c_bullet *bullet, c_pos *pos_bullet, c_sprite *spr_enemy, c_health *hl_enemy, c_plane *pl_enemy);
-void spawn_bulletshot(vec2 p, float angle, enum faction faction, float spread, float dmg, float speed);
-void spawn_homing_shot(vec2 p, float angle, ecs_entity_t target, enum faction faction, float dmg, float speed);
+static void hit_enemy(ecs_entity_t e_bullet, ecs_entity_t e_enemy, c_bullet *bullet, c_pos *pos_bullet, c_sprite *spr_enemy, c_health *hl_enemy, c_plane *pl_enemy);
+static void spawn_bulletshot(vec2 p, float angle, enum faction faction, float spread, float dmg, float speed);
+static void spawn_homing_shot(vec2 p, float angle, ecs_entity_t target, enum faction faction, float dmg, float speed);
 
 //
 // vars
@@ -415,7 +416,7 @@ static void load(struct scene_planes_s *scene, struct engine_s *engine) {
 			.bullet_damage = 1.0f,
 			.bullet_speed = 6.0f,
 			.bullet_spread = 30.0f,
-			.attack = PLAYER_ATTACK_HOMING_BURST,
+			.attack = PLAYER_ATTACK_BULLETSHOT,
 		});
 		ecs_set(g_ecs, e, c_faction, { .faction = FACTION_PLAYER });
 	}
@@ -579,51 +580,7 @@ static void update(struct scene_planes_s *scene, struct engine_s *engine, float 
 
 			spr->squish = 1.0f;
 			
-			switch (ply->attack) {
-			case PLAYER_ATTACK_BULLETSHOT:
-				spawn_bulletshot(pp->p.raw, pl->angle, FACTION_PLAYER, ply->bullet_spread, ply->bullet_damage, ply->bullet_speed);
-				break;
-			case PLAYER_ATTACK_BULLETSHOT_DOUBLE:{
-				vec2s center = pp->p;
-				vec2 forward = { cosf(pl->angle), sinf(pl->angle) };
-				vec2 left, right;
-				glm_vec2_rotate(forward, glm_rad(-90.0f), left);
-				glm_vec2_rotate(forward, glm_rad(90.0f), right);
-				const float dist = 9.5f;
-				glm_vec2_scale_as(left, dist, left);
-				glm_vec2_scale_as(right, dist, right);
-
-				vec2 left_gun, right_gun;
-				glm_vec2_add(center.raw, left, left_gun);
-				glm_vec2_add(center.raw, right, right_gun);
-
-				spawn_bulletshot(left_gun, pl->angle, FACTION_PLAYER, ply->bullet_spread, ply->bullet_damage, ply->bullet_speed);
-				spawn_bulletshot(right_gun, pl->angle, FACTION_PLAYER, ply->bullet_spread, ply->bullet_damage, ply->bullet_speed);
-				break;
-			}
-			case PLAYER_ATTACK_HOMING_BURST: {
-				ecs_filter_t *potential_targets = ecs_filter(g_ecs, {
-					.terms = { {ecs_id(c_pos)}, {ecs_id(c_plane)}, {ecs_id(c_faction)} },
-					});
-
-				ecs_entity_t targets[5] = {0};
-				ecs_iter_t it = ecs_filter_iter(g_ecs, potential_targets);
-				while (ecs_filter_next(&it)) {
-					for (int i = 0; i < it.count; ++i) {
-						if (i < 5) {
-							targets[i] = it.entities[i];
-						}
-					}
-				}
-
-				for (int i = 0; i < 5; ++i) {
-					if (targets[i] != 0 && ecs_is_alive(g_ecs, targets[i])) {
-						spawn_homing_shot(pp->p.raw, glm_rad(rand() % 360), targets[i], FACTION_PLAYER, ply->bullet_damage, ply->bullet_speed);
-					}
-				}
-			}
-			case PLAYER_ATTACK_MAX: break;
-			}
+			player_shoot(pp, ply, pl);
 		}
 	}
 
@@ -841,7 +798,7 @@ static int mapchunk_get(c_mapchunk *chunk, int x, int y, int *tx, int *ty) {
 	return id;
 }
 
-void mapchunk_init(c_mapchunk *chunk, int chunk_x, int chunk_y) {
+static void mapchunk_init(c_mapchunk *chunk, int chunk_x, int chunk_y) {
 	chunk->tiles = malloc(MAPCHUNK_WIDTH * MAPCHUNK_HEIGHT * sizeof(chunk->tiles[0]));
 
 	for (int y = 0; y < MAPCHUNK_HEIGHT; ++y) {
@@ -952,12 +909,12 @@ void mapchunk_init(c_mapchunk *chunk, int chunk_x, int chunk_y) {
 	}
 }
 
-void mapchunk_destroy(c_mapchunk *chunk) {
+static void mapchunk_destroy(c_mapchunk *chunk) {
 	free(chunk->tiles);
 	chunk->tiles = NULL;
 }
 
-void spawn_bulletshot(vec2 p, float angle, enum faction faction, float spread, float dmg, float speed) {
+static void spawn_bulletshot(vec2 p, float angle, enum faction faction, float spread, float dmg, float speed) {
 	float rnd_angle = glm_rad((rand() / (float)RAND_MAX) * spread - spread * 0.5f);
 	ecs_entity_t e = ecs_new_id(g_ecs);
 	ecs_set(g_ecs, e, c_pos, { .p.raw = {p[0], p[1]} });
@@ -979,7 +936,7 @@ void spawn_bulletshot(vec2 p, float angle, enum faction faction, float spread, f
 	ecs_set(g_ecs, e, c_faction, { .faction = faction });
 }
 
-void spawn_homing_shot(vec2 p, float angle, ecs_entity_t target, enum faction faction, float dmg, float speed) {
+static void spawn_homing_shot(vec2 p, float angle, ecs_entity_t target, enum faction faction, float dmg, float speed) {
 	ecs_entity_t e = ecs_new_id(g_ecs);
 	ecs_set(g_ecs, e, c_pos, { .p.raw = {p[0], p[1]} });
 	ecs_set(g_ecs, e, c_sprite, {
@@ -1002,7 +959,7 @@ void spawn_homing_shot(vec2 p, float angle, ecs_entity_t target, enum faction fa
 	ecs_set(g_ecs, e, c_homing, { .turn_strength=0.1f });
 }
 
-void show_levelup_rewards(void) {
+static void show_levelup_rewards(void) {
 	g_picking_rewards = 1;
 
 	for (int i = 0; i < 3; ++i) {
@@ -1010,11 +967,11 @@ void show_levelup_rewards(void) {
 	}
 }
 
-void close_levelup_rewards(void) {
+static void close_levelup_rewards(void) {
 	g_picking_rewards = 0;
 }
 
-void use_reward(reward_t *reward) {
+static void use_reward(reward_t *reward) {
 	if (!ecs_is_alive(g_ecs, g_player)) {
 		return;
 	}
@@ -1046,7 +1003,7 @@ void use_reward(reward_t *reward) {
 	ecs_modified(g_ecs, g_player, c_player);
 }
 
-void collect_xp(float xp) {
+static void collect_xp(float xp) {
 	g_xp += xp;
 	if (g_xp >= g_xp_per_level[g_level]) {
 		g_xp -= g_xp_per_level[g_level];
@@ -1056,7 +1013,7 @@ void collect_xp(float xp) {
 	}
 }
 
-void hit_enemy(ecs_entity_t e_bullet, ecs_entity_t e_enemy, c_bullet *bullet, c_pos *pos_bullet, c_sprite *spr_enemy, c_health *hl_enemy, c_plane *pl_enemy) {
+static void hit_enemy(ecs_entity_t e_bullet, ecs_entity_t e_enemy, c_bullet *bullet, c_pos *pos_bullet, c_sprite *spr_enemy, c_health *hl_enemy, c_plane *pl_enemy) {
 	spr_enemy->hurt = 1.0f;
 	hl_enemy->hp -= bullet->damage;
 
@@ -1103,9 +1060,57 @@ void hit_enemy(ecs_entity_t e_bullet, ecs_entity_t e_enemy, c_bullet *bullet, c_
 	}
 }
 
+static void player_shoot(c_pos *pp, c_player *ply, c_plane *pl) {
+	switch (ply->attack) {
+	case PLAYER_ATTACK_BULLETSHOT:
+		spawn_bulletshot(pp->p.raw, pl->angle, FACTION_PLAYER, ply->bullet_spread, ply->bullet_damage, ply->bullet_speed);
+		break;
+	case PLAYER_ATTACK_BULLETSHOT_DOUBLE:{
+		vec2s center = pp->p;
+		vec2 forward = { cosf(pl->angle), sinf(pl->angle) };
+		vec2 left, right;
+		glm_vec2_rotate(forward, glm_rad(-90.0f), left);
+		glm_vec2_rotate(forward, glm_rad(90.0f), right);
+		const float dist = 9.5f;
+		glm_vec2_scale_as(left, dist, left);
+		glm_vec2_scale_as(right, dist, right);
+
+		vec2 left_gun, right_gun;
+		glm_vec2_add(center.raw, left, left_gun);
+		glm_vec2_add(center.raw, right, right_gun);
+
+		spawn_bulletshot(left_gun, pl->angle, FACTION_PLAYER, ply->bullet_spread, ply->bullet_damage, ply->bullet_speed);
+		spawn_bulletshot(right_gun, pl->angle, FACTION_PLAYER, ply->bullet_spread, ply->bullet_damage, ply->bullet_speed);
+		break;
+	}
+	case PLAYER_ATTACK_HOMING_BURST: {
+		ecs_filter_t *potential_targets = ecs_filter(g_ecs, {
+			.terms = { {ecs_id(c_pos)}, {ecs_id(c_plane)}, {ecs_id(c_faction)} },
+			});
+
+		ecs_entity_t targets[5] = {0};
+		ecs_iter_t it = ecs_filter_iter(g_ecs, potential_targets);
+		while (ecs_filter_next(&it)) {
+			for (int i = 0; i < it.count; ++i) {
+				if (i < 5) {
+					targets[i] = it.entities[i];
+				}
+			}
+		}
+
+		for (int i = 0; i < 5; ++i) {
+			if (targets[i] != 0 && ecs_is_alive(g_ecs, targets[i])) {
+				spawn_homing_shot(pp->p.raw, glm_rad(rand() % 360), targets[i], FACTION_PLAYER, ply->bullet_damage, ply->bullet_speed);
+			}
+		}
+	}
+	case PLAYER_ATTACK_MAX: break;
+	}
+}
+
 // systems
 
-void system_move_plane(ecs_iter_t *it) {
+static void system_move_plane(ecs_iter_t *it) {
 	c_pos *pos = ecs_field(it, c_pos, 1);
 	c_plane *planes = ecs_field(it, c_plane, 2);
 
@@ -1116,7 +1121,7 @@ void system_move_plane(ecs_iter_t *it) {
 	}
 }
 
-void system_move_bullets(ecs_iter_t *it_bullet) {
+static void system_move_bullets(ecs_iter_t *it_bullet) {
 	c_pos *p_bullets = ecs_field(it_bullet, c_pos, 1);
 	c_bullet *bullets = ecs_field(it_bullet, c_bullet, 2);
 	c_faction *fac_bullets = ecs_field(it_bullet, c_faction, 3);
@@ -1187,7 +1192,7 @@ void system_move_bullets(ecs_iter_t *it_bullet) {
 
 }
 
-void system_move_particles(ecs_iter_t *it) {
+static void system_move_particles(ecs_iter_t *it) {
 	c_pos *pos = ecs_field(it, c_pos, 1);
 	c_particle *particles = ecs_field(it, c_particle, 2);
 	c_sprite *sprites = ecs_field(it, c_sprite, 3);
@@ -1216,7 +1221,7 @@ void system_move_particles(ecs_iter_t *it) {
 		}
 	}
 }
-void system_despawn(ecs_iter_t *it) {
+static void system_despawn(ecs_iter_t *it) {
 	c_despawn_after *ds = ecs_field(it, c_despawn_after, 1);
 
 	for (int i = 0; i < it->count; ++i) {
@@ -1227,7 +1232,7 @@ void system_despawn(ecs_iter_t *it) {
 	}
 }
 
-void system_unsquish(ecs_iter_t *it) {
+static void system_unsquish(ecs_iter_t *it) {
 	c_sprite *sprs = ecs_field(it, c_sprite, 1);
 
 	for (int i = 0; i < it->count; ++i) {
@@ -1236,7 +1241,7 @@ void system_unsquish(ecs_iter_t *it) {
 	}
 }
 
-void system_spawn_plane_effects(ecs_iter_t *it) {
+static void system_spawn_plane_effects(ecs_iter_t *it) {
 	c_pos *ps = ecs_field(it, c_pos, 1);
 	c_plane *planes = ecs_field(it, c_plane, 2);
 	for (int i = 0; i < it->count; ++i) {
@@ -1277,7 +1282,7 @@ void system_spawn_plane_effects(ecs_iter_t *it) {
 	}
 }
 
-void system_spawn_enemies(ecs_iter_t *it) {
+static void system_spawn_enemies(ecs_iter_t *it) {
 	//c_pos *ps = ecs_field(it, c_pos, 1);
 	//c_player *players = ecs_field(it, c_player, 2);
 
@@ -1325,7 +1330,7 @@ void system_spawn_enemies(ecs_iter_t *it) {
 	}
 }
 
-void system_remove_mapchunks(ecs_iter_t *it) {
+static void system_remove_mapchunks(ecs_iter_t *it) {
 	if (!ecs_is_alive(g_ecs, g_player)) {
 		return;
 	}
@@ -1337,6 +1342,10 @@ void system_remove_mapchunks(ecs_iter_t *it) {
 	float wy = -g_engine->u_view[3][1];
 	float ww = g_engine->window_width;
 	float wh = g_engine->window_height;
+
+	struct { int x, y; } existing_chunks[32];
+	int existing_count = 0;
+
 	for (int i = 0; i < it->count; ++i) {
 		c_pos *chunk_pos = &chunk_positions[i];
 		c_mapchunk *chunk = &chunks[i];
@@ -1349,11 +1358,15 @@ void system_remove_mapchunks(ecs_iter_t *it) {
 		if (x + w < wx || x > wx + ww || y + h < wy || y > wy + wh) {
 			mapchunk_destroy(chunk);
 			ecs_delete(g_ecs, it->entities[i]);
+		} else {
+			existing_chunks[existing_count].x = chunk->chunk.x;
+			existing_chunks[existing_count].y = chunk->chunk.y;
+			++existing_count;
 		}
 	}
 }
 
-void system_animate_sprites(ecs_iter_t *it) {
+static void system_animate_sprites(ecs_iter_t *it) {
 	c_sprite *sprites = ecs_field(it, c_sprite, 1);
 	c_animation *animations = ecs_field(it, c_animation, 2);
 
@@ -1371,7 +1384,7 @@ void system_animate_sprites(ecs_iter_t *it) {
 	}
 }
 
-void system_draw_sprites(ecs_iter_t *it) {
+static void system_draw_sprites(ecs_iter_t *it) {
 	pipeline_reset(&g_pipeline);
 	g_pipeline.texture = &g_plane_tex;
 
@@ -1430,7 +1443,7 @@ void system_draw_sprites(ecs_iter_t *it) {
 	pipeline_draw(&g_pipeline, g_engine);
 }
 
-void system_draw_map(ecs_iter_t *it) {
+static void system_draw_map(ecs_iter_t *it) {
 	c_pos *ps = ecs_field(it, c_pos, 1);
 	c_mapchunk *cs = ecs_field(it, c_mapchunk, 2);
 	for (int i = 0; i < it->count; ++i) {
