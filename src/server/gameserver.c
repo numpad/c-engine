@@ -26,6 +26,7 @@ static void gameserver_on_writable  (struct gameserver *, struct session *);
 static struct lws_protocols protocols[] = {
 	{"",       callback_rawtcp, sizeof(struct session), 512, 0, NULL, 0},
 	{"binary", callback_ws,     sizeof(struct session), 512, 0, NULL, 0}, // needed for SDLNet-to-WebSocket translation.
+	{"raw",    callback_rawtcp, sizeof(struct session), 512, 0, NULL, 0}, // needed for SDLNet-to-WebSocket translation.
 	{NULL,     NULL,            0,                      0,   0, NULL, 0},
 };
 
@@ -51,8 +52,26 @@ int gameserver_init(struct gameserver *server, uint16_t port) {
 	info.protocols = protocols;
 	info.gid = -1;
 	info.uid = -1;
-	// TODO: ADOPT_APPLY_LISTEN_ACCEPT_CONFIG fixes raw tcp not connecting immediately
-	info.options = LWS_SERVER_OPTION_FALLBACK_TO_RAW | LWS_SERVER_OPTION_ADOPT_APPLY_LISTEN_ACCEPT_CONFIG;
+	
+	// MSG_WELCOME enabled. Works for Raw-TCP, however Websocket disconnects immediately:
+	// info.options = LWS_SERVER_OPTION_ADOPT_APPLY_LISTEN_ACCEPT_CONFIG;
+	
+	// MSG_WELCOME enabled. Works for Raw-TCP, however Websocket disconnects immediately:
+	// info.options = LWS_SERVER_OPTION_ADOPT_APPLY_LISTEN_ACCEPT_CONFIG | LWS_SERVER_OPTION_FALLBACK_TO_APPLY_LISTEN_ACCEPT_CONFIG;
+
+	// MSG_WELCOME enabled. Works for Raw-TCP, however Websocket disconnects immediately:
+	// info.options = LWS_SERVER_OPTION_ADOPT_APPLY_LISTEN_ACCEPT_CONFIG | LWS_SERVER_OPTION_ALLOW_NON_SSL_ON_SSL_PORT;
+
+	// MSG_WELCOME enabled. Works for Websocket, however Raw-TCP only connects on first message.
+	// info.options = LWS_SERVER_OPTION_FALLBACK_TO_APPLY_LISTEN_ACCEPT_CONFIG | LWS_SERVER_OPTION_ALLOW_NON_SSL_ON_SSL_PORT;
+	
+	info.options = LWS_SERVER_OPTION_FALLBACK_TO_APPLY_LISTEN_ACCEPT_CONFIG | LWS_SERVER_OPTION_ALLOW_NON_SSL_ON_SSL_PORT;
+	//info.options = LWS_SERVER_OPTION_ADOPT_APPLY_LISTEN_ACCEPT_CONFIG;
+	//info.listen_accept_role = "raw";
+	//info.listen_accept_protocol = "raw";
+	// related: https://github.com/warmcat/libwebsockets/pull/2461
+
+	//info.options = LWS_SERVER_OPTION_FALLBACK_TO_APPLY_LISTEN_ACCEPT_CONFIG | LWS_SERVER_OPTION_ALLOW_NON_SSL_ON_SSL_PORT; // LWS_SERVER_OPTION_REDIRECT_HTTP_TO_HTTPS
 	info.user = (void *)server;
 
 	server->lws = lws_create_context(&info);
