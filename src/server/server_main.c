@@ -186,9 +186,11 @@ static void serverui_on_input(const char *cmd, size_t cmd_len) {
 		*/
 
 	} else {
-		// TODO: remove. just sends the raw input for debugging purposes.
-		gameserver_send_raw(&gserver, NULL, (uint8_t *)input, input_len);
-		console_log("[%s] %s", fmt_time(time(NULL)), input);
+		if (input_len > 1) {
+			// TODO: remove. just sends the raw input for debugging purposes.
+			gameserver_send_raw(&gserver, NULL, (uint8_t *)input, input_len);
+			console_log("[%s] %s", fmt_time(time(NULL)), input);
+		}
 	}
 }
 
