@@ -511,11 +511,11 @@ static void draw(struct scene_battle_s *scene, struct engine_s *engine) {
 
 		float hp = fabsf(cosf(engine->time_elapsed));
 		cmd = DRAWCMD_INIT;
-		cmd.size.x = 112 * hp;
+		cmd.size.x = ceilf(112.0f * hp);
 		cmd.size.y = 16;
 		cmd.position.x = -6;
 		cmd.position.y = 90;
-		drawcmd_set_texture_subrect(&cmd, g_ui_pipeline.texture, 96, 0, 112 * hp, 16);
+		drawcmd_set_texture_subrect(&cmd, g_ui_pipeline.texture, 96, 0, ceilf(112.0f * hp), 16);
 		pipeline_emit(&g_ui_pipeline, &cmd);
 	}
 	pipeline_draw_ortho(&g_ui_pipeline, g_engine->window_width, g_engine->window_height);
