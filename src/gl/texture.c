@@ -4,6 +4,7 @@
 #include <SDL.h>
 #include <SDL_opengles2.h>
 #include <stb_image.h>
+#include "util/util.h"
 
 static void set_texparams_from_settings(GLuint target, struct texture_settings_s *settings) {
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, (settings ? settings->filter_min : GL_LINEAR));
@@ -16,10 +17,14 @@ void texture_init(struct texture_s *texture, int width, int height, struct textu
 	texture->width = width;
 	texture->height = height;
 
+	// format & internalformat need to match in es2
+	GLint format = (settings != NULL) ? settings->internal_format : GL_RGBA;
+
 	glGenTextures(1, &texture->texture);
 	glBindTexture(GL_TEXTURE_2D, texture->texture);
 	set_texparams_from_settings(GL_TEXTURE_2D, settings);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+	glTexImage2D(GL_TEXTURE_2D, 0, format, width, height, 0, format, GL_UNSIGNED_BYTE, NULL);
+	GL_CHECK_ERROR();
 	glBindTexture(GL_TEXTURE_2D, 0);
 }
 

@@ -1,7 +1,9 @@
 #include "util.h"
 
+#include <stdio.h>
 #include <math.h>
 #include <assert.h>
+#include <SDL_opengles2.h>
 
 int point_in_rect(float px, float py, float x, float y, float w, float h) {
 	return (px >= x && py >= y && px <= x + w && py <= y + h);
@@ -51,3 +53,25 @@ float calculate_angle_segment(float angle, int segments) {
 	return div;
 }
 
+int gl_check_error(const char *file, int line) {
+	// TODO: only in DEBUG
+    GLenum errorCode;
+    int has_error = 0;
+	while ((errorCode = glGetError()) != GL_NO_ERROR) {
+		has_error = 1;
+
+        const char *error;
+        switch (errorCode) {
+            case GL_INVALID_ENUM:                  error = "INVALID_ENUM"; break;
+            case GL_INVALID_VALUE:                 error = "INVALID_VALUE"; break;
+            case GL_INVALID_OPERATION:             error = "INVALID_OPERATION"; break;
+            case GL_OUT_OF_MEMORY:                 error = "OUT_OF_MEMORY"; break;
+            case GL_INVALID_FRAMEBUFFER_OPERATION: error = "INVALID_FRAMEBUFFER_OPERATION"; break;
+			default: printf("Unknown Error: %d\n", errorCode); break;
+        }
+
+		printf("OpenGL Error %s:%d : %s\n", file, line, error);
+    }
+
+	return has_error;
+}

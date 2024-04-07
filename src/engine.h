@@ -13,7 +13,6 @@
 // forward decls & typedefs
 //
 
-struct nk_context;
 struct engine_s;
 struct console_s;
 struct message_header;
@@ -29,7 +28,6 @@ struct engine_s {
 	Uint32 window_id;
 	SDL_GLContext gl_ctx;
 	struct NVGcontext *vg;
-	struct nk_context *nk;
 	
 	// window
 	int window_width, window_height;

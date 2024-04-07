@@ -10,14 +10,15 @@ struct texture_s {
 	unsigned int width, height;
 };
 
-#define TEXTURE_SETTINGS_INIT     \
-	{                             \
-		.filter_min = GL_NEAREST, \
-		.filter_mag = GL_NEAREST, \
-		.wrap_s = GL_REPEAT,      \
-		.wrap_t = GL_REPEAT,      \
-		.gen_mipmap = 0,          \
-		.flip_y = 0,              \
+#define TEXTURE_SETTINGS_INIT      \
+	{                              \
+		.filter_min = GL_NEAREST,  \
+		.filter_mag = GL_NEAREST,  \
+		.wrap_s = GL_REPEAT,       \
+		.wrap_t = GL_REPEAT,       \
+		.gen_mipmap = 0,           \
+		.flip_y = 0,               \
+		.internal_format = GL_RGBA \
 	}
 
 struct texture_settings_s {
@@ -27,6 +28,7 @@ struct texture_settings_s {
 	GLint wrap_t;
 	int gen_mipmap;
 	int flip_y;
+	int internal_format;
 };
 
 void texture_init(struct texture_s *texture, int width, int height, struct texture_settings_s *settings);

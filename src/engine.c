@@ -7,8 +7,6 @@
 #include <nanovg_gl.h>
 #undef NANOVG_GLES2_IMPLEMENTATION
 #include <stb_ds.h>
-#include <nuklear.h>
-#include <nuklear_sdl_gles2.h>
 #include <cJSON.h>
 #include "scenes/intro.h"
 #include "scenes/menu.h"
@@ -133,13 +131,6 @@ struct engine_s *engine_new(void) {
 	signal(SIGUSR2, on_sigusr2);
 #endif
 
-	// init nuklear
-	engine->nk = nk_sdl_init(engine->window);
-	// init default font
-	struct nk_font_atlas *atlas;
-	nk_sdl_font_stash_begin(&atlas);
-	nk_sdl_font_stash_end();
-
 	// scene
 	struct intro_s *intro = malloc(sizeof(struct intro_s));
 	intro_init(intro, engine);
@@ -163,7 +154,6 @@ int engine_destroy(struct engine_s *engine) {
 	stbds_arrfree(engine->on_notify_callbacks);
 	console_destroy(engine->console);
 	free(engine->console);
-	nk_sdl_shutdown();
 
 	// windowing
 	SDL_DestroyWindow(engine->window);
@@ -347,9 +337,7 @@ void engine_update(struct engine_s *engine, double dt) {
 	}
 	
 	// poll events
-	nk_input_begin(engine->nk);
 	engine_poll_events(engine);
-	nk_input_end(engine->nk);
 
 	// update
 	console_update(engine->console, engine, dt);
@@ -395,7 +383,6 @@ void engine_draw(struct engine_s *engine) {
 	nvgText(engine->vg, engine->window_width - bounds[2], engine->window_height - bounds[3], debug_info, NULL);
 #endif
 
-	nk_sdl_render(NK_ANTI_ALIASING_ON, 512 * 1024, 128 * 1024);
 	nvgEndFrame(engine->vg);
 
 	SDL_GL_SwapWindow(engine->window);
@@ -449,9 +436,6 @@ static void engine_poll_events(struct engine_s *engine) {
 
 	SDL_Event event;
 	while (SDL_PollEvent(&event)) {
-        // TODO: stop event propagation when interacting with gui?
-		nk_sdl_handle_event(&event);
-
 		switch (event.type) {
 			case SDL_QUIT:
 				engine_setscene(engine, NULL);

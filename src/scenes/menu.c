@@ -1,5 +1,4 @@
 #include "menu.h"
-#include <stdint.h>
 #include <math.h>
 #include <SDL.h>
 #include <SDL_net.h>
@@ -8,7 +7,6 @@
 #include <cglm/cglm.h>
 #include <cglm/struct.h>
 #include <stb_ds.h>
-#include <nuklear.h>
 #include "engine.h"
 #include "scenes/scene_battle.h"
 #include "scenes/experiments.h"
@@ -19,7 +17,6 @@
 #include "gl/texture.h"
 #include "gl/graphics2d.h"
 #include "net/message.h"
-#include "util/fs.h"
 #include "util/util.h"
 #include "platform.h"
 
@@ -103,9 +100,6 @@ static void switch_to_minigame_scene(struct engine_s *engine);
 static void on_start_game(struct engine_s *engine);
 void on_begin_search_friends(struct engine_s *);
 void on_end_search_friends(struct engine_s *);
-
-// deprecated
-static void draw_menu(struct engine_s *, struct nk_context *nk);
 
 //
 // scene callbacks
@@ -502,6 +496,37 @@ static void switch_to_minigame_scene(struct engine_s *engine) {
 	platform_vibrate(PLATFORM_VIBRATE_TAP);
 }
 
+static float menuitem_active(float menu_x, float bookmark_x, float bookmark_tx) {
+	const float d = fabsf(menu_x - bookmark_x);
+	const float max_d = 110.0f;
+	if (d > max_d || fabs(bookmark_tx - menu_x) > 4.0f) return 0.0f;
+	return 1.0f - (d / max_d);
+}
+
+void on_begin_search_friends(struct engine_s *engine) {
+	g_search_friends_text = g_search_friends_texts[1];
+
+	// TODO: remove
+	if (engine->gameserver_tcp == NULL) {
+		if (engine_gameserver_connect(engine, "localhost") == 0) {
+			printf("\x1b[32mConnected to Server!\x1b[0m\n");
+		} else {
+			printf("\x1b[31mFailed connecting to Server...\x1b[0m\n");
+		}
+	} else {
+		printf("Sent something...\n");
+		struct lobby_list_request req;
+		message_header_init((struct message_header *)&req, LOBBY_LIST_REQUEST);
+		engine_gameserver_send(engine, (struct message_header *)&req);
+	}
+}
+
+void on_end_search_friends(struct engine_s *engine) {
+	g_search_friends_text = g_search_friends_texts[0];
+}
+
+
+/* Old Nuklear Menu Rendering
 static void draw_menu(struct engine_s *engine, struct nk_context *nk) {
 	const float padding_bottom = 80.0f;
 	const float padding_x = 40.0f;
@@ -678,33 +703,5 @@ static void draw_menu(struct engine_s *engine, struct nk_context *nk) {
 		nk_end(nk);
 	}
 }
-
-static float menuitem_active(float menu_x, float bookmark_x, float bookmark_tx) {
-	const float d = fabsf(menu_x - bookmark_x);
-	const float max_d = 110.0f;
-	if (d > max_d || fabs(bookmark_tx - menu_x) > 4.0f) return 0.0f;
-	return 1.0f - (d / max_d);
-}
-
-void on_begin_search_friends(struct engine_s *engine) {
-	g_search_friends_text = g_search_friends_texts[1];
-
-	// TODO: remove
-	if (engine->gameserver_tcp == NULL) {
-		if (engine_gameserver_connect(engine, "localhost") == 0) {
-			printf("\x1b[32mConnected to Server!\x1b[0m\n");
-		} else {
-			printf("\x1b[31mFailed connecting to Server...\x1b[0m\n");
-		}
-	} else {
-		printf("Sent something...\n");
-		struct lobby_list_request req;
-		message_header_init((struct message_header *)&req, LOBBY_LIST_REQUEST);
-		engine_gameserver_send(engine, (struct message_header *)&req);
-	}
-}
-
-void on_end_search_friends(struct engine_s *engine) {
-	g_search_friends_text = g_search_friends_texts[0];
-}
+*/
 

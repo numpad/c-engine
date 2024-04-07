@@ -12,11 +12,11 @@
 #include <cglm/cglm.h>
 #include <flecs.h>
 #include <cglm/cglm.h>
-#include <nuklear.h>
 #include "engine.h"
 #include "gl/texture.h"
 #include "gl/shader.h"
 #include "gl/graphics2d.h"
+#include "gl/text.h"
 #include "game/isoterrain.h"
 #include "game/background.h"
 #include "gui/console.h"
@@ -132,9 +132,11 @@ static texture_t    g_cards_texture;
 static texture_t    g_entities_texture;
 static texture_t    g_ui_texture;
 static shader_t     g_sprite_shader;
+static shader_t     g_text_shader;
 static pipeline_t   g_cards_pipeline;
 static pipeline_t   g_entities_pipeline;
 static pipeline_t   g_ui_pipeline;
+static pipeline_t   g_text_pipeline;
 static ecs_world_t  *g_world;
 static ecs_entity_t g_selected_card;
 static int          g_next_turn;
@@ -280,6 +282,14 @@ static void load(struct scene_battle_s *scene, struct engine_s *engine) {
 		g_ui_pipeline.texture = &g_ui_texture;
 	}
 
+	// text rendering
+	text_global_init();
+	{
+		shader_init_from_dir(&g_text_shader, "res/shader/text/");
+		pipeline_init(&g_text_pipeline, &g_text_shader, 2048);
+		g_text_pipeline.texture = text_get_atlas();
+	}
+
 	// background
 	background_set_parallax("res/image/bg-glaciers/%d.png", 4);
 	background_set_parallax_offset(-0.4f);
@@ -288,24 +298,35 @@ static void load(struct scene_battle_s *scene, struct engine_s *engine) {
 	g_place_card_sfx = Mix_LoadWAV("res/sounds/place_card.ogg");
 	g_pick_card_sfx = Mix_LoadWAV("res/sounds/cardSlide5.ogg");
 	g_slide_card_sfx = Mix_LoadWAV("res/sounds/cardSlide7.ogg");
+
 }
+
 
 static void destroy(struct scene_battle_s *scene, struct engine_s *engine) {
 	Mix_FreeChunk(g_place_card_sfx);
 	Mix_FreeChunk(g_pick_card_sfx);
 	Mix_FreeChunk(g_slide_card_sfx);
+
 	background_destroy();
 	isoterrain_destroy(&g_terrain);
+
 	texture_destroy(&g_cards_texture);
 	texture_destroy(&g_entities_texture);
 	texture_destroy(&g_ui_texture);
+
 	shader_destroy(&g_sprite_shader);
+	shader_destroy(&g_text_shader);
+
 	pipeline_destroy(&g_cards_pipeline);
 	pipeline_destroy(&g_entities_pipeline);
 	pipeline_destroy(&g_ui_pipeline);
+	pipeline_destroy(&g_text_pipeline);
+
 	ecs_query_fini(g_ordered_handcards);
 	ecs_fini(g_world);
+	text_global_destroy();
 }
+
 
 static void update(struct scene_battle_s *scene, struct engine_s *engine, float dt) {
 	const struct input_drag_s *drag = &(engine->input_drag);
@@ -483,10 +504,39 @@ static void draw(struct scene_battle_s *scene, struct engine_s *engine) {
 
 	pipeline_draw(&g_entities_pipeline, engine);
 
+	// draw cards
 	glEnable(GL_DEPTH_TEST);
 	glDepthFunc(GL_LEQUAL);
 	pipeline_draw_ortho(&g_cards_pipeline, g_engine->window_width, g_engine->window_height);
 	glDisable(GL_DEPTH_TEST);
+
+	// draw text
+	pipeline_reset(&g_text_pipeline);
+	{
+		int w, h;
+		text_get_charsize(&w, &h);
+		drawcmd_t cmd = DRAWCMD_INIT;
+		drawcmd_set_texture_subrect(&cmd, g_text_pipeline.texture, 0, 0, w, h);
+		cmd.size.x = w / 4;
+		cmd.size.y = h / 4;
+		cmd.position.x = 10.0f;
+		cmd.position.y = 120.0f;
+		pipeline_emit(&g_text_pipeline, &cmd);
+
+		cmd.size.x = w / 2;
+		cmd.size.y = h / 2;
+		cmd.position.x = 35.0f;
+		cmd.position.y = 120.0f;
+		pipeline_emit(&g_text_pipeline, &cmd);
+
+		cmd.size.x = w;
+		cmd.size.y = h;
+		cmd.position.x = 75.0f;
+		cmd.position.y = 120.0f;
+		pipeline_emit(&g_text_pipeline, &cmd);
+
+	}
+	pipeline_draw_ortho(&g_text_pipeline, engine->window_width, engine->window_height);
 
 	// draw ui
 	pipeline_reset(&g_ui_pipeline);
@@ -521,6 +571,7 @@ static void draw(struct scene_battle_s *scene, struct engine_s *engine) {
 	pipeline_draw_ortho(&g_ui_pipeline, g_engine->window_width, g_engine->window_height);
 }
 
+
 void scene_battle_init(struct scene_battle_s *scene_battle, struct engine_s *engine) {
 	// init scene base
 	scene_init((struct scene_s *)scene_battle, engine);
@@ -531,6 +582,7 @@ void scene_battle_init(struct scene_battle_s *scene_battle, struct engine_s *eng
 	scene_battle->base.update  = (scene_update_fn)update;
 	scene_battle->base.draw    = (scene_draw_fn)draw;
 }
+
 
 //
 // private implementations
@@ -586,6 +638,7 @@ static void recalculate_handcards(void) {
 	}
 }
 
+
 static ecs_entity_t find_closest_handcard(float x, float y, float max_distance) {
 	vec2 cursor_pos = {x, y};
 
@@ -609,12 +662,14 @@ static ecs_entity_t find_closest_handcard(float x, float y, float max_distance) 
 	return e;
 }
 
+
 static int order_handcards(ecs_entity_t e1, const void *data1, ecs_entity_t e2, const void *data2) {
 	const c_handcard *c1 = data1;
 	const c_handcard *c2 = data2;
 
 	return (c1->added_at_time > c2->added_at_time) - (c1->added_at_time < c2->added_at_time);
 }
+
 
 static void on_game_event(enum event_type type, event_info_t *info) {
 	switch (type) {
@@ -626,6 +681,7 @@ static void on_game_event(enum event_type type, event_info_t *info) {
 		break;
 	};
 }
+
 
 static void on_game_event_play_card(event_info_t *info) {
 	assert(info != NULL);
@@ -641,6 +697,7 @@ static void on_game_event_play_card(event_info_t *info) {
 	ecs_delete(g_world, g_selected_card);
 	g_selected_card = 0;
 }
+
 
 //
 // systems implementation
@@ -680,6 +737,7 @@ static void system_turn_move_entities(ecs_iter_t *it) {
 	}
 }
 
+
 static void system_move_cards(ecs_iter_t *it) {
 	c_position *positions = ecs_field(it, c_position, 1);
 	c_handcard *handcards = ecs_field(it, c_handcard, 2);
@@ -695,6 +753,7 @@ static void system_move_cards(ecs_iter_t *it) {
 		glm_vec2_lerp(p->raw, target->raw, it->delta_time * 9.0f, p->raw);
 	}
 }
+
 
 static void system_draw_cards(ecs_iter_t *it) {
 	c_card *cards = ecs_field(it, c_card, 1);
@@ -770,6 +829,7 @@ static void system_draw_cards(ecs_iter_t *it) {
 	}
 }
 
+
 static void system_draw_entities(ecs_iter_t *it) {
 	c_blockpos *positions = ecs_field(it, c_blockpos, 1);
 	c_tileset_tile *tiles = ecs_field(it, c_tileset_tile, 2);
@@ -796,6 +856,7 @@ static void system_draw_entities(ecs_iter_t *it) {
 		
 	}
 }
+
 
 static void observer_on_update_handcards(ecs_iter_t *it) {
 	c_card *changed_cards = ecs_field(it, c_card, 1);

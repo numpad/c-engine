@@ -3,7 +3,6 @@
 #include <stdlib.h>
 #include <assert.h>
 #include <nanovg.h>
-#include <nuklear.h>
 #include <cglm/cglm.h>
 #include <box2d/box2d.h>
 #include <stb_ds.h>
@@ -395,7 +394,7 @@ static void draw_box_title(NVGcontext *vg, float x, float y, float w, float h, c
 	// configure font
 	nvgFontSize(vg, 17.0f);
 	nvgFontFaceId(vg, font_score);
-	nvgTextAlign(vg, NK_TEXT_ALIGN_LEFT | NK_TEXT_ALIGN_MIDDLE);
+	nvgTextAlign(vg, 1 | 16); // TODO: wrongly used "NK_TEXT_ALIGN_LEFT | NK_TEXT_ALIGN_MIDDLE" here
 	// calculate text bounds
 	float bounds[4];
 	nvgTextBounds(vg, 0.0f, 0.0f, title, NULL, bounds);

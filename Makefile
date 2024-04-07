@@ -5,10 +5,9 @@ CFLAGS = -std=gnu99 -fPIC -Wall -Wextra -pedantic \
 		 -Wfloat-equal -Wshadow -Wno-unused-parameter -Wl,--export-dynamic \
 		 -Werror=switch-enum -Wcast-qual -Wnull-dereference -Wunused-result \
 		 -DFLECS_CUSTOM_BUILD -DFLECS_SYSTEM -DFLECS_MODULE -DFLECS_PIPELINE -DFLECS_TIMER -DFLECS_HTTP -DFLECS_SNAPSHOT -DFLECS_PARSER -DFLECS_APP -DFLECS_OS_API_IMPL \
-		 -DNK_INCLUDE_DEFAULT_ALLOCATOR -DNK_INCLUDE_DEFAULT_FONT -DNK_INCLUDE_FONT_BAKING -DNK_INCLUDE_FIXED_TYPES -DNK_INCLUDE_STANDARD_IO -DNK_INCLUDE_STANDARD_VARARGS -DNK_INCLUDE_VERTEX_BUFFER_OUTPUT -DNK_NO_STB_TRUETYPE_IMPLEMENTATION -DNK_NO_STB_RECT_PACK_IMPLEMENTATION \
 		 # flecs needs gnu99
-INCLUDES = -I src/ -isystem /usr/include/SDL2 -isystem lib/nanovg/src -isystem lib/stb -isystem lib/cglm/include -isystem lib/flecs -isystem lib/cJSON -isystem lib/nuklear -isystem lib/box2c/include/ -isystem lib/box2c/extern/simde/
-LIBS = -lm -lGL -lSDL2 -lSDL2_mixer -lSDL2_net # -lSDL2_ttf
+INCLUDES = -I src/ -isystem /usr/include/SDL2 -isystem /usr/include/freetype2 -isystem /usr/include/harfbuzz -isystem lib/nanovg/src -isystem lib/stb -isystem lib/cglm/include -isystem lib/flecs -isystem lib/cJSON -isystem lib/box2c/include/ -isystem lib/box2c/extern/simde/
+LIBS = -lm -lGL -lSDL2 -lSDL2_mixer -lSDL2_net -lfreetype -lharfbuzz
 
 BIN = bin/native/
 TARGET = soil_soldiers
@@ -19,7 +18,7 @@ ifeq ($(CC), emcc)
 	# TODO: Check if needed/better: -sASYNCIFY -sWEBSOCKET_SUBPROTOCOL="binary" -sMAX_WEBGL_VERSION=2
 	# TODO: Add in release? -sWEBSOCKET_URL="wss://"
 	CFLAGS += -sWASM=1 \
-			  -sUSE_SDL=2 -sUSE_SDL_NET=2 -sUSE_SDL_MIXER=2 -sUSE_SDL_IMAGE=0 -sUSE_SDL_TTF=0 \
+			  -sUSE_SDL=2 -sUSE_SDL_NET=2 -sUSE_SDL_MIXER=2 -sUSE_SDL_IMAGE=0 -sUSE_SDL_TTF=0 -sUSE_FREETYPE=1 -sUSE_HARFBUZZ=1 \
 			  -sALLOW_MEMORY_GROWTH=1 \
 			  -sINITIAL_MEMORY=128MB -sTOTAL_STACK=64MB \
 			  -sEXPORTED_RUNTIME_METHODS=cwrap \
@@ -34,8 +33,8 @@ endif
 SRC = main.c src/engine.c src/platform.c \
 	  src/gui/console.c src/gui/ugui.c \
 	  src/game/background.c src/game/terrain.c src/game/isoterrain.c \
-	  src/util/easing.c src/util/fs.c src/util/util.c \
-	  src/gl/shader.c src/gl/texture.c src/gl/vbuffer.c src/gl/graphics2d.c src/gl/canvas.c \
+	  $(wildcard src/util/*.c) \
+	  $(wildcard src/gl/*.c) \
 	  src/net/message.c \
 	  lib/nanovg/src/nanovg.c \
 	  lib/stb/stb_ds.c lib/stb/stb_perlin.c lib/stb/stb_image.c lib/stb/stb_rect_pack.c lib/stb/stb_truetype.c \
@@ -43,7 +42,6 @@ SRC = main.c src/engine.c src/platform.c \
 	  $(wildcard lib/box2c/src/*.c) \
 	  lib/cJSON/cJSON.c \
 	  lib/flecs/flecs.c \
-	  lib/nuklear/nuklear.c \
 	  $(wildcard src/scenes/*.c)
 OBJ = $(addprefix $(BIN),$(SRC:.c=.o))
 

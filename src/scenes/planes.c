@@ -5,7 +5,6 @@
 #include <math.h>
 #include <assert.h>
 #include <nanovg.h>
-#include <nuklear.h>
 #include <flecs.h>
 #include <cglm/cglm.h>
 #include <cglm/struct.h>
