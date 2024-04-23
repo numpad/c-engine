@@ -72,7 +72,7 @@ $(BIN)%.o: %.c
 scenes: CFLAGS += -DDEBUG -ggdb -O0
 scenes: LIBS += -ldl
 scenes:
-	$(CC) $(CFLAGS) -shared -o scene_game.so $(INCLUDES) $(LIBS) src/scenes/menu.c src/gl/graphics2d.c
+	$(CC) $(CFLAGS) -shared -o scene_game.so $(INCLUDES) $(LIBS) src/scenes/scene_battle.c src/gl/text.c
 
 clean:
 	rm -rf $(BIN) $(TARGET) "$(TARGET).data" "$(TARGET).html" "$(TARGET).js" "$(TARGET).wasm"

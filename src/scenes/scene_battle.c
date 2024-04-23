@@ -140,6 +140,7 @@ static pipeline_t   g_text_pipeline;
 static ecs_world_t  *g_world;
 static ecs_entity_t g_selected_card;
 static int          g_next_turn;
+static fontatlas_t  g_card_font;
 
 // testing
 static Mix_Chunk    *g_place_card_sfx;
@@ -283,11 +284,25 @@ static void load(struct scene_battle_s *scene, struct engine_s *engine) {
 	}
 
 	// text rendering
-	text_global_init();
 	{
+		text_global_init();
+
+		fontatlas_init(&g_card_font);
+		fontatlas_add_face(&g_card_font, "res/font/Inter-Regular.ttf", 32);
+		fontatlas_add_face(&g_card_font, "res/font/Inter-Bold.ttf", 32);
+		fontatlas_add_face(&g_card_font, "res/font/Inter-Italic.ttf", 32);
+		fontatlas_add_face(&g_card_font, "res/font/Inter-BoldItalic.ttf", 32);
+		fontatlas_add_glyphs(&g_card_font, 6, (ulong[]){'*', '+', '-', '@', '_', 0x2661});
+		for (unsigned long c = 'a'; c < 'z'; ++c) {
+			fontatlas_add_glyph(&g_card_font, c);
+		}
+		for (unsigned long c = 'A'; c < 'Z'; ++c) {
+			fontatlas_add_glyph(&g_card_font, c);
+		}
+
 		shader_init_from_dir(&g_text_shader, "res/shader/text/");
 		pipeline_init(&g_text_pipeline, &g_text_shader, 2048);
-		g_text_pipeline.texture = text_get_atlas();
+		g_text_pipeline.texture = &g_card_font.texture_atlas;
 	}
 
 	// background
@@ -298,7 +313,6 @@ static void load(struct scene_battle_s *scene, struct engine_s *engine) {
 	g_place_card_sfx = Mix_LoadWAV("res/sounds/place_card.ogg");
 	g_pick_card_sfx = Mix_LoadWAV("res/sounds/cardSlide5.ogg");
 	g_slide_card_sfx = Mix_LoadWAV("res/sounds/cardSlide7.ogg");
-
 }
 
 
@@ -514,14 +528,25 @@ static void draw(struct scene_battle_s *scene, struct engine_s *engine) {
 	pipeline_reset(&g_text_pipeline);
 	{
 		int w, h;
-		text_get_charsize(&w, &h);
 		drawcmd_t cmd = DRAWCMD_INIT;
-		drawcmd_set_texture_subrect(&cmd, g_text_pipeline.texture, 0, 0, w, h);
-		cmd.size.x = w / 4;
-		cmd.size.y = h / 4;
-		cmd.position.x = 10.0f;
-		cmd.position.y = 120.0f;
-		pipeline_emit(&g_text_pipeline, &cmd);
+
+		unsigned long foobar[] = {'F', 'o', 'o', 'b', 'a', 'r', 0x2661};
+		for (unsigned int i = 0; i < count_of(foobar); ++i) {
+			fontatlas_glyph_t *glyph = fontatlas_get_glyph(&g_card_font, foobar[i], 0);
+			if (glyph == NULL) continue;
+
+			drawcmd_set_texture_subrect(&cmd, g_text_pipeline.texture,
+					glyph->texture_rect.x, glyph->texture_rect.y, glyph->texture_rect.z, glyph->texture_rect.w);
+
+			w = glyph->texture_rect.z;
+			h = glyph->texture_rect.w;
+
+			cmd.size.x = w;
+			cmd.size.y = h;
+			cmd.position.x = 10.0f + i * 18.0f;
+			cmd.position.y = 190.0f + sinf(engine->time_elapsed * 4.0f + i * 0.66f) * 10.0f;
+			pipeline_emit(&g_text_pipeline, &cmd);
+		}
 
 		cmd.size.x = w / 2;
 		cmd.size.y = h / 2;
@@ -535,6 +560,7 @@ static void draw(struct scene_battle_s *scene, struct engine_s *engine) {
 		cmd.position.y = 120.0f;
 		pipeline_emit(&g_text_pipeline, &cmd);
 
+		fontatlas_write(&g_card_font, &g_text_pipeline, "Foo*bar");
 	}
 	pipeline_draw_ortho(&g_text_pipeline, engine->window_width, engine->window_height);
 
