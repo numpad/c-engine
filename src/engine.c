@@ -241,9 +241,9 @@ void engine_setscene_dll(struct engine_s *engine, const char *filename) {
 
 	handle = dlopen(filename, RTLD_NOW | RTLD_GLOBAL | RTLD_DEEPBIND);
 
-	struct scene_planes_s *modscene = malloc(sizeof(*modscene));
-	void(*test_init)(struct scene_planes_s *scene, struct engine_s *) = dlsym(handle, "scene_planes_init");
-	test_init(modscene, engine);
+	struct scene_battle_s *modscene = malloc(sizeof(*modscene));
+	void(*init_fn)(struct scene_battle_s *scene, struct engine_s *) = dlsym(handle, "scene_battle_init");
+	init_fn(modscene, engine);
 
 	engine_setscene(engine, (struct scene_s *)modscene);
 

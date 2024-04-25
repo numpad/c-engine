@@ -292,13 +292,8 @@ static void load(struct scene_battle_s *scene, struct engine_s *engine) {
 		fontatlas_add_face(&g_card_font, "res/font/Inter-Bold.ttf", 32);
 		fontatlas_add_face(&g_card_font, "res/font/Inter-Italic.ttf", 32);
 		fontatlas_add_face(&g_card_font, "res/font/Inter-BoldItalic.ttf", 32);
-		fontatlas_add_glyphs(&g_card_font, 6, (ulong[]){'*', '+', '-', '@', '_', 0x2661});
-		for (unsigned long c = 'a'; c < 'z'; ++c) {
-			fontatlas_add_glyph(&g_card_font, c);
-		}
-		for (unsigned long c = 'A'; c < 'Z'; ++c) {
-			fontatlas_add_glyph(&g_card_font, c);
-		}
+		// printable ascii characters
+		fontatlas_add_ascii_glyphs(&g_card_font);
 
 		shader_init_from_dir(&g_text_shader, "res/shader/text/");
 		pipeline_init(&g_text_pipeline, &g_text_shader, 2048);
@@ -560,7 +555,9 @@ static void draw(struct scene_battle_s *scene, struct engine_s *engine) {
 		cmd.position.y = 120.0f;
 		pipeline_emit(&g_text_pipeline, &cmd);
 
-		fontatlas_write(&g_card_font, &g_text_pipeline, "Foo*bar");
+		static int n = 0;
+		n = (n + 1) % 1000;
+		fontatlas_writef(&g_card_font, &g_text_pipeline, "Foo*bar=%d", n);
 	}
 	pipeline_draw_ortho(&g_text_pipeline, engine->window_width, engine->window_height);
 

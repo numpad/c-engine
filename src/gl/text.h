@@ -40,11 +40,13 @@ void fontatlas_destroy(fontatlas_t *);
 // faces
 unsigned int fontatlas_add_face(fontatlas_t *, const char *filename, int size);
 // glyphs
-void fontatlas_add_glyphs(fontatlas_t *fa, unsigned int num_chars, unsigned long *chars);
 void fontatlas_add_glyph(fontatlas_t *, unsigned long glyph);
+void fontatlas_add_glyphs(fontatlas_t *fa, unsigned int num_chars, unsigned long *chars);
+void fontatlas_add_ascii_glyphs(fontatlas_t *fa);
 // rendering
 fontatlas_glyph_t *fontatlas_get_glyph(fontatlas_t *, unsigned long glyph, unsigned char face_index);
 void fontatlas_write(fontatlas_t *, pipeline_t *, char *fmt);
+void fontatlas_writef(fontatlas_t *, pipeline_t *, char *fmt, ...);
 
 #endif
 

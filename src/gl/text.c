@@ -1,6 +1,7 @@
 #include "text.h"
 
 #include <stdio.h>
+#include <stdarg.h>
 #include <assert.h>
 #include <SDL2/SDL.h>
 #include <SDL_opengles2.h>
@@ -116,15 +117,6 @@ unsigned int fontatlas_add_face(fontatlas_t *fa, const char *filename, int size)
 	return face_index;
 }
 
-void fontatlas_add_glyphs(fontatlas_t *fa, unsigned int num_chars, unsigned long *chars) {
-	assert(fa != NULL);
-	assert(num_chars > 0);
-
-	for (unsigned int i = 0; i < num_chars; ++i) {
-		fontatlas_add_glyph(fa, chars[i]);
-	}
-}
-
 void fontatlas_add_glyph(fontatlas_t *fa, unsigned long character) {
 	assert(fa != NULL);
 	assert(fa->num_faces > 0); // TODO: doesn't make sense as we wouldnt create any glyphs
@@ -147,7 +139,6 @@ void fontatlas_add_glyph(fontatlas_t *fa, unsigned long character) {
 			printf("no glyph for %c(0x%lX) and face %d\n", (char)character, character, face_index);
 			continue;
 		}
-		assert(glyph_index != 0);
 
 		FT_Error error;
 		error = FT_Load_Glyph(face, glyph_index, FT_LOAD_RENDER | FT_LOAD_TARGET_NORMAL);
@@ -183,6 +174,21 @@ void fontatlas_add_glyph(fontatlas_t *fa, unsigned long character) {
 
 	glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
 	glBindTexture(GL_TEXTURE_2D, 0);
+}
+
+void fontatlas_add_glyphs(fontatlas_t *fa, unsigned int num_chars, unsigned long *chars) {
+	assert(fa != NULL);
+	assert(num_chars > 0);
+
+	for (unsigned int i = 0; i < num_chars; ++i) {
+		fontatlas_add_glyph(fa, chars[i]);
+	}
+}
+
+void fontatlas_add_ascii_glyphs(fontatlas_t *fa) {
+	for (unsigned long c = 0x21; c < 0x7f; ++c) {
+		fontatlas_add_glyph(fa, c);
+	}
 }
 
 fontatlas_glyph_t *fontatlas_get_glyph(fontatlas_t *fa, unsigned long glyph, unsigned char face_index) {
@@ -222,5 +228,24 @@ void fontatlas_write(fontatlas_t *fa, pipeline_t *pipeline, char *fmt) {
 
 		pipeline_emit(pipeline, &cmd);
 	}
+}
+
+void fontatlas_writef(fontatlas_t *fa, pipeline_t *pipeline, char *fmt, ...) {
+	va_list args;
+
+	// determine length of string
+	va_start(args, fmt);
+	int length = vsnprintf(NULL, 0, fmt, args);
+	va_end(args);
+
+	// build output string
+	char output[length + 1];
+	assert(output != NULL);
+
+	va_start(args, fmt);
+	vsnprintf(output, length + 1, fmt, args);
+	va_end(args);
+
+	fontatlas_write(fa, pipeline, output);
 }
 
