@@ -25,7 +25,7 @@
     </head>
     <body>
 		<progress value="0"></progress>
-		<button onclick="onRunApp()">Run Game</button>
+		<button id="start_button" onclick="onRunApp()">Run Game</button>
 		<label>
 			<input type="checkbox" value="" id="start-with-fullscreen" />
 			Fullscreen?
@@ -36,8 +36,11 @@
 			/** Called when starting the game */
 			function onRunApp() {
 				const canvas = document.querySelector('#canvas');
+				const startButton = document.querySelector('#start_button');
+
 				let reload_sig = null;
 
+				startButton.disabled = true;
 				// Hijack back button
 				history.pushState(null, document.title, location.href);
 				window.addEventListener('popstate', (event) => {
