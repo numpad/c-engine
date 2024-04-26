@@ -557,7 +557,7 @@ static void draw(struct scene_battle_s *scene, struct engine_s *engine) {
 
 		static int n = 0;
 		n = (n + 1) % 1000;
-		fontatlas_writef(&g_card_font, &g_text_pipeline, "Foo*bar=%d", n);
+		fontatlas_writef(&g_card_font, &g_text_pipeline, "Foo*bar mimimi %d", n);
 	}
 	pipeline_draw_ortho(&g_text_pipeline, engine->window_width, engine->window_height);
 

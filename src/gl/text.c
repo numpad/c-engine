@@ -6,6 +6,8 @@
 #include <SDL2/SDL.h>
 #include <SDL_opengles2.h>
 #include <cglm/types.h>
+#include <hb.h>
+#include <hb-ft.h>
 #include "gl/texture.h"
 #include "util/util.h"
 
@@ -30,6 +32,7 @@ void text_global_destroy(void) {
 	}
 
 	FT_Done_FreeType(library);
+	library = NULL;
 }
 
 
@@ -53,7 +56,6 @@ static fontatlas_glyph_t *fa_find_glyph(fontatlas_t *fa, unsigned long glyph, un
 		}
 	}
 
-	printf("couldn't find %lu with face %d\n", glyph, face_index);
 	return NULL;
 }
 
@@ -110,7 +112,7 @@ unsigned int fontatlas_add_face(fontatlas_t *fa, const char *filename, int size)
 	//float ddpi, hdpi, vdpi;
 	//assert(SDL_GetDisplayDPI(0, &ddpi, &hdpi, &vdpi) == 0);
 	//printf("Diagonal DPI: %f, Horizontal DPI: %f, Vertical DPI: %f", ddpi, hdpi, vdpi);
-	//error = FT_Set_Char_Size(face, 0, 48*64, hdpi, vdpi); // 16 points
+	//error = FT_Set_Char_Size(fa->faces[face_index], 0, 48*64, hdpi, vdpi); // 16 points
 	error = FT_Set_Pixel_Sizes(fa->faces[face_index], 0, size);
 	assert(!error);
 
@@ -161,6 +163,8 @@ void fontatlas_add_glyph(fontatlas_t *fa, unsigned long character) {
 		fg->texture_rect.z = face->glyph->bitmap.width;
 		fg->texture_rect.w = face->glyph->bitmap.rows;
 		fg->face_index = face_index;
+		fg->bearing.x = face->glyph->bitmap_left;
+		fg->bearing.y = face->glyph->bitmap_top;
 
 		// store glyph bitmap
 		glTexSubImage2D(GL_TEXTURE_2D, 0,
@@ -174,15 +178,6 @@ void fontatlas_add_glyph(fontatlas_t *fa, unsigned long character) {
 
 	glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
 	glBindTexture(GL_TEXTURE_2D, 0);
-}
-
-void fontatlas_add_glyphs(fontatlas_t *fa, unsigned int num_chars, unsigned long *chars) {
-	assert(fa != NULL);
-	assert(num_chars > 0);
-
-	for (unsigned int i = 0; i < num_chars; ++i) {
-		fontatlas_add_glyph(fa, chars[i]);
-	}
 }
 
 void fontatlas_add_ascii_glyphs(fontatlas_t *fa) {
@@ -204,30 +199,45 @@ void fontatlas_write(fontatlas_t *fa, pipeline_t *pipeline, char *fmt) {
 
 	unsigned char face_index = 0;
 
-	const uint fmt_len = strlen(fmt);
-	float x = 0.0f;
+	hb_buffer_t *hb_buffer = hb_buffer_create();
+	hb_font_t *hb_font = hb_ft_font_create_referenced(fa->faces[face_index]);
 
-	for (unsigned int i = 0; i < fmt_len; ++i) {
-		unsigned int character = fmt[i];
-		// TODO: implement control characters
-		if (character == '*') {
-			face_index = 1;
+	hb_buffer_add_utf8(hb_buffer, fmt, -1, 0, -1);
+	hb_buffer_guess_segment_properties(hb_buffer);
+
+	hb_shape(hb_font, hb_buffer, NULL, 0);
+
+	unsigned int shaped_len = hb_buffer_get_length(hb_buffer);
+	hb_glyph_info_t *infos = hb_buffer_get_glyph_infos(hb_buffer, NULL);
+	hb_glyph_position_t *positions = hb_buffer_get_glyph_positions(hb_buffer, NULL);
+
+	vec2s cursor = {0};
+	for (unsigned int i = 0; i < shaped_len; ++i) {
+		unsigned int character = fmt[i]; // TODO: infos[i].codepoint?
+
+		if (character == ' ') {
+			cursor.x += 10;
 			continue;
 		}
+
+		// TODO: implement control characters
 		fontatlas_glyph_t *glyph_info = fontatlas_get_glyph(fa, character, face_index);
 		assert(glyph_info != NULL); // TODO: allow this, for spaces etc. maybe unicode placeholder?
 
 		drawcmd_t cmd = DRAWCMD_INIT;
-		cmd.position.x = 200.0f + x;
-		cmd.position.y = 150.0f;
+		cmd.position.x = 200.0f + cursor.x + positions[i].x_offset + glyph_info->bearing.x;
+		cmd.position.y = 100.0f + cursor.y + positions[i].y_offset - glyph_info->bearing.y;
 		cmd.size.x = glyph_info->texture_rect.z;
 		cmd.size.y = glyph_info->texture_rect.w;
 		drawcmd_set_texture_subrect(&cmd, pipeline->texture, glyph_info->texture_rect.x, glyph_info->texture_rect.y, glyph_info->texture_rect.z, glyph_info->texture_rect.w);
 
-		x += glyph_info->texture_rect.z;
-
 		pipeline_emit(pipeline, &cmd);
+		cursor.x += positions[i].x_advance / 64.0f;
+		cursor.y += positions[i].y_advance / 64.0f;
 	}
+
+	hb_buffer_destroy(hb_buffer);
+	hb_font_destroy(hb_font);
 }
 
 void fontatlas_writef(fontatlas_t *fa, pipeline_t *pipeline, char *fmt, ...) {

@@ -3,6 +3,7 @@
 
 #include <ft2build.h>
 #include FT_FREETYPE_H
+#include <cglm/cglm.h>
 #include "gl/texture.h"
 #include "gl/graphics2d.h"
 
@@ -21,6 +22,7 @@ struct fontatlas_glyph_s {
 	unsigned long code;
 	ivec4s texture_rect;
 	unsigned char face_index;
+	vec2s bearing;
 };
 
 struct fontatlas_s {
@@ -41,7 +43,6 @@ void fontatlas_destroy(fontatlas_t *);
 unsigned int fontatlas_add_face(fontatlas_t *, const char *filename, int size);
 // glyphs
 void fontatlas_add_glyph(fontatlas_t *, unsigned long glyph);
-void fontatlas_add_glyphs(fontatlas_t *fa, unsigned int num_chars, unsigned long *chars);
 void fontatlas_add_ascii_glyphs(fontatlas_t *fa);
 // rendering
 fontatlas_glyph_t *fontatlas_get_glyph(fontatlas_t *, unsigned long glyph, unsigned char face_index);
