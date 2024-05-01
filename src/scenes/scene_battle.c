@@ -40,6 +40,12 @@ enum event_type {
 	EVENT_TYPE_MAX,
 };
 
+enum card_selection {
+	CS_NOT_SELECTED = 0,
+	CS_SELECTED,
+	CS_SELECTED_INITIAL,
+};
+
 typedef struct event_info {
 	ecs_entity_t entity;
 } event_info_t;
@@ -75,7 +81,7 @@ typedef struct {
 typedef struct {
 	vec2s hand_target_pos;
 	float hand_space;
-	int   is_selected;
+	enum card_selection is_selected;
 	int   can_be_placed;
 	float added_at_time;
 } c_handcard;
@@ -297,7 +303,7 @@ static void load(struct scene_battle_s *scene, struct engine_s *engine) {
 		pipeline_init(&g_text_pipeline, &g_text_shader, 2048);
 		g_text_pipeline.texture = &g_card_font.texture_atlas;
 		pipeline_reset(&g_text_pipeline);
-		fontatlas_writef(&g_card_font, &g_text_pipeline, "live*ft mimimi %d", 123);
+		fontatlas_writef(&g_card_font, &g_text_pipeline, "   $BCARD$0 $1TIT$0LE");
 	}
 
 	// background
@@ -346,7 +352,7 @@ static void update(struct scene_battle_s *scene, struct engine_s *engine, float 
 		if (g_selected_card != 0 && ecs_is_valid(g_world, g_selected_card)) {
 			c_handcard *hc = ecs_get_mut(g_world, g_selected_card, c_handcard);
 			hc->hand_space = 0.4f;
-			hc->is_selected = 1;
+			hc->is_selected = CS_SELECTED_INITIAL;
 			ecs_modified(g_world, g_selected_card, c_handcard);
 
 			Mix_PlayChannel(-1, g_pick_card_sfx, 0);
@@ -362,7 +368,7 @@ static void update(struct scene_battle_s *scene, struct engine_s *engine, float 
 				on_game_event(EVENT_PLAY_CARD, &(event_info_t){ .entity = g_selected_card });
 			} else {
 				hc->hand_space = 1.0f;
-				hc->is_selected = 0;
+				hc->is_selected = CS_NOT_SELECTED;
 				ecs_modified(g_world, g_selected_card, c_handcard);
 				g_selected_card = 0;
 				Mix_PlayChannel(-1, g_slide_card_sfx, 0);
@@ -431,6 +437,7 @@ static void update(struct scene_battle_s *scene, struct engine_s *engine, float 
 		const int new_can_be_placed = (pos->y < g_engine->window_height - 128.0f);
 		const int can_be_placed_changed = (new_can_be_placed != hc->can_be_placed);
 		if (can_be_placed_changed) {
+			hc->is_selected = CS_SELECTED;
 			hc->hand_space = new_can_be_placed ? 0.4f : 1.0f;
 			hc->can_be_placed = new_can_be_placed;
 			ecs_modified(g_world, g_selected_card, c_handcard);
@@ -456,7 +463,7 @@ static void update(struct scene_battle_s *scene, struct engine_s *engine, float 
 		while (ecs_filter_next(&it)) {
 			if (it.count > 0) {
 				ecs_entity_t e = it.entities[0];
-				ecs_set(g_world, e, c_handcard, { .hand_space = 1.0f, .hand_target_pos = {0}, .is_selected = 0, .added_at_time=engine->time_elapsed });
+				ecs_set(g_world, e, c_handcard, { .hand_space = 1.0f, .hand_target_pos = {0}, .is_selected = CS_NOT_SELECTED, .added_at_time=engine->time_elapsed });
 				ecs_set(g_world, e, c_position, { .x = engine->window_width, .y = engine->window_height * 0.9f });
 				Mix_PlayChannel(-1, g_place_card_sfx, 0);
 			}
@@ -753,18 +760,25 @@ static void system_draw_cards(ecs_iter_t *it) {
 		const float p = ((float)i / glm_max(cards_count - 1, 1));
 		float angle = p * glm_rad(30.0f) - glm_rad(15.0f);
 
-		int is_selected = (handcards && handcards[i].is_selected);
+		int is_selected = (handcards && handcards[i].is_selected == CS_SELECTED);
 		int can_be_placed = (handcards && handcards[i].can_be_placed);
 		if (is_selected) {
 			angle = 0.0f;
 		}
 		float z_offset = is_selected * 0.1f;
-		
 		card_z += 0.01f;
 
+		float extra_scale = 1.0f;
+		if (handcards && handcards[i].is_selected == CS_SELECTED_INITIAL) {
+			angle = 0.0f;
+			card_pos->x = g_engine->window_width * 0.5f;
+			card_pos->y = g_engine->window_height * 0.5f;
+			extra_scale = 3.0f;
+		}
+
 		drawcmd_t cmd_card = DRAWCMD_INIT;
-		cmd_card.size.x = 90;
-		cmd_card.size.y = 128;
+		cmd_card.size.x = 90 * extra_scale;
+		cmd_card.size.y = 128 * extra_scale;
 		if (can_be_placed) {
 			angle = cosf(g_engine->time_elapsed * 18.0f) * 0.1f;
 		}
@@ -794,10 +808,10 @@ static void system_draw_cards(ecs_iter_t *it) {
 			int icon_tex_x = cards[i].icon_ids[icon_i] % 2;
 			int icon_tex_y = 4 + cards[i].icon_ids[icon_i] / 2.0f;
 			drawcmd_t cmd_icon = DRAWCMD_INIT;
-			cmd_icon.position.x = cmd_card.position.x + 7 + 12 * icon_i;
-			cmd_icon.position.y = cmd_card.position.y - 6;
+			cmd_icon.position.x = cmd_card.position.x + 7 + 12 * extra_scale * icon_i;
+			cmd_icon.position.y = cmd_card.position.y - 6 * extra_scale;
 			cmd_icon.position.z = cmd_card.position.z;
-			cmd_icon.size.x = cmd_icon.size.y = 20;
+			cmd_icon.size.x = cmd_icon.size.y = 20 * extra_scale;
 			cmd_icon.origin.x = cmd_icon.origin.y = 0.0f;
 			cmd_icon.origin.z = 45 - 7 - 12 * icon_i;
 			cmd_icon.origin.w = 64 + 6;
@@ -805,7 +819,8 @@ static void system_draw_cards(ecs_iter_t *it) {
 			drawcmd_set_texture_subrect_tile(&cmd_icon, g_cards_pipeline.texture, 32, 32, icon_tex_x, icon_tex_y);
 			pipeline_emit(&g_cards_pipeline, &cmd_icon);
 		}
-		// Flush / draw immediately instead of batching... TODO
+		// Flush / draw immediately instead of batching...
+		// This is needed so that text appears on top of the card, and isnt drawn below.
 		pipeline_draw_ortho(&g_cards_pipeline, g_engine->window_width, g_engine->window_height);
 		pipeline_reset(&g_cards_pipeline);
 
@@ -820,7 +835,7 @@ static void system_draw_cards(ecs_iter_t *it) {
 			},
 			cmd_card.angle, (vec3){0.0f, 0.0f, 1.0f}
 		);
-		glm_translate(model, (vec3){5, 64 + 11 + 5, 0});
+		glm_translate(model, (vec3){5, 64 * extra_scale + 11 + 5, 0});
 		pipeline_set_transform(&g_text_pipeline, model);
 		pipeline_draw_ortho(&g_text_pipeline, g_engine->window_width, g_engine->window_height);
 	}

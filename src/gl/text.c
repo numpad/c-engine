@@ -178,29 +178,67 @@ void fontatlas_write(fontatlas_t *fa, pipeline_t *pipeline, unsigned int str_len
 
 	unsigned char face_index = 0;
 
+	// shaping
 	hb_buffer_t *hb_buffer = hb_buffer_create();
 	hb_font_t *hb_font = hb_ft_font_create_referenced(fa->faces[face_index]);
-
+	// TODO: remove control characters from buffer...
 	hb_buffer_add_utf8(hb_buffer, str, str_len, 0, str_len);
 	hb_buffer_guess_segment_properties(hb_buffer);
-
 	hb_shape(hb_font, hb_buffer, NULL, 0);
-
 	unsigned int shaped_len = hb_buffer_get_length(hb_buffer);
 	//hb_glyph_info_t *infos = hb_buffer_get_glyph_infos(hb_buffer, NULL);
 	hb_glyph_position_t *positions = hb_buffer_get_glyph_positions(hb_buffer, NULL);
 
+	// control state
+	unsigned int last_character = 0;
+
 	vec2s cursor = {0};
+	drawcmd_t cmd = DRAWCMD_INIT;
 	for (unsigned int i = 0; i < shaped_len; ++i) {
 		unsigned int character = str[i]; // TODO: infos[i].codepoint?
-		// TODO: implement control characters
+
+		// handle ccontrol characters
+		if (character == '$' && i < shaped_len - 1 && str[i + 1] != '$') {
+			goto loop_end;
+		}
+		if (last_character == '$') {
+			int is_printable = 0;
+			switch (character) {
+				// 0-9 : Colors
+				case '0': // reset all
+					glm_vec4_zero(cmd.color_add);
+					face_index = 0;
+					break;
+				case '1': // red
+					glm_vec4_zero(cmd.color_add);
+					cmd.color_add[0] = 1.0f;
+					break;
+				case '2': // green
+					glm_vec4_zero(cmd.color_add);
+					cmd.color_add[1] = 1.0f;
+					break;
+				case '3': // blue
+					glm_vec4_zero(cmd.color_add);
+					cmd.color_add[2] = 1.0f;
+					break;
+				// B,I : Style
+				case 'B':
+					face_index = 1;
+					break;
+				case 'I':
+					face_index = 2;
+					break;
+
+				default: is_printable = 1; break;
+			};
+			if (!is_printable) goto loop_end;
+		}
 
 		fontatlas_glyph_t *glyph_info = fontatlas_get_glyph(fa, character, face_index);
 
 		// skip non-drawable characters
 		// TODO: differentiate between non-drawable and just not rasterized (yet?)
 		if (glyph_info) {
-			drawcmd_t cmd = DRAWCMD_INIT;
 			cmd.position.x = cursor.x + positions[i].x_offset + glyph_info->bearing.x;
 			cmd.position.y = cursor.y + positions[i].y_offset - glyph_info->bearing.y;
 			cmd.size.x = glyph_info->texture_rect.z;
@@ -211,6 +249,8 @@ void fontatlas_write(fontatlas_t *fa, pipeline_t *pipeline, unsigned int str_len
 
 		cursor.x += positions[i].x_advance / 64.0f;
 		cursor.y += positions[i].y_advance / 64.0f;
+loop_end:
+		last_character = character;
 	}
 
 	hb_buffer_destroy(hb_buffer);

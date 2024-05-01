@@ -9,7 +9,7 @@ varying vec4 v_color_add;
 #define RENDER_NORMAL
 
 void main() {
-	vec4 pixel = vec4(1.0, 0.0, 0.0, 1.0);
+	vec4 pixel = vec4(0.0, 0.0, 0.0, 1.0);
 
 #ifdef RENDER_SDF
 	float dist = texture2D(u_texture, v_texcoord).a;
@@ -21,9 +21,10 @@ void main() {
 #endif
 
 #ifdef RENDER_NORMAL
-	pixel = texture2D(u_texture, v_texcoord);
+	pixel.rgb = v_color_add.rgb;
+	pixel.a = texture2D(u_texture, v_texcoord).a;
 #endif
 
-	gl_FragColor = vec4(0.0, 0.0, 0.0, pixel.a); //clamp(pixel * v_color_mult + v_color_add, vec4(0.0), vec4(1.0));
+	gl_FragColor = pixel;
 }
 
