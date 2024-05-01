@@ -197,7 +197,7 @@ static void menu_draw(struct menu_s *menu, struct engine_s *engine) {
 	// build matrix
 	glm_mat4_identity(engine->u_view);
 	const float t_scale = ((engine->window_width - t_padding) / (float)t_width);
-	glm_translate(engine->u_view, (vec3){ t_padding * 0.5f, 100.0f + fabsf(sinf(engine->time_elapsed)) * -30.0f, 0.0f });
+	glm_translate(engine->u_view, (vec3){ t_padding * 0.5f, 180.0f + fabsf(sinf(engine->time_elapsed)) * -30.0f, 0.0f });
 	glm_scale(engine->u_view, (vec3){ t_scale, t_scale, t_scale });
 	isoterrain_draw(&g_terrain, engine);
 

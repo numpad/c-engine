@@ -26,6 +26,7 @@ struct fontatlas_glyph_s {
 };
 
 struct fontatlas_s {
+	FT_Library library_ref;
 	FT_Face *faces;
 	unsigned int num_faces;
 
@@ -37,7 +38,7 @@ struct fontatlas_s {
 };
 
 // init/destroy
-void fontatlas_init(fontatlas_t *);
+void fontatlas_init(fontatlas_t *, FT_Library);
 void fontatlas_destroy(fontatlas_t *);
 // faces
 unsigned int fontatlas_add_face(fontatlas_t *, const char *filename, int size);
@@ -46,7 +47,7 @@ void fontatlas_add_glyph(fontatlas_t *, unsigned long glyph);
 void fontatlas_add_ascii_glyphs(fontatlas_t *fa);
 // rendering
 fontatlas_glyph_t *fontatlas_get_glyph(fontatlas_t *, unsigned long glyph, unsigned char face_index);
-void fontatlas_write(fontatlas_t *, pipeline_t *, char *fmt);
+void fontatlas_write(fontatlas_t *, pipeline_t *, unsigned int str_len, char *str);
 void fontatlas_writef(fontatlas_t *, pipeline_t *, char *fmt, ...);
 
 #endif

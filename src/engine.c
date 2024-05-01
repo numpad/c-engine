@@ -8,6 +8,7 @@
 #undef NANOVG_GLES2_IMPLEMENTATION
 #include <stb_ds.h>
 #include <cJSON.h>
+#include "gl/text.h"
 #include "scenes/intro.h"
 #include "scenes/menu.h"
 #include "scenes/scene_battle.h"
@@ -100,6 +101,7 @@ struct engine_s *engine_new(void) {
 	engine->gameserver_tcp = NULL;
 	engine->gameserver_socketset = NULL;
 	engine->console_visible = 1;
+	engine->freetype = NULL;
 	console_init(engine->console);
 
 	if (engine->window == NULL) {
@@ -131,6 +133,11 @@ struct engine_s *engine_new(void) {
 	signal(SIGUSR2, on_sigusr2);
 #endif
 
+	// font system
+	if (FT_Init_FreeType(&engine->freetype) != 0) {
+		fprintf(stderr, "error: failed initializing freetype!\n");
+	}
+
 	// scene
 	struct intro_s *intro = malloc(sizeof(struct intro_s));
 	intro_init(intro, engine);
@@ -154,6 +161,10 @@ int engine_destroy(struct engine_s *engine) {
 	stbds_arrfree(engine->on_notify_callbacks);
 	console_destroy(engine->console);
 	free(engine->console);
+
+	// fonts
+	FT_Done_FreeType(engine->freetype);
+	engine->freetype = NULL;
 
 	// windowing
 	SDL_DestroyWindow(engine->window);

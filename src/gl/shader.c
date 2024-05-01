@@ -198,12 +198,9 @@ static GLint uniform_location(shader_t *shader, const char *uniform_name) {
 
 #ifdef DEBUG
 	if (u_location < 0) {
-		fprintf(stderr, "[err] no uniform \"%s\".\n", uniform_name);
+		fprintf(stderr, "[warn] uniform \"%s\" not found.\n", uniform_name);
 	}
-#else
-	assert(u_location >= 0);
 #endif
-
 
 	return u_location;
 }

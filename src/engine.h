@@ -6,6 +6,8 @@
 #include <SDL_opengles2.h>
 #include <cglm/cglm.h>
 #include <nanovg.h>
+#include <ft2build.h>
+#include FT_FREETYPE_H
 #include "scenes/scene.h"
 #include "input.h"
 
@@ -28,6 +30,7 @@ struct engine_s {
 	Uint32 window_id;
 	SDL_GLContext gl_ctx;
 	struct NVGcontext *vg;
+	FT_Library freetype;
 	
 	// window
 	int window_width, window_height;

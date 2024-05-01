@@ -2,6 +2,7 @@ precision mediump float;
 
 uniform mat4 u_projection;
 uniform mat4 u_view;
+uniform mat4 u_model;
 
 attribute vec3 a_pos;
 attribute vec2 a_texcoord;
@@ -17,6 +18,6 @@ void main() {
 	v_color_mult = a_color_mult;
 	v_color_add = a_color_add;
 
-	gl_Position = u_projection * u_view * vec4(a_pos, 1.0);
+	gl_Position = u_projection * u_view * u_model * vec4(a_pos, 1.0);
 }
 

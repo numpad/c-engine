@@ -285,19 +285,19 @@ static void load(struct scene_battle_s *scene, struct engine_s *engine) {
 
 	// text rendering
 	{
-		text_global_init();
-
-		fontatlas_init(&g_card_font);
-		fontatlas_add_face(&g_card_font, "res/font/Inter-Regular.ttf", 32);
-		fontatlas_add_face(&g_card_font, "res/font/Inter-Bold.ttf", 32);
-		fontatlas_add_face(&g_card_font, "res/font/Inter-Italic.ttf", 32);
-		fontatlas_add_face(&g_card_font, "res/font/Inter-BoldItalic.ttf", 32);
+		fontatlas_init(&g_card_font, engine->freetype);
+		fontatlas_add_face(&g_card_font, "res/font/NotoSans-Regular.ttf",    11);
+		fontatlas_add_face(&g_card_font, "res/font/NotoSans-Bold.ttf",       11);
+		fontatlas_add_face(&g_card_font, "res/font/NotoSans-Italic.ttf",     11);
+		fontatlas_add_face(&g_card_font, "res/font/NotoSans-BoldItalic.ttf", 11);
 		// printable ascii characters
 		fontatlas_add_ascii_glyphs(&g_card_font);
 
 		shader_init_from_dir(&g_text_shader, "res/shader/text/");
 		pipeline_init(&g_text_pipeline, &g_text_shader, 2048);
 		g_text_pipeline.texture = &g_card_font.texture_atlas;
+		pipeline_reset(&g_text_pipeline);
+		fontatlas_writef(&g_card_font, &g_text_pipeline, "live*ft mimimi %d", 123);
 	}
 
 	// background
@@ -333,7 +333,6 @@ static void destroy(struct scene_battle_s *scene, struct engine_s *engine) {
 
 	ecs_query_fini(g_ordered_handcards);
 	ecs_fini(g_world);
-	text_global_destroy();
 }
 
 
@@ -518,48 +517,6 @@ static void draw(struct scene_battle_s *scene, struct engine_s *engine) {
 	glDepthFunc(GL_LEQUAL);
 	pipeline_draw_ortho(&g_cards_pipeline, g_engine->window_width, g_engine->window_height);
 	glDisable(GL_DEPTH_TEST);
-
-	// draw text
-	pipeline_reset(&g_text_pipeline);
-	{
-		int w, h;
-		drawcmd_t cmd = DRAWCMD_INIT;
-
-		unsigned long foobar[] = {'F', 'o', 'o', 'b', 'a', 'r', 0x2661};
-		for (unsigned int i = 0; i < count_of(foobar); ++i) {
-			fontatlas_glyph_t *glyph = fontatlas_get_glyph(&g_card_font, foobar[i], 0);
-			if (glyph == NULL) continue;
-
-			drawcmd_set_texture_subrect(&cmd, g_text_pipeline.texture,
-					glyph->texture_rect.x, glyph->texture_rect.y, glyph->texture_rect.z, glyph->texture_rect.w);
-
-			w = glyph->texture_rect.z;
-			h = glyph->texture_rect.w;
-
-			cmd.size.x = w;
-			cmd.size.y = h;
-			cmd.position.x = 10.0f + i * 18.0f;
-			cmd.position.y = 190.0f + sinf(engine->time_elapsed * 4.0f + i * 0.66f) * 10.0f;
-			pipeline_emit(&g_text_pipeline, &cmd);
-		}
-
-		cmd.size.x = w / 2;
-		cmd.size.y = h / 2;
-		cmd.position.x = 35.0f;
-		cmd.position.y = 120.0f;
-		pipeline_emit(&g_text_pipeline, &cmd);
-
-		cmd.size.x = w;
-		cmd.size.y = h;
-		cmd.position.x = 75.0f;
-		cmd.position.y = 120.0f;
-		pipeline_emit(&g_text_pipeline, &cmd);
-
-		static int n = 0;
-		n = (n + 1) % 1000;
-		fontatlas_writef(&g_card_font, &g_text_pipeline, "Foo*bar mimimi %d", n);
-	}
-	pipeline_draw_ortho(&g_text_pipeline, engine->window_width, engine->window_height);
 
 	// draw ui
 	pipeline_reset(&g_ui_pipeline);
@@ -848,7 +805,24 @@ static void system_draw_cards(ecs_iter_t *it) {
 			drawcmd_set_texture_subrect_tile(&cmd_icon, g_cards_pipeline.texture, 32, 32, icon_tex_x, icon_tex_y);
 			pipeline_emit(&g_cards_pipeline, &cmd_icon);
 		}
+		// Flush / draw immediately instead of batching... TODO
+		pipeline_draw_ortho(&g_cards_pipeline, g_engine->window_width, g_engine->window_height);
+		pipeline_reset(&g_cards_pipeline);
 
+		// write text
+		mat4 model = GLM_MAT4_IDENTITY_INIT;
+		glm_translate(model, cmd_card.position.raw);
+		glm_rotate_at(model,
+			(vec3){
+				cmd_card.size.x * 0.5f,
+				cmd_card.size.y * 0.5f,
+				0
+			},
+			cmd_card.angle, (vec3){0.0f, 0.0f, 1.0f}
+		);
+		glm_translate(model, (vec3){5, 64 + 11 + 5, 0});
+		pipeline_set_transform(&g_text_pipeline, model);
+		pipeline_draw_ortho(&g_text_pipeline, g_engine->window_width, g_engine->window_height);
 	}
 }
 

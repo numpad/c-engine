@@ -9,31 +9,6 @@
 #include <hb.h>
 #include <hb-ft.h>
 #include "gl/texture.h"
-#include "util/util.h"
-
-
-static FT_Library library;
-
-void text_global_init(void) {
-	assert(library == NULL);
-
-	FT_Error error;
-
-	error = FT_Init_FreeType(&library);
-	if (error) {
-		printf("error initializing freetype!\n");
-		return;
-	}
-}
-
-void text_global_destroy(void) {
-	if (library == NULL) {
-		return;
-	}
-
-	FT_Done_FreeType(library);
-	library = NULL;
-}
 
 
 // font atlas
@@ -59,9 +34,11 @@ static fontatlas_glyph_t *fa_find_glyph(fontatlas_t *fa, unsigned long glyph, un
 	return NULL;
 }
 
-void fontatlas_init(fontatlas_t *fa) {
+void fontatlas_init(fontatlas_t *fa, FT_Library library) {
 	assert(fa != NULL);
+	assert(library != NULL);
 
+	fa->library_ref = library;
 	fa->faces = NULL;
 	fa->num_faces = 0;
 	fa->glyphs = NULL;
@@ -78,6 +55,7 @@ void fontatlas_init(fontatlas_t *fa) {
 void fontatlas_destroy(fontatlas_t *fa) {
 	assert(fa != NULL);
 
+	fa->library_ref = NULL;
 	for (unsigned int i = 0; i < fa->num_faces; ++i) {
 		FT_Done_Face(fa->faces[i]);
 	}
@@ -94,14 +72,13 @@ void fontatlas_destroy(fontatlas_t *fa) {
 unsigned int fontatlas_add_face(fontatlas_t *fa, const char *filename, int size) {
 	assert(fa != NULL);
 	assert(filename != NULL);
-	assert(library != NULL);
 	assert(fa->num_glyphs == 0); // TODO: update existing glyphs
 
 	fa_append_face_memory(fa);
 	unsigned int face_index = fa->num_faces - 1;
 
 	FT_Error error;
-	error = FT_New_Face(library, filename, 0, &(fa->faces[face_index]));
+	error = FT_New_Face(fa->library_ref, filename, 0, &(fa->faces[face_index]));
 	assert(!error);
 
 	// TODO: handle dpi correctly.
@@ -130,7 +107,6 @@ void fontatlas_add_glyph(fontatlas_t *fa, unsigned long character) {
 	static int free_x = 0;
 	static int free_y = 0;
 	static int height_max = 0;
-	const int padding = 2;
 
 	for (unsigned int face_index = 0; face_index < fa->num_faces; ++face_index) {
 		FT_Face face = fa->faces[face_index];
@@ -143,7 +119,7 @@ void fontatlas_add_glyph(fontatlas_t *fa, unsigned long character) {
 		}
 
 		FT_Error error;
-		error = FT_Load_Glyph(face, glyph_index, FT_LOAD_RENDER | FT_LOAD_TARGET_NORMAL);
+		error = FT_Load_Glyph(face, glyph_index, FT_LOAD_DEFAULT | FT_LOAD_TARGET_NORMAL); // FT_LOAD_RENDER??
 		assert(!error);
 
 		error = FT_Render_Glyph(face->glyph, FT_RENDER_MODE_NORMAL);
@@ -151,7 +127,7 @@ void fontatlas_add_glyph(fontatlas_t *fa, unsigned long character) {
 
 		if (free_x + face->glyph->bitmap.width >= fa->texture_atlas.width) {
 			free_x = 0;
-			free_y += height_max + padding;
+			free_y += height_max + fa->atlas_padding;
 			height_max = 0;
 		}
 
@@ -172,7 +148,7 @@ void fontatlas_add_glyph(fontatlas_t *fa, unsigned long character) {
 			GL_ALPHA, GL_UNSIGNED_BYTE,
 			face->glyph->bitmap.buffer);
 
-		free_x += face->glyph->bitmap.width + padding;
+		free_x += face->glyph->bitmap.width + fa->atlas_padding;
 		height_max = (fg->texture_rect.w > height_max) ? fg->texture_rect.w : height_max;
 	}
 
@@ -193,45 +169,46 @@ fontatlas_glyph_t *fontatlas_get_glyph(fontatlas_t *fa, unsigned long glyph, uns
 	return fa_find_glyph(fa, glyph, face_index);
 }
 
-void fontatlas_write(fontatlas_t *fa, pipeline_t *pipeline, char *fmt) {
+void fontatlas_write(fontatlas_t *fa, pipeline_t *pipeline, unsigned int str_len, char *str) {
 	assert(fa != NULL);
-	assert(fmt != NULL);
+	assert(str != NULL);
+	assert(str_len > 0);
+
+	pipeline_reset(pipeline);
 
 	unsigned char face_index = 0;
 
 	hb_buffer_t *hb_buffer = hb_buffer_create();
 	hb_font_t *hb_font = hb_ft_font_create_referenced(fa->faces[face_index]);
 
-	hb_buffer_add_utf8(hb_buffer, fmt, -1, 0, -1);
+	hb_buffer_add_utf8(hb_buffer, str, str_len, 0, str_len);
 	hb_buffer_guess_segment_properties(hb_buffer);
 
 	hb_shape(hb_font, hb_buffer, NULL, 0);
 
 	unsigned int shaped_len = hb_buffer_get_length(hb_buffer);
-	hb_glyph_info_t *infos = hb_buffer_get_glyph_infos(hb_buffer, NULL);
+	//hb_glyph_info_t *infos = hb_buffer_get_glyph_infos(hb_buffer, NULL);
 	hb_glyph_position_t *positions = hb_buffer_get_glyph_positions(hb_buffer, NULL);
 
 	vec2s cursor = {0};
 	for (unsigned int i = 0; i < shaped_len; ++i) {
-		unsigned int character = fmt[i]; // TODO: infos[i].codepoint?
+		unsigned int character = str[i]; // TODO: infos[i].codepoint?
+		// TODO: implement control characters
 
-		if (character == ' ') {
-			cursor.x += 10;
-			continue;
+		fontatlas_glyph_t *glyph_info = fontatlas_get_glyph(fa, character, face_index);
+
+		// skip non-drawable characters
+		// TODO: differentiate between non-drawable and just not rasterized (yet?)
+		if (glyph_info) {
+			drawcmd_t cmd = DRAWCMD_INIT;
+			cmd.position.x = cursor.x + positions[i].x_offset + glyph_info->bearing.x;
+			cmd.position.y = cursor.y + positions[i].y_offset - glyph_info->bearing.y;
+			cmd.size.x = glyph_info->texture_rect.z;
+			cmd.size.y = glyph_info->texture_rect.w;
+			drawcmd_set_texture_subrect(&cmd, pipeline->texture, glyph_info->texture_rect.x, glyph_info->texture_rect.y, glyph_info->texture_rect.z, glyph_info->texture_rect.w);
+			pipeline_emit(pipeline, &cmd);
 		}
 
-		// TODO: implement control characters
-		fontatlas_glyph_t *glyph_info = fontatlas_get_glyph(fa, character, face_index);
-		assert(glyph_info != NULL); // TODO: allow this, for spaces etc. maybe unicode placeholder?
-
-		drawcmd_t cmd = DRAWCMD_INIT;
-		cmd.position.x = 200.0f + cursor.x + positions[i].x_offset + glyph_info->bearing.x;
-		cmd.position.y = 100.0f + cursor.y + positions[i].y_offset - glyph_info->bearing.y;
-		cmd.size.x = glyph_info->texture_rect.z;
-		cmd.size.y = glyph_info->texture_rect.w;
-		drawcmd_set_texture_subrect(&cmd, pipeline->texture, glyph_info->texture_rect.x, glyph_info->texture_rect.y, glyph_info->texture_rect.z, glyph_info->texture_rect.w);
-
-		pipeline_emit(pipeline, &cmd);
 		cursor.x += positions[i].x_advance / 64.0f;
 		cursor.y += positions[i].y_advance / 64.0f;
 	}
@@ -245,17 +222,17 @@ void fontatlas_writef(fontatlas_t *fa, pipeline_t *pipeline, char *fmt, ...) {
 
 	// determine length of string
 	va_start(args, fmt);
-	int length = vsnprintf(NULL, 0, fmt, args);
+	int output_len = vsnprintf(NULL, 0, fmt, args);
 	va_end(args);
 
 	// build output string
-	char output[length + 1];
+	char output[output_len + 1];
 	assert(output != NULL);
 
 	va_start(args, fmt);
-	vsnprintf(output, length + 1, fmt, args);
+	vsnprintf(output, output_len + 1, fmt, args);
 	va_end(args);
 
-	fontatlas_write(fa, pipeline, output);
+	fontatlas_write(fa, pipeline, output_len, output);
 }
 
