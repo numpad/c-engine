@@ -514,10 +514,10 @@ static void draw(struct scene_battle_s *scene, struct engine_s *engine) {
 		ecs_run(g_world, ecs_id(system_turn_move_entities), engine->dt, NULL);
 	}
 	ecs_run(g_world, ecs_id(system_move_cards), engine->dt, NULL);
-	ecs_run(g_world, ecs_id(system_draw_cards), engine->dt, NULL);
 	ecs_run(g_world, ecs_id(system_draw_entities), engine->dt, NULL);
-
 	pipeline_draw(&g_entities_pipeline, engine);
+
+	ecs_run(g_world, ecs_id(system_draw_cards), engine->dt, NULL);
 
 	// draw cards
 	glEnable(GL_DEPTH_TEST);
