@@ -248,11 +248,6 @@ static void load(struct scene_battle_s *scene, struct engine_s *engine) {
 					isoterrain_set_block(&g_terrain, x, y, z, BLOCK_GRASS);
 				}
 				else if (z == 19) {
-					float noise = stb_perlin_noise3_seed(x / 10.0f, y / 10.0f, z / 10.0f, 0, 0, 0, time(NULL))
-								+ stb_perlin_noise3_seed(x /  3.0f, y /  3.0f, z /  3.0f, 0, 0, 0, time(NULL));
-					if (noise > 0.0f) {
-						isoterrain_set_block(&g_terrain, x, y, z, BLOCK_DIRT);
-					}
 				}
 			}
 		}
@@ -677,7 +672,7 @@ static void on_game_event_play_card(event_info_t *info) {
 
 	ecs_entity_t e = info->entity;
 
-	c_card *card = ecs_get(g_world, e, c_card);
+	const c_card *card = ecs_get(g_world, e, c_card);
 	printf("played card '%s'\n", card->name);
 
 	// remove card
@@ -801,7 +796,8 @@ static void system_draw_cards(ecs_iter_t *it) {
 		drawcmd_set_texture_subrect(&cmd_img, g_cards_pipeline.texture, 90 * (1 + cards[i].image_id % 4), 64 * floorf(cards[i].image_id / 4.0f), 90, 64);
 		pipeline_emit(&g_cards_pipeline, &cmd_img);
 		// card
-		drawcmd_set_texture_subrect_tile(&cmd_card, g_cards_pipeline.texture, 90, 128, 0, 0);
+		drawcmd_set_texture_subrect(&cmd_card, g_cards_pipeline.texture, 2, 226, 359, 512);
+
 		pipeline_emit(&g_cards_pipeline, &cmd_card);
 		// icons
 		for (int icon_i = 0; icon_i < cards[i].icon_ids_count; ++icon_i) {

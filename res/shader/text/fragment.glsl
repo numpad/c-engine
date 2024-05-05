@@ -17,7 +17,7 @@ void main() {
 	float smoothing = 1.0/5.0;
 	float border = 0.5;
 	float alpha = smoothstep(border - smoothing, border + smoothing, dist);
-	pixel = vec4(1.0, 1.0, 1.0, alpha);
+	pixel = vec4(v_color_add.rgb, alpha);
 #endif
 
 #ifdef RENDER_NORMAL

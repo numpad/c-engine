@@ -3,7 +3,6 @@
 #include <stdlib.h>
 #include <time.h>
 #include <math.h>
-#include <assert.h>
 #include <nanovg.h>
 #include <flecs.h>
 #include <cglm/cglm.h>

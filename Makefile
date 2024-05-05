@@ -42,6 +42,7 @@ SRC = main.c src/engine.c src/platform.c \
 	  $(wildcard lib/box2c/src/*.c) \
 	  lib/cJSON/cJSON.c \
 	  lib/flecs/flecs.c \
+	  lib/cgltf/cgltf.c \
 	  $(wildcard src/scenes/*.c)
 OBJ = $(addprefix $(BIN),$(SRC:.c=.o))
 
