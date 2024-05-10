@@ -19,6 +19,7 @@
 #include "gl/text.h"
 #include "game/isoterrain.h"
 #include "game/background.h"
+#include "game/model.h"
 #include "gui/console.h"
 #include "scenes/menu.h"
 #include "util/util.h"
@@ -147,6 +148,7 @@ static ecs_world_t  *g_world;
 static ecs_entity_t g_selected_card;
 static int          g_next_turn;
 static fontatlas_t  g_card_font;
+static model_t      g_model;
 
 // testing
 static Mix_Chunk    *g_place_card_sfx;
@@ -163,6 +165,8 @@ static void load(struct scene_battle_s *scene, struct engine_s *engine) {
 	g_handcards_updated = 0;
 	g_selected_card = 0;
 	g_next_turn = 0;
+
+	model_from_file(&g_model, "res/models/Knight.glb");
 
 	// ecs
 	g_world = ecs_init();
@@ -334,6 +338,8 @@ static void destroy(struct scene_battle_s *scene, struct engine_s *engine) {
 
 	ecs_query_fini(g_ordered_handcards);
 	ecs_fini(g_world);
+
+	model_destroy(&g_model);
 }
 
 
@@ -551,6 +557,24 @@ static void draw(struct scene_battle_s *scene, struct engine_s *engine) {
 		pipeline_emit(&g_ui_pipeline, &cmd);
 	}
 	pipeline_draw_ortho(&g_ui_pipeline, g_engine->window_width, g_engine->window_height);
+
+	// draw model
+	{
+		mat4 perspective = GLM_MAT4_IDENTITY_INIT;
+		glm_perspective(glm_rad(50.0f), g_engine->window_width / (float)g_engine->window_height, 1.0f, 100.0f, perspective);
+		mat4 model = GLM_MAT4_IDENTITY_INIT;
+		glm_translate(model, (vec3){ 0.0f, 0.0f, -5.0f });
+		glm_rotate_x(model, glm_rad(35.0f), model);
+		glm_rotate_y(model, glm_rad(g_engine->time_elapsed * 40.0f), model);
+		glm_mat4_scale(model, 0.5f);
+		mat4 mvp = GLM_MAT4_IDENTITY_INIT;
+		glm_mat4_mul(perspective, model, mvp);
+
+		glEnable(GL_DEPTH_TEST);
+		shader_set_uniform_mat4(&g_model.shader, "u_mvp", (float*)mvp);
+		model_draw(&g_model);
+		glDisable(GL_DEPTH_TEST);
+	}
 }
 
 

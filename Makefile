@@ -6,7 +6,7 @@ CFLAGS = -std=gnu99 -fPIC -Wall -Wextra -pedantic \
 		 -Werror=switch-enum -Wcast-qual -Wnull-dereference -Wunused-result \
 		 -DFLECS_CUSTOM_BUILD -DFLECS_SYSTEM -DFLECS_MODULE -DFLECS_PIPELINE -DFLECS_TIMER -DFLECS_HTTP -DFLECS_SNAPSHOT -DFLECS_PARSER -DFLECS_APP -DFLECS_OS_API_IMPL \
 		 # flecs needs gnu99
-INCLUDES = -I src/ -isystem /usr/include/SDL2 -isystem /usr/include/freetype2 -isystem /usr/include/harfbuzz -isystem lib/nanovg/src -isystem lib/stb -isystem lib/cglm/include -isystem lib/flecs -isystem lib/cJSON -isystem lib/box2c/include/ -isystem lib/box2c/extern/simde/
+INCLUDES = -I src/ -isystem /usr/include/SDL2 -isystem /usr/include/freetype2 -isystem /usr/include/harfbuzz -isystem lib/cgltf -isystem lib/nanovg/src -isystem lib/stb -isystem lib/cglm/include -isystem lib/flecs -isystem lib/cJSON -isystem lib/box2c/include/ -isystem lib/box2c/extern/simde/
 LIBS = -lm -lGL -lSDL2 -lSDL2_mixer -lSDL2_net -lfreetype -lharfbuzz
 
 BIN = bin/native/
@@ -32,7 +32,7 @@ endif
 
 SRC = main.c src/engine.c src/platform.c \
 	  src/gui/console.c src/gui/ugui.c \
-	  src/game/background.c src/game/terrain.c src/game/isoterrain.c \
+	  $(wildcard src/game/*.c) \
 	  $(wildcard src/util/*.c) \
 	  $(wildcard src/gl/*.c) \
 	  src/net/message.c \
@@ -73,7 +73,8 @@ $(BIN)%.o: %.c
 scenes: CFLAGS += -DDEBUG -ggdb -O0
 scenes: LIBS += -ldl
 scenes:
-	$(CC) $(CFLAGS) -shared -o scene_game.so $(INCLUDES) $(LIBS) src/scenes/scene_battle.c src/gl/text.c
+	$(CC) $(CFLAGS) -shared -o scene_game.so $(INCLUDES) $(LIBS) \
+		src/scenes/scene_battle.c src/game/model.c
 
 clean:
 	rm -rf $(BIN) $(TARGET) "$(TARGET).data" "$(TARGET).html" "$(TARGET).js" "$(TARGET).wasm"
