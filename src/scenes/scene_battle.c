@@ -166,7 +166,9 @@ static void load(struct scene_battle_s *scene, struct engine_s *engine) {
 	g_selected_card = 0;
 	g_next_turn = 0;
 
-	model_from_file(&g_model, "res/models/Knight.glb");
+	static int loads = 0;
+	const char *models[] = {"res/models/Knight.glb", "res/models/Mage.glb", "res/models/Barbarian.glb", "res/models/Rogue.glb"};
+	model_from_file(&g_model, models[loads++ % 4]);
 
 	// ecs
 	g_world = ecs_init();
@@ -560,18 +562,30 @@ static void draw(struct scene_battle_s *scene, struct engine_s *engine) {
 
 	// draw model
 	{
+		// calculate matrices
 		mat4 perspective = GLM_MAT4_IDENTITY_INIT;
-		glm_perspective(glm_rad(50.0f), g_engine->window_width / (float)g_engine->window_height, 1.0f, 100.0f, perspective);
+		glm_perspective(glm_rad(50.0f), g_engine->window_width / (float)g_engine->window_height, 1.0f, 50.0f, perspective);
+		mat4 view = GLM_MAT4_IDENTITY_INIT;
 		mat4 model = GLM_MAT4_IDENTITY_INIT;
-		glm_translate(model, (vec3){ 0.0f, 0.0f, -5.0f });
+		glm_translate(model, (vec3){ 0.0f, 0.0f, -7.0f });
 		glm_rotate_x(model, glm_rad(35.0f), model);
-		glm_rotate_y(model, glm_rad(g_engine->time_elapsed * 40.0f), model);
-		glm_mat4_scale(model, 0.5f);
-		mat4 mvp = GLM_MAT4_IDENTITY_INIT;
-		glm_mat4_mul(perspective, model, mvp);
+		glm_rotate_y(model, glm_rad(sinf(g_engine->time_elapsed * 2.0f) * 80.0f), model);
 
+		mat4 modelView = GLM_MAT4_IDENTITY_INIT;
+		mat4 mvp = GLM_MAT4_IDENTITY_INIT;
+		glm_mat4_mul(view, model, modelView);
+		glm_mat4_mul(perspective, modelView, mvp);
+
+		mat3 normalMatrix = GLM_MAT3_IDENTITY_INIT;
+		glm_mat4_pick3(modelView, normalMatrix);
+		glm_mat3_inv(normalMatrix, normalMatrix);
+		glm_mat3_transpose(normalMatrix);
+
+		// draw
 		glEnable(GL_DEPTH_TEST);
 		shader_set_uniform_mat4(&g_model.shader, "u_mvp", (float*)mvp);
+		shader_set_uniform_mat4(&g_model.shader, "u_modelView", (float*)modelView);
+		shader_set_uniform_mat3(&g_model.shader, "u_normalMatrix", (float*)normalMatrix);
 		model_draw(&g_model);
 		glDisable(GL_DEPTH_TEST);
 	}

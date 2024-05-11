@@ -118,6 +118,16 @@ void shader_set_uniform_vec4(shader_t *shader, const char *uniform_name, float v
 	glUniform4fv(u_location, 1, vec);
 }
 
+void shader_set_uniform_mat3(shader_t *shader, const char *uniform_name, float matrix[9]) {
+	assert(shader != NULL);
+	assert(shader->program > 0);
+	assert(uniform_name != NULL);
+
+	glUseProgram(shader->program);
+	GLint u_location = uniform_location(shader, uniform_name);
+	glUniformMatrix3fv(u_location, 1, GL_FALSE, matrix);
+}
+
 void shader_set_uniform_mat4(shader_t *shader, const char *uniform_name, float matrix[16]) {
 	assert(shader != NULL);
 	assert(shader->program > 0);

@@ -3,12 +3,14 @@
 
 #include <cgltf.h>
 #include "gl/shader.h"
+#include "gl/texture.h"
 
 typedef struct model_s {
 	cgltf_data *gltf_data;
 	shader_t shader;
 	unsigned int vertex_buffers[8];
 	unsigned int index_buffers[8];
+	texture_t textures[8];
 } model_t;
 
 

@@ -45,20 +45,12 @@ void texture_init_from_image(struct texture_s *texture, const char *source_path,
 		set_texparams_from_settings(GL_TEXTURE_2D, settings);
 		GLenum format;
 		switch (tn) {
-		case 1:
-			format = GL_RED_EXT;
-			break;
-		case 2:
-			format = GL_RG_EXT;
-			break;
-		case 3:
-			format = GL_RGB;
-			break;
-		case 4:
-			format = GL_RGBA;
-			break;
+		case 1: format = GL_RED_EXT; break;
+		case 2: format = GL_RG_EXT; break;
+		case 3: format = GL_RGB; break;
+		case 4: format = GL_RGBA; break;
 		default:
-			SDL_Log("could not determine channels in image \"%s\"...", source_path);
+			fprintf(stderr, "[warn] could not determine channels of image \"%s\"...\n", source_path);
 			return;
 		};
 		
@@ -71,7 +63,43 @@ void texture_init_from_image(struct texture_s *texture, const char *source_path,
 		glBindTexture(GL_TEXTURE_2D, 0);
 		stbi_image_free(tpixels);
 	}
+}
 
+void texture_init_from_memory(struct texture_s *texture, unsigned int data_len, const unsigned char *data, struct texture_settings_s *settings) {
+	int tw, th, tn;
+	stbi_set_flip_vertically_on_load(settings ? settings->flip_y : 1);
+	unsigned char *tpixels = stbi_load_from_memory(data, data_len, &tw, &th, &tn, 0);
+	stbi_set_flip_vertically_on_load(0);
+
+	assert(tpixels != NULL);
+
+	if (tpixels != NULL) {
+		texture->width = tw;
+		texture->height = th;
+
+		glGenTextures(1, &texture->texture);
+		glBindTexture(GL_TEXTURE_2D, texture->texture);
+		set_texparams_from_settings(GL_TEXTURE_2D, settings);
+		GLenum format;
+		switch (tn) {
+		case 1: format = GL_RED_EXT; break;
+		case 2: format = GL_RG_EXT; break;
+		case 3: format = GL_RGB; break;
+		case 4: format = GL_RGBA; break;
+		default:
+			fprintf(stderr, "[warn] could not determine channels of in-memory image...\n");
+			return;
+		};
+		
+		glTexImage2D(GL_TEXTURE_2D, 0, format, tw, th, 0, format, GL_UNSIGNED_BYTE, tpixels);
+
+		if (settings != NULL && settings->gen_mipmap) {
+			glGenerateMipmap(GL_TEXTURE_2D);
+		}
+
+		glBindTexture(GL_TEXTURE_2D, 0);
+		stbi_image_free(tpixels);
+	}
 }
 
 void texture_destroy(struct texture_s *texture) {

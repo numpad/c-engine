@@ -36,6 +36,7 @@ void shader_set_uniform_float  (shader_t *, const char *uniform_name, float);
 void shader_set_uniform_vec2   (shader_t *, const char *uniform_name, float[2]);
 void shader_set_uniform_vec3   (shader_t *, const char *uniform_name, float[3]);
 void shader_set_uniform_vec4   (shader_t *, const char *uniform_name, float[4]);
+void shader_set_uniform_mat3   (shader_t *, const char *uniform_name, float[9]);
 void shader_set_uniform_mat4   (shader_t *, const char *uniform_name, float[16]);
 
 #endif

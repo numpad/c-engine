@@ -30,6 +30,23 @@ static GLint accessor_to_component_size(cgltf_accessor *access) {
 	return num_components;
 }
 
+static const char* accessor_to_component_size_name(cgltf_accessor *access) {
+	switch (access->type) {
+		case cgltf_type_scalar  : return "cgltf_type_scalar";
+		case cgltf_type_vec2    : return "cgltf_type_vec2";
+		case cgltf_type_vec3    : return "cgltf_type_vec3";
+		case cgltf_type_vec4    : return "cgltf_type_vec4";
+		case cgltf_type_mat2    : return "cgltf_type_mat2";
+		case cgltf_type_mat3    : return "cgltf_type_mat3";
+		case cgltf_type_mat4    : return "cgltf_type_mat4";
+		case cgltf_type_invalid : return "cgltf_type_invalid";
+		case cgltf_type_max_enum: return "cgltf_type_max_enum";
+	}
+
+	return NULL;
+}
+
+
 static GLint accessor_to_component_type(cgltf_accessor *access) {
 	GLint comp_type = -1;
 	switch(access->component_type) {
@@ -72,12 +89,17 @@ void model_from_file(model_t *model, const char *path) {
 		return;
 	}
 
-	if (false) {
+	{ // find images
+		for (cgltf_size i = 0; i < data->materials_count; ++i) {
+			printf("Material #%ld:\n", i);
+			printf(" - name : \"%s\"\n", data->materials[i].name);
+		}
 		for (cgltf_size i = 0; i < data->images_count; ++i) {
 			printf("Image #%ld:\n", i);
 			printf(" - name      : \"%s\"\n", data->images[i].name);
 			printf(" - uri       : %s\n", data->images[i].uri);
 			printf(" - mime-type : %s\n", data->images[i].mime_type);
+			printf(" - size      : %zu\n", data->images[i].buffer_view->size);
 		}
 
 		for (cgltf_size i = 0; i < data->textures_count; ++i) {
@@ -89,19 +111,10 @@ void model_from_file(model_t *model, const char *path) {
 			printf("Sampler #%ld:\n", i);
 			printf(" - name : \"%s\"\n", data->samplers[i].name);
 		}
-
-		for (cgltf_size i = 0; i < data->animations_count; ++i) {
-			printf("Animation #%ld:\n", i);
-			printf(" - name     : \"%s\"\n", data->animations[i].name);
-			printf(" - channels : %ld\n", data->animations[i].channels_count);
-			printf(" - samplers : %ld\n", data->animations[i].samplers_count);
-		}
-
-		for (cgltf_size i = 0; i < data->materials_count; ++i) {
-			printf("Material #%ld:\n", i);
-			printf(" - name : \"%s\"\n", data->materials[i].name);
-		}
 	}
+
+	// setup shader
+	shader_init_from_dir(&model->shader, "res/shader/model/");
 
 	// load buffer data
 	assert(data->buffers_count < count_of(model->vertex_buffers));
@@ -110,54 +123,52 @@ void model_from_file(model_t *model, const char *path) {
 	for (cgltf_size i = 0; i < data->buffers_count; ++i) {
 		glBindBuffer(GL_ARRAY_BUFFER, model->vertex_buffers[i]);
 		glBufferData(GL_ARRAY_BUFFER, data->buffers[i].size, data->buffers[i].data, GL_STATIC_DRAW);
+		glBindBuffer(GL_ARRAY_BUFFER, 0);
+
 		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, model->index_buffers[i]);
 		glBufferData(GL_ELEMENT_ARRAY_BUFFER, data->buffers[i].size, data->buffers[i].data, GL_STATIC_DRAW);
-		glBindBuffer(GL_ARRAY_BUFFER, 0);
 		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-
-		printf("Buffer #%ld:\n", i);
-		printf(" - name  : \"%s\"\n", data->buffers[i].name);
-		printf(" - uri   : \"%s\"\n", data->buffers[i].uri);
-		printf(" - size  : %ld\n", data->buffers[i].size);
-		printf(" - @data : %p\n", data->buffers[i].data);
 	}
 
-	if (false) {
-		for (cgltf_size i = 0; i < data->buffer_views_count; ++i) {
-			printf("Buffer-View #%ld:\n", i);
-			printf(" - name : \"%s\"\n", data->buffer_views[i].name);
-			printf(" - type : %d\n", data->buffer_views[i].type);
-			printf(" - offset : %ld\n", data->buffer_views[i].offset);
-			printf(" - stride : %ld\n", data->buffer_views[i].stride);
-			printf(" - size : %ld\n", data->buffer_views[i].size);
-			printf(" - @data : %p\n", data->buffer_views[i].data);
-		}
+	// load materials
+	for (cgltf_size i = 0; i < data->materials_count; ++i) {
+		cgltf_material *mat = &data->materials[i];
+		assert(mat->has_pbr_metallic_roughness);
+		cgltf_texture_view *texture_view = &mat->pbr_metallic_roughness.base_color_texture;
 
-		for (cgltf_size i = 0; i < data->accessors_count; ++i) {
-			printf("Accessor #%ld:\n", i);
-			printf(" - name     : \"%s\"\n", data->accessors[i].name);
-			printf(" - comptype : %u\n", data->accessors[i].component_type);
-			printf(" - datatype : %u\n", data->accessors[i].type);
-			printf(" - nrmlz'd  : %b\n", data->accessors[i].normalized);
-			printf(" - offset   : %zb\n", data->accessors[i].offset);
-			printf(" - stride   : %zb\n", data->accessors[i].stride);
+		struct texture_settings_s settings = TEXTURE_SETTINGS_INIT;
+		settings.flip_y = 0;
+		if (texture_view->texture->image->uri != NULL) {
+			const char *image_path = texture_view->texture->image->uri;
+			fprintf(stderr, "[warn] loading image by uri is not supported & tested yet: \"%s\"...\n", image_path);
+			texture_init_from_image(&model->textures[0], image_path, &settings);
+		} else {
+			unsigned int image_data_len = data->images[i].buffer_view->size;
+			unsigned char *image_data = (unsigned char *)data->images[i].buffer_view->buffer->data + data->images[i].buffer_view->offset;
+			texture_init_from_memory(&model->textures[0], image_data_len, image_data, &settings);
 		}
+	}
 
-		for (cgltf_size i = 0; i < data->meshes_count; ++i) {
-			printf("Mesh #%ld:\n", i);
-			printf(" - name      : \"%s\"\n", data->meshes[i].name);
-			printf(" - primitives: %zu\n", data->meshes[i].primitives_count);
-			for (cgltf_size j = 0; j < data->meshes[i].primitives_count; ++j) {
-				for (cgltf_size k = 0; k < data->meshes[i].primitives[j].attributes_count; ++k) {
-					printf("   > attribute : \"%s\"\n", data->meshes[i].primitives[j].attributes[k].name);
+#ifndef NDEBUG
+	// Perform some validation: unused attributes, ...
+	glUseProgram(model->shader.program);
+	for (cgltf_size mesh_index = 0; mesh_index < model->gltf_data->meshes_count; ++mesh_index) {
+		cgltf_mesh *mesh = &model->gltf_data->meshes[mesh_index];
+		for (cgltf_size prim_index = 0; prim_index < mesh->primitives_count; ++prim_index) {
+			cgltf_primitive *primitive = &mesh->primitives[prim_index];
+			for (cgltf_size attrib_index = 0; attrib_index < primitive->attributes_count; ++attrib_index) {
+				cgltf_attribute *attrib = &primitive->attributes[attrib_index];
+				const GLint location = glGetAttribLocation(model->shader.program, attrib->name);
+				if (location < 0) {
+					fprintf(stderr, "[warn] attribute \"%s\" (%s) doesn't exist (or is unused).\n",
+							attrib->name, accessor_to_component_size_name(attrib->data));
 				}
 			}
 		}
 	}
-
-	shader_init_from_dir(&model->shader, "res/shader/model/");
+	glUseProgram(0);
+#endif
 }
-
 
 void model_draw(model_t *model) {
 	assert(model != NULL);
@@ -165,12 +176,20 @@ void model_draw(model_t *model) {
 	glUseProgram(model->shader.program);
 	glBindBuffer(GL_ARRAY_BUFFER, model->vertex_buffers[0]);
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, model->index_buffers[0]);
+	shader_set_uniform_texture(&model->shader, "u_diffuse", GL_TEXTURE0, &model->textures[0]);
 
-	for (cgltf_size mesh_index = 0; mesh_index < model->gltf_data->meshes_count; ++mesh_index) {
-		cgltf_mesh *mesh = &model->gltf_data->meshes[mesh_index];
+	for (cgltf_size node_index = 0; node_index < model->gltf_data->nodes_count; ++node_index) {
+		cgltf_node *node = &model->gltf_data->nodes[node_index];
+		// TODO: node->children
+
+		if (node->mesh == NULL) {
+			continue;
+		}
+		cgltf_mesh *mesh = node->mesh;
 
 		for (cgltf_size prim_index = 0; prim_index < mesh->primitives_count; ++prim_index) {
 			cgltf_primitive *primitive = &mesh->primitives[prim_index];
+			primitive->material->pbr_metallic_roughness.base_color_texture.texture->image->uri;
 
 			for (cgltf_size attrib_index = 0; attrib_index < primitive->attributes_count; ++attrib_index) {
 				cgltf_attribute *attrib = &primitive->attributes[attrib_index];
@@ -178,9 +197,9 @@ void model_draw(model_t *model) {
 
 				const int location = glGetAttribLocation(model->shader.program, attrib->name);
 				if (location < 0) {
-					fprintf(stderr, "[warn] attribute \"%s\" doesn't exist (or is unused).\n", attrib->name);
 					continue;
 				}
+
 				glVertexAttribPointer(location, accessor_to_component_size(access), accessor_to_component_type(access),
 					access->normalized, access->buffer_view->stride, (void *)access->buffer_view->offset);
 				glEnableVertexAttribArray(location);
@@ -194,8 +213,8 @@ void model_draw(model_t *model) {
 
 			// cleanup
 			for (cgltf_size attrib_index = 0; attrib_index < primitive->attributes_count; ++attrib_index) {
-				cgltf_attribute *attrib = &primitive->attributes[attrib_index];
-				const int location = glGetAttribLocation(model->shader.program, attrib->name);
+				char *attrib_name = primitive->attributes[attrib_index].name;
+				const int location = glGetAttribLocation(model->shader.program, attrib_name);
 				if (location >= 0) {
 					glDisableVertexAttribArray(location);
 				}
