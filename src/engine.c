@@ -252,10 +252,13 @@ void engine_setscene_dll(struct engine_s *engine, const char *filename) {
 
 	handle = dlopen(filename, RTLD_NOW | RTLD_GLOBAL | RTLD_DEEPBIND);
 
-	struct scene_battle_s *modscene = malloc(sizeof(*modscene));
-	void(*init_fn)(struct scene_battle_s *scene, struct engine_s *) = dlsym(handle, "scene_battle_init");
+#define SCENE_STRUCT scene_battle_s
+#define SCENE_INIT_FN "scene_battle_init"
+	struct SCENE_STRUCT *modscene = malloc(sizeof(*modscene));
+	void(*init_fn)(struct SCENE_STRUCT *scene, struct engine_s *) = dlsym(handle, SCENE_INIT_FN);
 	init_fn(modscene, engine);
-
+#undef SCENE_INIT_FN
+#undef SCENE_STRUCT
 	engine_setscene(engine, (struct scene_s *)modscene);
 
 }

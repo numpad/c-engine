@@ -65,11 +65,64 @@ static GLint accessor_to_component_type(cgltf_accessor *access) {
 	return comp_type;
 }
 
+static void draw_node(model_t *model, cgltf_node *node, mat4 modelmatrix) {
+	if (node->mesh != NULL) {
+		cgltf_mesh *mesh = node->mesh;
+
+		for (cgltf_size prim_index = 0; prim_index < mesh->primitives_count; ++prim_index) {
+			cgltf_primitive *primitive = &mesh->primitives[prim_index];
+
+			for (cgltf_size attrib_index = 0; attrib_index < primitive->attributes_count; ++attrib_index) {
+				cgltf_attribute *attrib = &primitive->attributes[attrib_index];
+				cgltf_accessor *access = attrib->data;
+
+				const int location = glGetAttribLocation(model->shader.program, attrib->name);
+				if (location < 0) {
+					continue;
+				}
+
+				glVertexAttribPointer(location, accessor_to_component_size(access), accessor_to_component_type(access),
+					access->normalized, access->buffer_view->stride, (void *)access->buffer_view->offset);
+				glEnableVertexAttribArray(location);
+			}
+
+			// calculate matrices
+			mat4 node_transform;
+			cgltf_node_transform_world(node, (float*)node_transform);
+			glm_mat4_mul(modelmatrix, node_transform, node_transform);
+			shader_set_uniform_mat4(&model->shader, "u_model", (float*)node_transform);
+
+			if (primitive->indices != NULL) {
+				glDrawElements(GL_TRIANGLES, primitive->indices->count, accessor_to_component_type(primitive->indices), (void*)primitive->indices->buffer_view->offset);
+			} else {
+				// TODO: glDrawArrays
+			}
+
+			// cleanup
+			for (cgltf_size attrib_index = 0; attrib_index < primitive->attributes_count; ++attrib_index) {
+				char *attrib_name = primitive->attributes[attrib_index].name;
+				const int location = glGetAttribLocation(model->shader.program, attrib_name);
+				if (location >= 0) {
+					glDisableVertexAttribArray(location);
+				}
+			}
+		}
+	}
+
+	// TODO: why not draw this? this duplicates everything
+	/*
+	for (cgltf_size child_index = 0; child_index < node->children_count; ++child_index) {
+		cgltf_node *child = node->children[child_index];
+		draw_node(model, child, modelmatrix);
+	}
+	*/
+}
+
 //////////////
 //  PUBLIC  //
 //////////////
 
-void model_from_file(model_t *model, const char *path) {
+void model_init_from_file(model_t *model, const char *path) {
 	assert(model != NULL);
 	assert(path != NULL);
 
@@ -113,6 +166,17 @@ void model_from_file(model_t *model, const char *path) {
 		}
 	}
 
+	{ // animations
+		for (cgltf_size skin_index = 0; skin_index < data->skins_count; ++skin_index) {
+			cgltf_skin *skin = &data->skins[skin_index];
+			printf("Skin: %s\n", skin->name);
+		}
+		for (cgltf_size anim_index = 0; anim_index < data->animations_count; ++anim_index) {
+			cgltf_animation *anim = &data->animations[anim_index];
+			printf("Anim: %s\n", anim->name);
+		}
+	}
+
 	// setup shader
 	shader_init_from_dir(&model->shader, "res/shader/model/");
 
@@ -137,15 +201,24 @@ void model_from_file(model_t *model, const char *path) {
 		cgltf_texture_view *texture_view = &mat->pbr_metallic_roughness.base_color_texture;
 
 		struct texture_settings_s settings = TEXTURE_SETTINGS_INIT;
-		settings.flip_y = 0;
+		settings.flip_y     = 0;
+		settings.filter_min = texture_view->texture->sampler->min_filter;
+		settings.filter_mag = texture_view->texture->sampler->mag_filter;
+		settings.wrap_s     = texture_view->texture->sampler->wrap_s;
+		settings.wrap_t     = texture_view->texture->sampler->wrap_t;
+
+		if (UTIL_IS_GL_FILTER_MIPMAP(settings.filter_min) || UTIL_IS_GL_FILTER_MIPMAP(settings.filter_mag)) {
+			settings.gen_mipmap = 1;
+		}
+
 		if (texture_view->texture->image->uri != NULL) {
 			const char *image_path = texture_view->texture->image->uri;
 			fprintf(stderr, "[warn] loading image by uri is not supported & tested yet: \"%s\"...\n", image_path);
-			texture_init_from_image(&model->textures[0], image_path, &settings);
+			texture_init_from_image(&model->texture0, image_path, &settings);
 		} else {
 			unsigned int image_data_len = data->images[i].buffer_view->size;
 			unsigned char *image_data = (unsigned char *)data->images[i].buffer_view->buffer->data + data->images[i].buffer_view->offset;
-			texture_init_from_memory(&model->textures[0], image_data_len, image_data, &settings);
+			texture_init_from_memory(&model->texture0, image_data_len, image_data, &settings);
 		}
 	}
 
@@ -170,56 +243,20 @@ void model_from_file(model_t *model, const char *path) {
 #endif
 }
 
-void model_draw(model_t *model) {
+void model_draw(model_t *model, mat4 projection, mat4 view, mat4 modelmatrix) {
 	assert(model != NULL);
 
 	glUseProgram(model->shader.program);
 	glBindBuffer(GL_ARRAY_BUFFER, model->vertex_buffers[0]);
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, model->index_buffers[0]);
-	shader_set_uniform_texture(&model->shader, "u_diffuse", GL_TEXTURE0, &model->textures[0]);
+	shader_set_uniform_texture(&model->shader, "u_diffuse", GL_TEXTURE0, &model->texture0);
+	shader_set_uniform_mat4(&model->shader, "u_projection", (float*)projection);
+	shader_set_uniform_mat4(&model->shader, "u_view", (float*)view);
 
+	// TODO: maybe use a stack based approach instead of doing recursion?
 	for (cgltf_size node_index = 0; node_index < model->gltf_data->nodes_count; ++node_index) {
 		cgltf_node *node = &model->gltf_data->nodes[node_index];
-		// TODO: node->children
-
-		if (node->mesh == NULL) {
-			continue;
-		}
-		cgltf_mesh *mesh = node->mesh;
-
-		for (cgltf_size prim_index = 0; prim_index < mesh->primitives_count; ++prim_index) {
-			cgltf_primitive *primitive = &mesh->primitives[prim_index];
-			primitive->material->pbr_metallic_roughness.base_color_texture.texture->image->uri;
-
-			for (cgltf_size attrib_index = 0; attrib_index < primitive->attributes_count; ++attrib_index) {
-				cgltf_attribute *attrib = &primitive->attributes[attrib_index];
-				cgltf_accessor *access = attrib->data;
-
-				const int location = glGetAttribLocation(model->shader.program, attrib->name);
-				if (location < 0) {
-					continue;
-				}
-
-				glVertexAttribPointer(location, accessor_to_component_size(access), accessor_to_component_type(access),
-					access->normalized, access->buffer_view->stride, (void *)access->buffer_view->offset);
-				glEnableVertexAttribArray(location);
-			}
-
-			if (primitive->indices != NULL) {
-				glDrawElements(GL_TRIANGLES, primitive->indices->count, accessor_to_component_type(primitive->indices), (void*)primitive->indices->buffer_view->offset);
-			} else {
-				// TODO: glDrawArrays
-			}
-
-			// cleanup
-			for (cgltf_size attrib_index = 0; attrib_index < primitive->attributes_count; ++attrib_index) {
-				char *attrib_name = primitive->attributes[attrib_index].name;
-				const int location = glGetAttribLocation(model->shader.program, attrib_name);
-				if (location >= 0) {
-					glDisableVertexAttribArray(location);
-				}
-			}
-		}
+		draw_node(model, node, modelmatrix);
 	}
 
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
@@ -234,5 +271,7 @@ void model_destroy(model_t *model) {
 	// TODO: delete index buffers
 	cgltf_free(model->gltf_data);
 	shader_destroy(&model->shader);
+
+	texture_destroy(&model->texture0);
 }
 

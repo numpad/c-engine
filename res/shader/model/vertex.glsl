@@ -1,7 +1,8 @@
 precision highp float;
 
-uniform mat4 u_mvp;
-uniform mat4 u_modelView;
+uniform mat4 u_projection;
+uniform mat4 u_view;
+uniform mat4 u_model;
 uniform mat3 u_normalMatrix;
 
 attribute vec3 POSITION;
@@ -15,6 +16,6 @@ void main() {
 	v_texcoord0 = TEXCOORD_0;
 	v_normal = normalize(u_normalMatrix * NORMAL);
 
-	gl_Position = u_mvp * vec4(POSITION, 1.0);
+	gl_Position = u_projection * u_view * u_model * vec4(POSITION, 1.0);
 }
 

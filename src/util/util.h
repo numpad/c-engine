@@ -12,6 +12,12 @@ typedef size_t usize;
 #define count_of(arr) (sizeof(arr) / sizeof(arr[0]))
 #define GL_CHECK_ERROR() gl_check_error(__FILE__, __LINE__)
 
+#define UTIL_IS_GL_FILTER_MIPMAP(filter)      \
+	(   (filter) == GL_NEAREST_MIPMAP_NEAREST \
+	 || (filter) == GL_NEAREST_MIPMAP_LINEAR  \
+	 || (filter) == GL_LINEAR_MIPMAP_NEAREST  \
+	 || (filter) == GL_LINEAR_MIPMAP_LINEAR)
+
 // math
 int point_in_rect(float px, float py, float x, float y, float w, float h);
 int nearest_pow2(int value);
