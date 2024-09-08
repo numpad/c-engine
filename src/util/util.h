@@ -1,6 +1,7 @@
 #ifndef UTIL_H
 #define UTIL_H
 
+#include <stdint.h>
 #include <stddef.h>
 
 
@@ -29,6 +30,20 @@ const char *str_match_bracket(const char *str, size_t len, char open, char close
 
 // gl utils
 int gl_check_error(const char *file, int line);
+
+
+// random numbers
+
+struct rng_state {
+	uint64_t s0;
+	uint64_t s1;
+};
+
+float rng_f(void);
+void  rng_seed(uint64_t seed);
+
+void  rng_save_state(struct rng_state *);
+void  rng_restore_state(struct rng_state *);
 
 #endif
 

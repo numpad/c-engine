@@ -1,6 +1,7 @@
 #include "util.h"
 
 #include <stdio.h>
+#include <stdint.h>
 #include <math.h>
 #include <assert.h>
 #include <SDL_opengles2.h>
@@ -74,3 +75,46 @@ int gl_check_error(const char *file, int line) {
 
 	return has_error;
 }
+
+// random numbers
+
+static struct rng_state rng_state = {
+	.s0 = 1234567890987654321ULL,
+	.s1 = 9876543210123456789ULL,
+};
+
+static uint64_t splitmix64(uint64_t *x) {
+	uint64_t z = (*x += 0x9e3779b97f4a7c15);
+	z = (z ^ (z >> 30)) * 0xbf58476d1ce4e5b9;
+	z = (z ^ (z >> 27)) * 0x94d049bb133111eb;
+	return z ^ (z >> 31);
+}
+
+static uint64_t xorshift128plus(void) {
+	uint64_t x = rng_state.s0;
+	uint64_t y = rng_state.s1;
+	rng_state.s0 = y;
+	x ^= x << 23;
+	rng_state.s1 = x ^ y ^ (x >> 17) ^ (y >> 26);
+	return rng_state.s1 + y;
+}
+
+/**
+ * Generate a random float in range [0..1]
+ */
+float rng_f(void) {
+	return (float)((xorshift128plus() >> 11) * (1.0 / 9007199254740992.0));
+}
+
+void rng_seed(uint64_t seed) {
+	rng_state.s0 = seed;
+	rng_state.s1 = splitmix64(&rng_state.s0);
+	rng_state.s0 = splitmix64(&rng_state.s0);
+}
+
+void rng_save_state(struct rng_state *) {
+}
+
+void rng_restore_state(struct rng_state *) {
+}
+
