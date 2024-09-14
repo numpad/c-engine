@@ -31,6 +31,9 @@ const char *str_match_bracket(const char *str, size_t len, char open, char close
 // gl utils
 int gl_check_error(const char *file, int line);
 
+// arg parsing
+int is_argv_set(int argc, char **argv, char *arg_to_check);
+
 
 // random numbers
 
@@ -40,6 +43,7 @@ struct rng_state {
 };
 
 float rng_f(void);
+float rng_fnd(void);
 void  rng_seed(uint64_t seed);
 
 void  rng_save_state(struct rng_state *);

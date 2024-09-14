@@ -1,29 +1,29 @@
 <!DOCTYPE html>
 <html lang="en">
-    <head>
-        <meta charset="utf-8">
+	<head>
+		<meta charset="utf-8">
 		<meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <meta http-equiv="X-UA-Compatible" content="chrome=1, IE=edge">
+		<meta http-equiv="X-UA-Compatible" content="chrome=1, IE=edge">
 		<link rel="manifest" href="/src/web/pwa/manifest.json">
-        <title>Demo – c-engine</title>
-        <style>
-            .fullwindow {
-                position: absolute;
-                top: 0px;
-                left: 0px;
-                margin: 0px;
-                border: 0;
-                width: 100%;
-                height: 100%;
-                overflow: hidden;
-                display: block;
-            }
+		<title>Demo – c-engine</title>
+		<style>
+			.fullwindow {
+				position: absolute;
+				top: 0px;
+				left: 0px;
+				margin: 0px;
+				border: 0;
+				width: 100%;
+				height: 100%;
+				overflow: hidden;
+				display: block;
+			}
 			#canvas.hidden {
 				display: none;
 			}
-        </style>
-    </head>
-    <body>
+		</style>
+	</head>
+	<body>
 		<progress value="0"></progress>
 		<button id="start_button" onclick="onRunApp()">Run Game</button>
 		<label>
@@ -34,7 +34,7 @@
 			<input type="checkbox" value="" id="start-with-clean-cache" />
 			Clean Cache?
 		</label>
-        <canvas class="hidden" id="canvas" oncontextmenu="event.preventDefault()"/>
+		<canvas class="hidden" id="canvas" oncontextmenu="event.preventDefault()"/>
 		<script type="text/javascript" src="soil_soldiers.js"></script>
 		<script>
 			/** Called when starting the game */
@@ -63,7 +63,7 @@
 				history.pushState(null, document.title, location.href);
 				window.addEventListener('popstate', (event) => {
 					// TODO: notify engine that back was pressed. Let engine
-					//       decide if we should prevent the event.
+					//	   decide if we should prevent the event.
 					reload_sig();
 					history.pushState(null, document.title, location.href);
 				});
@@ -96,7 +96,7 @@
 
 				});
 			}
-        </script>
+		</script>
 		<!-- {{{ SCRIPT }}} -->
 
 		<!-- PWA -->
@@ -111,6 +111,6 @@
 					});
 			}
 		</script>
-    </body>
+	</body>
 </html>
 

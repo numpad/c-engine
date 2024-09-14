@@ -66,7 +66,7 @@ struct engine_s {
 };
 
 // init & cleanup
-struct engine_s *engine_new(void);
+struct engine_s *engine_new(int argc, char **argv);
 int engine_destroy(struct engine_s *engine);
 
 // settings

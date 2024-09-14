@@ -65,7 +65,7 @@ void on_siggoback(void) {
 }
 
 
-struct engine_s *engine_new(void) {
+struct engine_s *engine_new(int argc, char **argv) {
 	if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_TIMER | SDL_INIT_GAMECONTROLLER | SDL_INIT_EVENTS) < 0) {
 		SDL_LogError(SDL_LOG_CATEGORY_ERROR, "failed initializing SDL: %s.\n", SDL_GetError());
 		return NULL;
@@ -140,15 +140,20 @@ struct engine_s *engine_new(void) {
 	}
 
 	// scene
-	struct intro_s *intro = malloc(sizeof(struct intro_s));
-	intro_init(intro, engine);
-	engine_setscene(engine, (struct scene_s *)intro);
+	if (is_argv_set(argc, argv, "--nosplash")) {
+		struct menu_s *menu = malloc(sizeof(struct menu_s));
+		scene_menu_init(menu, engine);
+		engine_setscene(engine, (struct scene_s *)menu);
+	} else {
+		struct intro_s *intro = malloc(sizeof(struct intro_s));
+		intro_init(intro, engine);
+		engine_setscene(engine, (struct scene_s *)intro);
+	}
 
-	on_window_resized(engine, engine->window_width, engine->window_height);
-	glClearColor(0.06f, 0.0f, 0.10f, 1.0f);
 
 	// camera
 	glm_mat4_identity(engine->u_view);
+	on_window_resized(engine, engine->window_width, engine->window_height);
 
 	return engine;
 }

@@ -1,6 +1,7 @@
 #include "util.h"
 
 #include <stdio.h>
+#include <string.h>
 #include <stdint.h>
 #include <math.h>
 #include <assert.h>
@@ -76,6 +77,24 @@ int gl_check_error(const char *file, int line) {
 	return has_error;
 }
 
+// arg parsing
+
+int is_argv_set(int argc, char **argv, char *arg_to_check) {
+	if (arg_to_check[0] == '-') ++arg_to_check;
+	if (arg_to_check[0] == '-') ++arg_to_check;
+
+	int arg_to_check_len = strnlen(arg_to_check, 64);
+	for (int i = 1; i < argc; ++i) {
+		char *arg = argv[i];
+		int is_dashed_arg = (arg[0] == '-' && arg[1] == '-');
+		if (is_dashed_arg && strncmp(arg + 2, arg_to_check, arg_to_check_len) == 0) {
+			return 1;
+		}
+	}
+	return 0;
+}
+
+
 // random numbers
 
 static struct rng_state rng_state = {
@@ -106,15 +125,31 @@ float rng_f(void) {
 	return (float)((xorshift128plus() >> 11) * (1.0 / 9007199254740992.0));
 }
 
+/**
+ * Generate a random float in range [0..1] using
+ * an approximated normal/gaussian distribution.
+ */
+float rng_fnd(void) {
+	const int iters = 12;
+	float sum = 0.0f;
+	for (int i = 0; i < iters; ++i) {
+		sum += rng_f();
+	}
+	return (sum / iters);
+}
+
 void rng_seed(uint64_t seed) {
 	rng_state.s0 = seed;
 	rng_state.s1 = splitmix64(&rng_state.s0);
 	rng_state.s0 = splitmix64(&rng_state.s0);
 }
 
-void rng_save_state(struct rng_state *) {
+void rng_save_state(struct rng_state *state) {
+	assert(state != NULL);
+	*state = rng_state;
 }
 
-void rng_restore_state(struct rng_state *) {
+void rng_restore_state(struct rng_state *state) {
+	rng_state = *state;
 }
 

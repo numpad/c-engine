@@ -7,7 +7,7 @@
 #include "engine.h"
 
 int main(int argc, char *argv[]) {
-	struct engine_s *engine = engine_new();
+	struct engine_s *engine = engine_new(argc, argv);
 	if (engine == NULL) {
 		SDL_Log("failed initializing engine...\n");
 		return 1;
