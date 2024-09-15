@@ -6,7 +6,17 @@ CFLAGS = -std=gnu99 -fPIC -Wall -Wextra -pedantic \
 		 -Werror=switch-enum -Wcast-qual -Wnull-dereference -Wunused-result \
 		 -DFLECS_CUSTOM_BUILD -DFLECS_SYSTEM -DFLECS_MODULE -DFLECS_PIPELINE -DFLECS_TIMER -DFLECS_HTTP -DFLECS_SNAPSHOT -DFLECS_PARSER -DFLECS_APP -DFLECS_OS_API_IMPL \
 		 # flecs needs gnu99
-INCLUDES = -I src/ -isystem /usr/include/SDL2 -isystem /usr/include/freetype2 -isystem /usr/include/harfbuzz -isystem lib/cgltf -isystem lib/nanovg/src -isystem lib/stb -isystem lib/cglm/include -isystem lib/flecs -isystem lib/cJSON -isystem lib/box2c/include/ -isystem lib/box2c/extern/simde/
+INCLUDES = -I src/ \
+		   -isystem /usr/include/SDL2 \
+		   -isystem /usr/include/freetype2 \
+		   -isystem /usr/include/harfbuzz \
+		   -isystem lib/cgltf \
+		   -isystem lib/nanovg/src \
+		   -isystem lib/stb \
+		   -isystem lib/cglm/include \
+		   -isystem lib/flecs \
+		   -isystem lib/cJSON \
+		   -isystem lib/box2d/include/
 LIBS = -lm -lGL -lSDL2 -lSDL2_mixer -lSDL2_net -lfreetype -lharfbuzz
 
 BIN = bin/native/
@@ -39,7 +49,7 @@ SRC = main.c src/engine.c src/platform.c \
 	  lib/nanovg/src/nanovg.c \
 	  lib/stb/stb_ds.c lib/stb/stb_perlin.c lib/stb/stb_image.c lib/stb/stb_rect_pack.c lib/stb/stb_truetype.c \
 	  $(wildcard lib/cglm/src/*.c) \
-	  $(wildcard lib/box2c/src/*.c) \
+	  $(wildcard lib/box2d/src/*.c) \
 	  lib/cJSON/cJSON.c \
 	  lib/flecs/flecs.c \
 	  lib/cgltf/cgltf.c \

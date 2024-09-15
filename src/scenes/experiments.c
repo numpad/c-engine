@@ -139,40 +139,40 @@ static void load(struct scene_experiments_s *scene, struct engine_s *engine) {
 	world_id = b2CreateWorld(&world_def);
 
 	{ // ground
-		ground_bodydef = b2_defaultBodyDef;
+		ground_bodydef = b2DefaultBodyDef();
 		ground_bodydef.type = b2_staticBody;
 		ground_bodydef.position = (b2Vec2){0.0f, 267.5f};
 		ground_bodyid = b2CreateBody(world_id, &ground_bodydef);
 
 		ground_polygon = b2MakeBox(200.0f, 20.0f);
 
-		ground_shapedef = b2_defaultShapeDef;
+		ground_shapedef = b2DefaultShapeDef();
 		ground_shapedef.friction = 0.7f;
 		ground_shapedef.restitution = 0.5f;
 		b2CreatePolygonShape(ground_bodyid, &ground_shapedef, &ground_polygon);
 	}
 	{ // left
-		leftwall_bodydef = b2_defaultBodyDef;
+		leftwall_bodydef = b2DefaultBodyDef();
 		leftwall_bodydef.type = b2_staticBody;
 		leftwall_bodydef.position = (b2Vec2){-200.0f, 100.0f};
 		leftwall_bodyid = b2CreateBody(world_id, &leftwall_bodydef);
 
 		leftwall_polygon = b2MakeBox(20.0f, 350.0f);
 
-		leftwall_shapedef = b2_defaultShapeDef;
+		leftwall_shapedef = b2DefaultShapeDef();
 		leftwall_shapedef.friction = 0.7f;
 		leftwall_shapedef.restitution = 0.5f;
 		b2CreatePolygonShape(leftwall_bodyid, &leftwall_shapedef, &leftwall_polygon);
 	}
 	{ // right
-		rightwall_bodydef = b2_defaultBodyDef;
+		rightwall_bodydef = b2DefaultBodyDef();
 		rightwall_bodydef.type = b2_staticBody;
 		rightwall_bodydef.position = (b2Vec2){200.0f, 100.0f};
 		rightwall_bodyid = b2CreateBody(world_id, &rightwall_bodydef);
 
 		rightwall_polygon = b2MakeBox(20.0f, 350.0f);
 
-		rightwall_shapedef = b2_defaultShapeDef;
+		rightwall_shapedef = b2DefaultShapeDef();
 		rightwall_shapedef.friction = 0.7f;
 		rightwall_shapedef.restitution = 0.5f;
 		b2CreatePolygonShape(rightwall_bodyid, &rightwall_shapedef, &rightwall_polygon);
@@ -240,7 +240,7 @@ static void update(struct scene_experiments_s *scene, struct engine_s *engine, f
 
 	// test physics
 	for (int i = 0; i < 2; ++i) {
-		b2World_Step(world_id, 1.0f / 20.0f, 8, 3);
+		b2World_Step(world_id, 1.0f / 20.0f, 8);
 		
 		b2ContactEvents contacts = b2World_GetContactEvents(world_id);
 		for (int j = 0; j < contacts.beginCount; ++j) {
@@ -327,7 +327,8 @@ static void draw(struct scene_experiments_s *scene, struct engine_s *engine) {
 	const size_t bodies_len = stbds_arrlen(body_ids);
 	for (size_t i = 0; i < bodies_len; ++i) {
 		b2Vec2 p = b2Body_GetPosition(body_ids[i]);
-		float angle = b2Body_GetAngle(body_ids[i]);
+		b2Rot rot = b2Body_GetRotation(body_ids[i]);
+		float angle = atan2f(-rot.c, rot.s);
 
 		draw_tile(vg, emojis[i]->tile, p.x, p.y, emojis[i]->scale, angle);
 	}
@@ -622,7 +623,7 @@ static void emoji_spawn(struct emoji *e) {
 	emojis_len = stbds_arrlen(emojis);
 
 	// add physics body
-	b2BodyDef body_def = b2_defaultBodyDef;
+	b2BodyDef body_def = b2DefaultBodyDef();
 	body_def.type = b2_dynamicBody;
 	body_def.position = (b2Vec2){e->pos[0], e->pos[1]};
 	body_def.linearVelocity = (b2Vec2){0.0f, 20.0f};
@@ -630,9 +631,9 @@ static void emoji_spawn(struct emoji *e) {
 	
 	b2Circle body_circle;
 	body_circle.radius = 75.0f * e->scale;
-	body_circle.point = (b2Vec2){0.0f, 0.0f};
+	body_circle.center = (b2Vec2){0.0f, 0.0f};
 
-	b2ShapeDef body_shape_def = b2_defaultShapeDef;
+	b2ShapeDef body_shape_def = b2DefaultShapeDef();
 	body_shape_def.density = 0.5f;
 	body_shape_def.friction = 0.7f;
 	body_shape_def.userData = (void *)e;
