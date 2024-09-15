@@ -8,9 +8,10 @@
 #include <cglm/struct.h>
 #include <stb_ds.h>
 #include "engine.h"
-#include "scenes/scene_battle.h"
+#include "scenes/battle.h"
 #include "scenes/experiments.h"
 #include "scenes/planes.h"
+#include "scenes/brickbreaker.h"
 #include "game/isoterrain.h"
 #include "game/background.h"
 #include "gui/ugui.h"
@@ -105,7 +106,7 @@ void on_end_search_friends(struct engine_s *);
 // scene callbacks
 //
 
-static void menu_load(struct menu_s *menu, struct engine_s *engine) {
+static void menu_load(struct scene_menu_s *menu, struct engine_s *engine) {
 	engine_set_clear_color(0.34f, 0.72f, 0.98f);
 	engine->console_visible = 0;
 
@@ -162,7 +163,7 @@ static void menu_load(struct menu_s *menu, struct engine_s *engine) {
 	g_entities[2].tile[1] = 4;
 }
 
-static void menu_destroy(struct menu_s *menu, struct engine_s *engine) {
+static void menu_destroy(struct scene_menu_s *menu, struct engine_s *engine) {
 	pipeline_destroy(&g_pipeline_entities);
 	shader_destroy(&g_shader_entities);
 	isoterrain_destroy(&g_terrain);
@@ -176,14 +177,14 @@ static void menu_destroy(struct menu_s *menu, struct engine_s *engine) {
 	texture_destroy(&g_entity_tex);
 }
 
-static void menu_update(struct menu_s *menu, struct engine_s *engine, float dt) {
+static void menu_update(struct scene_menu_s *menu, struct engine_s *engine, float dt) {
 	if (g_next_scene != NULL) {
 		engine_setscene(engine, g_next_scene);
 		g_next_scene = NULL;
 	}
 }
 
-static void menu_draw(struct menu_s *menu, struct engine_s *engine) {
+static void menu_draw(struct scene_menu_s *menu, struct engine_s *engine) {
 	NVGcontext *vg = engine->vg;
 	const float W2 = engine->window_width * 0.5f;
 	const float H2 = engine->window_height * 0.5f;
@@ -394,7 +395,7 @@ static void menu_draw(struct menu_s *menu, struct engine_s *engine) {
 	pipeline_draw(&g_pipeline_entities, engine);
 }
 
-static void menu_on_message(struct menu_s *menu, struct engine_s *engine, struct message_header *msg) {
+static void menu_on_message(struct scene_menu_s *menu, struct engine_s *engine, struct message_header *msg) {
 	switch (msg->type) {
 		case WELCOME_RESPONSE: {
 			struct welcome_response *response = (struct welcome_response *)msg;
@@ -456,7 +457,7 @@ static void menu_on_message(struct menu_s *menu, struct engine_s *engine, struct
 	}
 }
 
-void scene_menu_init(struct menu_s *menu, struct engine_s *engine) {
+void scene_menu_init(struct scene_menu_s *menu, struct engine_s *engine) {
 	// init scene base
 	scene_init((struct scene_s *)menu, engine);
 
@@ -488,10 +489,16 @@ static void switch_to_game_scene(struct engine_s *engine) {
 }
 
 static void switch_to_minigame_scene(struct engine_s *engine) {
-	struct scene_planes_s *scene = malloc(sizeof(struct scene_planes_s));
-	scene_planes_init(scene, engine);
+	/*
+	struct scene_brickbreaker_s *scene = malloc(sizeof(struct scene_brickbreaker_s));
+	scene_brickbreaker_init(scene, engine);
 	//engine_setscene(engine, (struct scene_s *)game_scene_planes);
 	g_next_scene = (struct scene_s *)scene;
+	*/
+	struct scene_experiments_s *scene = malloc(sizeof(struct scene_experiments_s));
+	scene_experiments_init(scene, engine);
+	g_next_scene = (struct scene_s *)scene;
+
 
 	platform_vibrate(PLATFORM_VIBRATE_TAP);
 }

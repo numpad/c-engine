@@ -8,10 +8,9 @@
 #undef NANOVG_GLES2_IMPLEMENTATION
 #include <stb_ds.h>
 #include <cJSON.h>
-#include "gl/text.h"
 #include "scenes/intro.h"
 #include "scenes/menu.h"
-#include "scenes/scene_battle.h"
+#include "scenes/brickbreaker.h"
 #include "gui/console.h"
 #include "net/message.h"
 #include "util/util.h"
@@ -141,12 +140,12 @@ struct engine_s *engine_new(int argc, char **argv) {
 
 	// scene
 	if (is_argv_set(argc, argv, "--nosplash")) {
-		struct menu_s *menu = malloc(sizeof(struct menu_s));
+		struct scene_menu_s *menu = malloc(sizeof(struct scene_menu_s));
 		scene_menu_init(menu, engine);
 		engine_setscene(engine, (struct scene_s *)menu);
 	} else {
-		struct intro_s *intro = malloc(sizeof(struct intro_s));
-		intro_init(intro, engine);
+		struct scene_intro_s *intro = malloc(sizeof(struct scene_intro_s));
+		scene_intro_init(intro, engine);
 		engine_setscene(engine, (struct scene_s *)intro);
 	}
 
@@ -528,7 +527,7 @@ static void engine_poll_events(struct engine_s *engine) {
 
 			// TODO: only switch if we're not in menu? need to be able to check scene type
 			// TODO: notify current scene about this
-			struct menu_s *menu_scene = malloc(sizeof(struct menu_s));
+			struct scene_menu_s *menu_scene = malloc(sizeof(struct scene_menu_s));
 			scene_menu_init(menu_scene, engine);
 			engine_setscene(engine, (struct scene_s *)menu_scene);
 		}

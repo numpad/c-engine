@@ -6,7 +6,7 @@
 
 struct engine_s;
 
-struct intro_s {
+struct scene_intro_s {
 	struct scene_s base;
 
 	float timer;
@@ -15,7 +15,7 @@ struct intro_s {
 	int logo_image_nvg;
 };
 
-void intro_init(struct intro_s *intro, struct engine_s *engine);
+void scene_intro_init(struct scene_intro_s *intro, struct engine_s *engine);
 
 #endif
 

@@ -1,4 +1,4 @@
-#include "scene_battle.h"
+#include "battle.h"
 
 #include <math.h>
 #include <time.h>
@@ -565,15 +565,16 @@ static void draw(struct scene_battle_s *scene, struct engine_s *engine) {
 		// calculate matrices
 		mat4 perspective = GLM_MAT4_IDENTITY_INIT;
 		//glm_perspective(glm_rad(50.0f), g_engine->window_width / (float)g_engine->window_height, 1.0f, 50.0f, perspective);
-		float size = 5.0f;
-		glm_ortho(-size, size, -size * g_engine->window_aspect, size * g_engine->window_aspect, 1.0f, 50.0f, perspective);
+		float size = engine->window_width;
+		glm_ortho(-size, size, -size * g_engine->window_aspect, size * g_engine->window_aspect, 1.0f, 500.0f, perspective);
 		mat4 view = GLM_MAT4_IDENTITY_INIT;
 		mat4 model = GLM_MAT4_IDENTITY_INIT;
-		glm_translate(model, (vec3){ 0.0f, 0.0f, -7.0f });
+		glm_translate(model, (vec3){ -100.0f, 0.0f, -200.0f });
 		glm_rotate_x(model, glm_rad(35.0f), model);
 		glm_rotate_y(model, glm_rad(sinf(g_engine->time_elapsed * 2.0f) * 80.0f), model);
+		glm_scale(model, (vec3){ 100.0f, 100.0f, 100.0f});
 
-		// TODO: also do this for every node, as the model matrix can change...
+		// TODO: also do this for every node, as the model matrix changes...
 		mat4 modelView = GLM_MAT4_IDENTITY_INIT;
 		glm_mat4_mul(view, model, modelView);
 		mat3 normalMatrix = GLM_MAT3_IDENTITY_INIT;
@@ -586,20 +587,48 @@ static void draw(struct scene_battle_s *scene, struct engine_s *engine) {
 		shader_set_uniform_mat3(&g_model.shader, "u_normalMatrix", (float*)normalMatrix);
 		model_draw(&g_model, perspective, view, model);
 		{
+			static float pos_x = 100.0f;
+			static float pos_y = 0.0f;
+			static float dir = 1.0f;
+			static float vel_y = 0.0f;
+			static float speed = 4.0f;
+
+			pos_x += speed * dir;
+			pos_y += vel_y;
+			vel_y -= 0.2f;
+			if (vel_y < -12.0f) vel_y = -12.0f;
+
+			if (pos_x + 35.0f >= g_engine->window_width) dir = -1.0f;
+			if (pos_x - 35.0f <= -g_engine->window_width) dir =  1.0f;
+			if (g_engine->input_drag.state == INPUT_DRAG_BEGIN) {
+
+				if (vel_y < 0.0f) {
+					pos_y += 30.0f;
+				}
+
+				vel_y = 8.0f;
+			}
+
+			if (pos_y + 150.0f < -g_engine->window_height) {
+				pos_y = 0.0f;
+			}
+
 			glm_mat4_identity(model);
-			glm_translate(model, (vec3){2.0f, 0.0f, -5.0f});
-			glm_rotate_y(model, glm_rad(90.0f), model);
+			glm_translate(model, (vec3){pos_x, pos_y, -100.0f});
+			glm_rotate_y(model, (engine->time_elapsed), model);
+			glm_scale(model, (vec3){ 100.0f, 100.0f, 100.0f});
 			model_draw(&g_model, perspective, view, model);
 
 			for (int i = 0; i < 7; ++i) {
-				const int x = i % 10;
-				const int y = i / 10.0f;
+				const int x = i % 7;
+				const int y = i / 7.0f;
 				glm_mat4_identity(model);
 				glm_translate(model, (vec3){
-					-4.0f + 1.2f * x,
-					g_engine->window_aspect * -5.0f + y * 2.2f + fmaxf(0.0f, sinf(g_engine->time_elapsed * 8.0f + 2.5f * x)),
-					-2.0f});
+					-270.0f + 90.0f * x,
+					-engine->window_height,
+					-100.0f});
 				glm_rotate_y(model, GLM_PI * ((164^x) % 3 ? -1 : 1) * (g_engine->time_elapsed), model);
+				glm_scale(model, (vec3){ 60.0f, 60.0f, 60.0f});
 				model_draw(&g_model, perspective, view, model);
 			}
 		}

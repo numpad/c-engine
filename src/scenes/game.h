@@ -6,14 +6,14 @@
 
 struct engine_s;
 
-struct game_s {
+struct scene_game_s {
 	struct scene_s base;
 	
 	struct terrain_s terrain;
 };
 
 
-void game_init(struct game_s *scene, struct engine_s *engine, int w, int h);
+void scene_game_init(struct scene_game_s *scene, struct engine_s *engine, int w, int h);
 
 #endif
 
