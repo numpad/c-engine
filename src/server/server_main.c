@@ -55,8 +55,8 @@ int main(int argc, char **argv) {
 	//nodelay(stdscr, TRUE);
 	//wtimeout(win_messages, 100);
 	wmove(win_messages, 0, 0);
-	console_log("[%s]  Server started on %s", fmt_time(time(NULL)), fmt_date(time(NULL)));
-	console_log("[%s]  PID : %ld\n", fmt_time(time(NULL)), (long)getpid());
+	console_log("Server started on %s", fmt_date(time(NULL)));
+	console_log("PID : %ld\n", (long)getpid());
 
 	// start bg services
 	pthread_t gameserver_thread;
@@ -189,7 +189,7 @@ static void serverui_on_input(const char *cmd, size_t cmd_len) {
 		if (input_len > 1) {
 			// TODO: remove. just sends the raw input for debugging purposes.
 			gameserver_send_raw(&gserver, NULL, (uint8_t *)input, input_len);
-			console_log("[%s] %s", fmt_time(time(NULL)), input);
+			console_log("%s", input);
 		}
 	}
 }
@@ -228,22 +228,28 @@ static const char *fmt_date(time_t rawtime) {
 
 static void console_log(char *fmt, ...) {
 	va_list args;
-	
-	// determine size
+
+	// determine message size
 	va_start(args, fmt);
-	int len = vsnprintf(NULL, 0, fmt, args);
-	char *buf = malloc((len + 1) * sizeof(char));
-	buf[len] = '\0';
+	int message_len = vsnprintf(NULL, 0, fmt, args);
+	char *message = malloc((message_len + 1) * sizeof(char));
+	message[message_len] = '\0';
 	va_end(args);
 
 	va_start(args, fmt);
-	vsnprintf(buf, len + 1, fmt, args);
+	vsnprintf(message, message_len + 1, fmt, args);
 	va_end(args);
+
+	char *full_fmt = "[%s]  %s";
+	int full_message_len = snprintf(NULL, 0, full_fmt, fmt_time(time(NULL)), message);
+	char *full_message = malloc((full_message_len + 1) * sizeof(char));
+	snprintf(full_message, full_message_len + 1, full_fmt, fmt_time(time(NULL)), message);
+	full_message[full_message_len] = '\0';
 
 	// write to queue
 	pthread_mutex_lock(&messagequeue_mutex);
 	assert(messagequeue_len < messagequeue_max);
-	messagequeue[messagequeue_len++] = buf;
+	messagequeue[messagequeue_len++] = full_message;
 	pthread_mutex_unlock(&messagequeue_mutex);
 
 }

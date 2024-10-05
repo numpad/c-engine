@@ -29,13 +29,15 @@ ifeq ($(CC), emcc)
 	# TODO: Add in release? -sWEBSOCKET_URL="wss://"
 	CFLAGS += -sWASM=1 \
 			  -sUSE_SDL=2 -sUSE_SDL_NET=2 -sUSE_SDL_MIXER=2 -sUSE_SDL_IMAGE=0 -sUSE_SDL_TTF=0 -sUSE_FREETYPE=1 -sUSE_HARFBUZZ=1 \
+			  -sMIN_WEBGL_VERSION=2 -sMAX_WEBGL_VERSION=2 \
 			  -sALLOW_MEMORY_GROWTH=1 \
 			  -sINITIAL_MEMORY=128MB -sTOTAL_STACK=64MB \
 			  -sEXPORTED_RUNTIME_METHODS=cwrap \
 			  -sEXPORTED_FUNCTIONS=_main,_on_siggoback \
 			  -sMODULARIZE=1 -sEXPORT_NAME="MyApp" \
 			  --preload-file res \
-			  --shell-file src/web/shell_start_on_click.html
+			  --shell-file src/web/shell_start_on_click.html \
+			  -msimd128 -msse2
 	TARGET = soil_soldiers.html
 	BIN = bin/emcc/
 endif
