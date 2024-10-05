@@ -85,6 +85,13 @@ void reset_ids_of_lobbies(void) {
 		ids_of_lobbies = NULL;
 	}
 }
+static struct { char text[100]; int type; } server_messages[64];
+static int server_messages_count;
+static void add_server_message(char *message, int type) {
+	strncpy(server_messages[server_messages_count].text, message, 100);
+	server_messages[server_messages_count].type = type;
+	++server_messages_count;
+}
 
 //
 // private functions
@@ -117,6 +124,8 @@ static void menu_load(struct scene_menu_s *menu, struct engine_s *engine) {
 	id_of_current_lobby = 0;
 	others_in_lobby = 0;
 	reset_ids_of_lobbies();
+
+	server_messages_count = 0;
 
 	// load font & icons
 	if (g_font == -1) g_font = nvgCreateFont(engine->vg, "Baloo", "res/font/Baloo-Regular.ttf");
@@ -339,6 +348,29 @@ static void menu_draw(struct scene_menu_s *menu, struct engine_s *engine) {
 
 			ugui_mainmenu_checkbox(engine, 50.0f, 110.0f, 90.0f, 45.0f, g_font, "Multiplayer", sinf(engine->time_elapsed * 3.0f) * 0.5f + 0.5f);
 
+			// debug multiplayer
+			nvgBeginPath(vg);
+			nvgRect(vg, 50.0f, 200.0f, 400.0f, 300.0f);
+			nvgFillColor(vg, nvgRGBf(1.0f, 0.9f, 0.95f));
+			nvgFill(vg);
+
+			nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_TOP);
+			nvgFontSize(vg, 16.0f);
+			for (int i = 0; i < server_messages_count; ++i) {
+				switch ((enum {RED, GREEN})server_messages[i].type) {
+					case RED:
+						nvgFillColor(vg, nvgRGBf(0.8f, 0.1f, 0.1f));
+						break;
+					case GREEN:
+						nvgFillColor(vg, nvgRGBf(0.1f, 0.8f, 0.1f));
+						break;
+					default:
+						nvgFillColor(vg, nvgRGBf(0.2f, 0.2f, 0.2f));
+						break;
+				}
+				nvgText(vg, 50.0f, 200.0f + 16.0f * i, server_messages[i].text, NULL);
+			}
+
 			// draw here...
 			nvgRestore(vg);
 		}
@@ -399,6 +431,7 @@ static void menu_on_message(struct scene_menu_s *menu, struct engine_s *engine, 
 	switch (msg->type) {
 		case WELCOME_RESPONSE: {
 			struct welcome_response *response = (struct welcome_response *)msg;
+			add_server_message("Received welcome from server!", 1);
 			break;
 		}
 		case LOBBY_CREATE_RESPONSE: {
@@ -439,6 +472,7 @@ static void menu_on_message(struct scene_menu_s *menu, struct engine_s *engine, 
 			break;
 		}
 		case LOBBY_LIST_RESPONSE: {
+			add_server_message("Lobby response!", 1);
 			reset_ids_of_lobbies();
 
 			struct lobby_list_response *response = (struct lobby_list_response *)msg;
@@ -447,6 +481,9 @@ static void menu_on_message(struct scene_menu_s *menu, struct engine_s *engine, 
 			}
 			break;
 		}
+		case MSG_DISCONNECTED:
+			add_server_message("Disconnected...", 0);
+			break;
 		case MSG_TYPE_UNKNOWN:
 		case MSG_TYPE_MAX:
 		case LOBBY_CREATE_REQUEST:
@@ -517,8 +554,10 @@ void on_begin_search_friends(struct engine_s *engine) {
 	if (engine->gameserver_tcp == NULL) {
 		if (engine_gameserver_connect(engine, "localhost") == 0) {
 			printf("\x1b[32mConnected to Server!\x1b[0m\n");
+			add_server_message("Connected to server!", 1);
 		} else {
 			printf("\x1b[31mFailed connecting to Server...\x1b[0m\n");
+			add_server_message("Connect failed :(", 0);
 		}
 	} else {
 		printf("Sent something...\n");

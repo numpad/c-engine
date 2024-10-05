@@ -314,6 +314,10 @@ void engine_gameserver_disconnect(struct engine_s *engine) {
 	engine->gameserver_ip.host = engine->gameserver_ip.port = 0;
 
 	if (engine->gameserver_tcp != NULL) {
+		if (engine->scene != NULL) {
+			scene_on_message(engine->scene, engine, &(struct message_header){ .type = MSG_DISCONNECTED });
+		}
+
 		// socketset
 		SDLNet_TCP_DelSocket(engine->gameserver_socketset, engine->gameserver_tcp);
 		SDLNet_FreeSocketSet(engine->gameserver_socketset);

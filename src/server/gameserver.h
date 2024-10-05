@@ -36,6 +36,8 @@ struct gameserver {
 	struct lws_context *lws;
 	struct session **sessions;
 
+	int shutdown_requested;
+
 	// callbacks
 	on_connect_fn    callback_on_connect;
 	on_disconnect_fn callback_on_disconnect;
@@ -60,6 +62,7 @@ struct session {
 // init & destroy
 int  gameserver_init         (struct gameserver *, uint16_t port);
 void gameserver_destroy      (struct gameserver *);
+void gameserver_shutdown     (struct gameserver *);
 
 //   main                            loop
 void gameserver_listen       (struct gameserver *);
@@ -74,6 +77,9 @@ int  filter_group            (struct session *o, struct session *t);
 int  filter_group_exclude    (struct session *o, struct session *t);
 int  filter_everybody        (struct session *o, struct session *t);
 int  filter_everybody_exclude(struct session *o, struct session *t);
+
+// session api
+char *gameserver_session_connection_type(struct session *);
 
 #endif
 

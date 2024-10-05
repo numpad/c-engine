@@ -63,10 +63,14 @@ void gameserver_destroy(struct gameserver *server) {
 	lws_context_destroy(server->lws);
 }
 
+void gameserver_shutdown(struct gameserver *server) {
+	server->shutdown_requested = 1;
+}
+
 // main loop
 void gameserver_listen(struct gameserver *server) {
-	while (1) {
-		lws_service(server->lws, 100);
+	while (!server->shutdown_requested) {
+		lws_service(server->lws, 0);
 	}
 }
 
@@ -143,6 +147,20 @@ void gameserver_send_filtered(struct gameserver *gserver, struct message_header 
 	}
 
 	free(json_str);
+}
+
+//
+// session api
+//
+
+char *gameserver_session_connection_type(struct session *s) {
+	assert(s != NULL);
+	switch (s->connection_type) {
+		case CONNECTION_TYPE_WEBSOCKET: return "Websocket";
+		case CONNECTION_TYPE_TCP: return "TCP";
+		case CONNECTION_TYPE_UNKNOWN: return "Unknown";
+	}
+	return NULL;
 }
 
 //

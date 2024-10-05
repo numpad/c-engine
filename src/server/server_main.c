@@ -11,6 +11,8 @@
 #include "net/message.h"
 #include "services/services.h"
 
+#define MAX_INPUT_BYTES 4096  // How many bytes the admin can write into the input box.
+
 //
 // logic
 //
@@ -20,6 +22,7 @@
 //
 
 static void serverui_on_input(const char *cmd, size_t cmd_len);
+static int serverui_is_input_command(const char *input, const char *command_name);
 
 static void *thread_run_gameserver(void *data);
 
@@ -55,8 +58,7 @@ int main(int argc, char **argv) {
 	//nodelay(stdscr, TRUE);
 	//wtimeout(win_messages, 100);
 	wmove(win_messages, 0, 0);
-	console_log("Server started on %s", fmt_date(time(NULL)));
-	console_log("PID : %ld\n", (long)getpid());
+	console_log("Server started with PID %ld at %s. Press Ctrl-c to exit.", (long)getpid(), fmt_date(time(NULL)));
 
 	// start bg services
 	pthread_t gameserver_thread;
@@ -93,7 +95,7 @@ int main(int argc, char **argv) {
 
 		// read input
 		int in_char = wgetch(win_input);
-		if (in_char == 127) {
+		if (in_char == 127 || in_char == 8) {
 			if (in_command_i > 0) {
 				--in_command_i;
 			}
@@ -104,6 +106,8 @@ int main(int argc, char **argv) {
 			in_command_i = 0;
 			werase(win_input);
 		} else if (in_char == 4 /* ^D */) {
+			console_log("Quitting...");
+			gameserver_shutdown(&gserver);
 			running = 0;
 		} else if (in_char == '\n') {
 			serverui_on_input(in_command, in_command_i);
@@ -129,7 +133,7 @@ int main(int argc, char **argv) {
 //
 
 static void server_on_connect(struct gameserver *gs, struct session *session) {
-	console_log("Client %d connected.", session->id);
+	console_log("%s Client %d connected.", gameserver_session_connection_type(session), session->id);
 
 	// send a welcome message
 	struct welcome_response res;
@@ -160,6 +164,25 @@ static void serverui_on_input(const char *cmd, size_t cmd_len) {
 	int is_command = (input[0] == '/');
 	if (is_command) {
 		console_log("%s", input);
+
+		if (serverui_is_input_command(input, "help")) {
+			console_log("- /help [cmd]    :  Get help for a specific command.");
+			console_log("- /status        :  Display server status info.");
+			console_log("- /clear         :  Clear the screen, same as <C-l>.");
+			console_log("- /logs [on/off] :  Enable or disable writing logs to disk.");
+		} else if (serverui_is_input_command(input, "status")) {
+			console_log("Status: OK");
+			console_log("PID: %d", getpid());
+			console_log("Clients: %d", stbds_arrlen(gserver.sessions));
+			for (int i = 0; i < stbds_arrlen(gserver.sessions); ++i) {
+				struct session *s = gserver.sessions[i];
+				console_log(" - %d <%s>", s->id, gameserver_session_connection_type(s));
+			}
+		} else if (serverui_is_input_command(input, "clear")) {
+			console_log("Not implemented :(");
+		} else {
+			console_log("Unrecognized command. See available commands with /help");
+		}
 		/*
 		if (strncmp(input, "/queue", strlen("/queue")) == 0) {
 			for (int i = 0; i < stbds_arrlen(sessions); ++i) {
@@ -192,6 +215,27 @@ static void serverui_on_input(const char *cmd, size_t cmd_len) {
 			console_log("%s", input);
 		}
 	}
+}
+
+static int serverui_is_input_command(const char *input, const char *cmd) {
+	int cmd_len = strnlen(cmd, MAX_INPUT_BYTES);
+	int input_len = strnlen(input, MAX_INPUT_BYTES);
+	char *input_cmd = NULL;
+	for (int i = 0; i < input_len; ++i) {
+		if (input[i] == '/' && (i + 1) < input_len) {
+			input_cmd = &input[i + 1];
+			break;
+		}
+	}
+	if (input_cmd == NULL) {
+		return 0;
+	}
+
+	int is_cmd_equal = (strncmp(input_cmd, cmd, cmd_len) == 0);
+	
+	char *input_cmd_after_end = input_cmd + cmd_len;
+	int is_cmd_terminated = (*input_cmd_after_end == ' ' || *input_cmd_after_end == '\0');
+	return (is_cmd_equal && is_cmd_terminated);
 }
 
 static WINDOW *create_messages_window(void) {
@@ -273,7 +317,7 @@ static void *thread_run_gameserver(void *data) {
 	gserver.callback_on_message = server_on_message;
 
 	// run
-	console_log("Starting Websocket server on :%d...", port);
+	console_log("Websocket server on :%d...", port);
 	gameserver_listen(&gserver);
 
 	// destroy
