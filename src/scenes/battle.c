@@ -165,7 +165,7 @@ static void load(struct scene_battle_s *scene, struct engine_s *engine) {
 	g_handcards_updated = 0;
 	g_selected_card = 0;
 	g_next_turn = 0;
-	console_log(engine, "Hello Battle.c!");
+	console_log(engine, "Starting battle scene!");
 
 	static int loads = 0;
 	const char *models[] = {"res/models/Knight.glb", "res/models/Mage.glb", "res/models/Barbarian.glb", "res/models/Rogue.glb"};

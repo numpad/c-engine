@@ -7,18 +7,22 @@ struct engine_s;
 
 enum console_msg_type {
 	CONSOLE_MSG_DEFAULT,
-	CONSOLE_MSG_SUCCESS
+	CONSOLE_MSG_SUCCESS,
+	CONSOLE_MSG_ERROR,
 };
 
 struct console_msg_s {
 	char *message;
 	double created_at;
+	float duration;
 
 	enum console_msg_type type;
+
+	float fade_in_animation;
 };
 
 struct console_s {
-	struct console_msg_s messages[64];
+	struct console_msg_s messages[16];
 	size_t messages_max;
 	size_t messages_count;
 
