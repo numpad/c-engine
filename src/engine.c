@@ -10,6 +10,7 @@
 #include <cJSON.h>
 #include "scenes/intro.h"
 #include "scenes/menu.h"
+#include "scenes/battle.h"
 #include "scenes/brickbreaker.h"
 #include "gui/console.h"
 #include "net/message.h"
@@ -122,6 +123,7 @@ struct engine_s *engine_new(int argc, char **argv) {
 	// libs
 	// TODO: _STENCIL_STROKES is a bit slower, check if needed
 	engine->vg = nvgCreateGLES2(NVG_ANTIALIAS | NVG_STENCIL_STROKES);
+	engine->font_default_bold = nvgCreateFont(engine->vg, "Inter Regular", "res/font/Inter-Bold.ttf");
 	engine->font_monospace = nvgCreateFont(engine->vg, "NotoSansMono", "res/font/NotoSansMono-Regular.ttf");
 
 	// custom events
@@ -224,10 +226,7 @@ static void on_window_resized(struct engine_s *engine, int w, int h) {
 
 void engine_setscene(struct engine_s *engine, struct scene_s *new_scene) {
 #ifdef DEBUG
-	static char text[256];
-	text[0] = '\0';
-	sprintf(text, "Switching to scene %p", (void*)new_scene);
-	console_add_message(engine->console, (struct console_msg_s){ text });
+	console_log(engine, "Switching to scene %p", (void*)new_scene);
 #endif
 
 	struct scene_s *old_scene = engine->scene;
@@ -262,8 +261,9 @@ void engine_setscene_dll(struct engine_s *engine, const char *filename) {
 	struct SCENE_STRUCT *modscene = malloc(sizeof(*modscene));
 	void(*init_fn)(struct SCENE_STRUCT *scene, struct engine_s *) = dlsym(handle, SCENE_INIT_FN);
 	init_fn(modscene, engine);
-#undef SCENE_INIT_FN
 #undef SCENE_STRUCT
+#undef SCENE_INIT_FN
+
 	engine_setscene(engine, (struct scene_s *)modscene);
 
 }
@@ -521,13 +521,13 @@ static void engine_poll_events(struct engine_s *engine) {
 
 		if (event.type == USR_EVENT_RELOAD) {
 			// only emit this in debug?
-			engine_setscene_dll(engine, "./scene_game.so");
+			engine_setscene_dll(engine, "./hotreload.so");
 		} else if (event.type == USR_EVENT_NOTIFY) {
 			for (int i = 0; i < stbds_arrlen(engine->on_notify_callbacks); ++i) {
 				engine->on_notify_callbacks[i](engine);
 			}
 		} else if (event.type == USR_EVENT_GOBACK) {
-			console_log(engine->console, "← Back");
+			console_log(engine, "← Back");
 
 			// TODO: only switch if we're not in menu? need to be able to check scene type
 			// TODO: notify current scene about this

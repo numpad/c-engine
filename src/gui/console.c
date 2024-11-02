@@ -2,39 +2,34 @@
 
 #include <string.h>
 #include <stdarg.h>
-#include <stb_ds.h>
 #include <nanovg.h>
 #include "engine.h"
 
+
+static void console_add_message(struct console_s *, struct console_msg_s msg);
+static void console_remove_message(struct console_s *, int message_i);
+
 // deep copy the message so that console can manage message lifetimes
-static void console_msg_copy(struct console_msg_s *from, struct console_msg_s *to) {
-	const size_t msg_len = strlen(from->message);
-	char *newmsg = malloc(msg_len * sizeof(char) + 1);
-	strcpy(newmsg, from->message);
-	to->message = newmsg;
-}
+static void console_msg_copy(struct console_msg_s *from, struct console_msg_s *to);
 
-static size_t console_new_messages_count(struct console_s *console) {
-	const int visible = stbds_arrlen(console->messages) - console->new_messages_from_index;
+static void get_color_for_msg(struct console_msg_s *, NVGcolor *bg, NVGcolor *fg, NVGcolor *outline);
 
-	return visible > 0 ? visible : 0;
-}
+////////////
+// PUBLIC //
+////////////
 
 void console_init(struct console_s *console) {
-	console->messages = NULL;
-	console->new_messages_from_index = 0;
+	console->messages_max = 64;
+	console->messages_count = 0;
 	console->input_text_maxlen = 1024;
 	console->input_text = malloc(console->input_text_maxlen * sizeof(char));
-	console->last_message_added_at = -1.0f;
 }
 
 void console_destroy(struct console_s *console) {
-	const size_t messages_len = stbds_arrlen(console->messages);
-	for (size_t i = 0; i < messages_len; ++i) {
+	for (size_t i = 0; i < console->messages_count; ++i) {
 		free(console->messages[i].message);
 	}
 
-	stbds_arrfree(console->messages);
 	free(console->input_text);
 	console->input_text_maxlen = 0;
 }
@@ -42,56 +37,62 @@ void console_destroy(struct console_s *console) {
 void console_update(struct console_s *console, struct engine_s *engine, float dt) {
 	const float msg_visibility_duration = 4.0f; // 4 seconds
 	
-	static float t = 0.0f;
-	t += dt;
-
-	if (console_new_messages_count(console) > 0) {
-		if (t >= msg_visibility_duration) {
-			t -= msg_visibility_duration;
-			console->new_messages_from_index++;
+	for (int i = 0; i < console->messages_count; ++i) {
+		struct console_msg_s *msg = &console->messages[i];
+		double alive_for = engine->time_elapsed - msg->created_at;
+		if (alive_for >= 4.0f) {
+			console_remove_message(console, i);
+			--i;
 		}
-	} else {
-		t = 0.0f;
 	}
 }
 
 void console_draw(struct console_s *console, struct engine_s *engine) {
 	NVGcontext *vg = engine->vg;
 
-	const float width = 210.0f;
-	const float height = 180.0f;
-	const float input_height = 20.0f;
-	const float x = 5.0f;
-	const float y = engine->window_height - height - 220.0f;
+	const float msg_h = 30.0f;
+	const float con_x = engine->window_width - 23.0f;
+	const float con_y = 60.0f;
 
-	const float input_y = y + height - input_height;
-
-	// chat messages
-	nvgBeginPath(vg);
-	nvgRect(vg, x, y, width, height - input_height);
-	nvgFillColor(vg, nvgRGBAf(0.1f, 0.1f, 0.1f, 0.4f));
-	nvgFill(vg);
-
-	// chat input
-	nvgBeginPath(vg);
-	nvgRect(vg, x, input_y, width, input_height);
-	nvgFillColor(vg, nvgRGBAf(0.2f, 0.2f, 0.2f, 0.4f));
-	nvgFill(vg);
-
+	nvgFontFaceId(vg, engine->font_default_bold);
 	nvgFontSize(vg, 12.0f);
-	const int msgs_len = stbds_arrlen(console->messages);
-	for (int i = console->new_messages_from_index; i < msgs_len; ++i) {
-		const int local_i = i - console->new_messages_from_index;
-		float bounds[4];
-		nvgTextBounds(vg, 0.0f, 0.0f, console->messages[i].message, NULL, bounds);
+	nvgTextAlign(vg, NVG_ALIGN_MIDDLE | NVG_ALIGN_RIGHT);
+	for (int i = 0; i < console->messages_count; ++i) {
+		struct console_msg_s *msg = &console->messages[i];
+		float text_w;
+		{
+			float bounds[4];
+			nvgTextBounds(vg, 0.0f, 0.0f, msg->message, NULL, bounds);
+			text_w = bounds[2] - bounds[0];
+		}
 
-		const float y_offset = (local_i + 1.0f) * (bounds[3] - bounds[1]);
+		const float y_offset = (i + 1.0f) * (msg_h + 6.0f);
+		const float msg_x = con_x;
+		const float msg_y = con_y + y_offset;
+
+		NVGcolor color_bg, color_fg, color_outline;
+		get_color_for_msg(msg, &color_bg, &color_fg, &color_outline);
+
+		// Draw background
 		nvgBeginPath(vg);
-		nvgFillColor(vg, nvgRGBf(1.0f, 1.0f, 1.0f));
-		nvgText(vg, x, y + y_offset, console->messages[i].message, NULL);
+		nvgRect(vg, con_x - text_w, con_y + y_offset - msg_h * 0.5f, text_w, msg_h);
+		nvgCircle(vg, msg_x - text_w, msg_y, msg_h * 0.5f);
+		nvgCircle(vg, msg_x - text_w + text_w, msg_y, msg_h * 0.5f);
+		nvgStrokeWidth(vg, 4.0f);
+		nvgStrokeColor(vg, color_outline);
+		nvgStroke(vg);
+		nvgFillColor(vg, color_bg);
+		nvgFill(vg);
+
+		// Draw text
+		nvgFontBlur(vg, 0.0f);
+		nvgFillColor(vg, color_fg);
+		nvgText(vg, con_x, con_y + y_offset + 1.0f, msg->message, NULL);
+
+		nvgFillColor(vg, nvgRGBAf(color_fg.r, color_fg.g, color_fg.b, color_fg.a * 0.5f));
+		nvgText(vg, con_x, con_y + y_offset + 1.0f, msg->message, NULL);
 	}
 
-	
 }
 
 void console_add_input_text(struct console_s *console, char *text) {
@@ -99,27 +100,64 @@ void console_add_input_text(struct console_s *console, char *text) {
 	strcat(console->input_text, text);
 }
 
-void console_add_message(struct console_s *console, struct console_msg_s msg) {
-	console_msg_copy(&msg, &msg);
-	stbds_arrput(console->messages, msg);
-}
-
-void console_log(struct console_s *console, char *fmt, ...) {
+void console_log(struct engine_s *engine, char *fmt, ...) {
 	va_list argp;
 
 	va_start(argp, fmt);
-	
-	int len = snprintf(NULL, 0, fmt, argp);
+	int len = vsnprintf(NULL, 0, fmt, argp);
 	char buf[len + 1];
-	buf[len] = '\0';
-
 	va_end(argp);
 
 	va_start(argp, fmt);
-	snprintf(buf, len, fmt, argp);
-
-	console_add_message(console, (struct console_msg_s){ .message = buf });
-
+	vsnprintf(buf, len + 1, fmt, argp);
 	va_end(argp);
 
+	console_add_message(engine->console, (struct console_msg_s){
+		.message = buf,
+		.created_at = engine->time_elapsed,
+		.type = (rand() % 2 == 0) ? CONSOLE_MSG_SUCCESS : CONSOLE_MSG_DEFAULT
+	});
+}
+
+////////////
+// STATIC //
+////////////
+
+static void console_add_message(struct console_s *console, struct console_msg_s msg) {
+	while (console->messages_count >= console->messages_max) {
+		console_remove_message(console, 0);
+	}
+
+	console_msg_copy(&msg, &console->messages[console->messages_count]);
+	++console->messages_count;
+}
+
+static void console_remove_message(struct console_s *console, int message_i) {
+	for (size_t i = message_i; i < console->messages_count; ++i) {
+		console->messages[i] = console->messages[i + 1];
+	}
+	--console->messages_count;
+}
+
+static void console_msg_copy(struct console_msg_s *from, struct console_msg_s *to) {
+	memcpy(to, from, sizeof(struct console_msg_s));
+	const size_t msg_len = strlen(from->message);
+	char *newmsg = malloc(msg_len * sizeof(char) + 1);
+	strcpy(newmsg, from->message);
+	to->message = newmsg;
+}
+
+static void get_color_for_msg(struct console_msg_s *msg, NVGcolor *bg, NVGcolor *fg, NVGcolor *outline) {
+	switch (msg->type) {
+	case CONSOLE_MSG_DEFAULT:
+		*bg      = nvgRGBf (1.0f, 1.0f, 1.0f);
+		*fg      = nvgRGBf (0.1f, 0.1f, 0.1f);
+		*outline = nvgRGBAf(1.0f, 1.0f, 1.0f, 0.7f);
+		break;
+	case CONSOLE_MSG_SUCCESS:
+		*bg      = nvgRGBf (0.4f, 0.84f, 0.32f);
+		*fg      = nvgRGBf (1.0f, 1.0f, 1.0f);
+		*outline = nvgRGBAf(0.55f, 0.9f, 0.5f, 0.7f);
+		break;
+	};
 }

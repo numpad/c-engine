@@ -62,7 +62,7 @@ struct engine_s {
 
 	// dumb state
 	int console_visible;
-	int font_monospace;
+	int font_default_bold, font_monospace;
 };
 
 // init & cleanup

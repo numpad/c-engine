@@ -15,8 +15,6 @@ static void switch_to_menu_scene(struct engine_s *engine) {
 }
 
 static void intro_load(struct scene_intro_s *scene, struct engine_s *engine) {
-	nvgCreateFont(engine->vg, "Inter Regular", "res/font/Inter-Regular.ttf");
-
 	scene->timer = 0.0f;
 	scene->time_passed = 0.0f;
 	scene->time_passed_max = 1.75f;
@@ -24,7 +22,7 @@ static void intro_load(struct scene_intro_s *scene, struct engine_s *engine) {
 	scene->logo_image_nvg = nvgCreateImage(engine->vg, "res/image/numpad.png", NVG_IMAGE_NEAREST);
 
 #ifdef DEBUG
-	console_add_message(engine->console, (struct console_msg_s){ "Debug-Build is enabled!" });
+	console_log(engine, "Debug-Build is enabled!");
 #endif
 }
 

@@ -12,6 +12,7 @@ const float g_bar_height = 60.0f;
 const float g_icon_size = 42.0f;
 const float g_bookmark_width = 110.0f;
 const float g_bookmark_pointyness = 30.0f;
+const float g_border_radius = 10.0f;
 
 //
 // private funcs
@@ -125,13 +126,82 @@ void ugui_mainmenu_icon(engine_t *engine, float x, const char *label, int icon, 
 	nvgText(vg, x, label_y, label, NULL);
 }
 
+
+//////////////////////
+// Modals & Windows //
+//////////////////////
+
+rendered_modal_t ugui_modal_begin(engine_t *engine) {
+	NVGcontext *vg = engine->vg;
+
+	const float padding_x = 60.0f;
+	const float modal_x = padding_x;
+	const float modal_y = 200.0f;
+	const float modal_w = engine->window_width - padding_x * 2.0f;
+	const float modal_h = engine->window_height - 200.0f - 150.0f;
+
+	// Shade background darker
+	nvgBeginPath(vg);
+	nvgFillColor(vg, nvgRGBA(0, 0, 0, 60));
+	nvgRect(vg, 0.0f, 0.0f, engine->window_width, engine->window_height);
+	nvgFill(vg);
+
+	// Shadow
+	nvgBeginPath(vg);
+	nvgFillColor(vg, nvgRGBA(0, 0, 0, 80));
+	nvgRoundedRect(vg, padding_x + 6.0f, 200.0f + 7.0f,
+			engine->window_width - padding_x * 2.0f, engine->window_height - 200.0f - 150.0f,
+			g_border_radius + 5.0f);
+	nvgFill(vg);
+
+	// Background
+	nvgBeginPath(vg);
+	nvgFillColor(vg, nvgRGBf(0.95f, 0.97f, 0.78f));
+	nvgRoundedRect(vg, padding_x, 200.0f,
+			engine->window_width - padding_x * 2.0f, engine->window_height - 200.0f - 150.0f,
+			g_border_radius);
+	nvgFill(vg);
+
+	// Prevent Overdraw
+	nvgScissor(vg, modal_x, modal_y, modal_w, modal_h);
+
+	// Restore state
+	nvgSave(vg);
+	nvgTranslate(vg, modal_x, modal_y);
+
+	return (rendered_modal_t) {
+		.vg = vg,
+		.width = modal_w,
+		.height = modal_h
+	};
+}
+
+void ugui_modal_end(rendered_modal_t modal) {
+	NVGcontext *vg = modal.vg;
+	nvgResetScissor(vg);
+
+	// Outline
+	nvgBeginPath(vg);
+	nvgRoundedRect(vg, 0.0f, 0.0f, modal.width, modal.height, g_border_radius);
+	nvgStrokeColor(vg, nvgRGBf(0.33f, 0.2f, 0.25f));
+	nvgStrokeWidth(vg, 3.5f);
+	nvgStroke(vg);
+
+	nvgRestore(vg);
+}
+
+
+///////////////////
+// UI Components //
+///////////////////
+
 void ugui_mainmenu_button(engine_t *engine, float x, float y, float w, float h, const char *text1, const char *text2, const char *subtext, int font, NVGcolor color_bg, NVGcolor color_bg_darker, NVGcolor color_text_outline, float is_pressed) {
 	assert(text1 != NULL);
 	NVGcontext *vg = engine->vg;
 	const float height_3d = 10.0f;
 	const float hp = glm_ease_elast_out(is_pressed) * 0.5f;
 
-	const float radius = 10.0f - 6.0f * hp;
+	const float radius = g_border_radius - 6.0f * hp;
 	const float active_outline_width = 13.5f * hp;
 
 	x = x - 7.0f * hp * 2.0f;

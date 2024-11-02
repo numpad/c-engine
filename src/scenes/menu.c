@@ -64,6 +64,8 @@ static float g_menu_camera_target_y = 0.0f;
 static struct isoterrain_s g_terrain;
 static shader_t g_shader_entities;
 static pipeline_t g_pipeline_entities;
+static int g_minigame_selection_visible = 0;
+static int g_minigame_covers = -1;
 
 // sfx
 static Mix_Chunk *g_sound_click = NULL;
@@ -85,9 +87,11 @@ void reset_ids_of_lobbies(void) {
 		ids_of_lobbies = NULL;
 	}
 }
-static struct { char text[100]; int type; } server_messages[64];
+static struct { char text[100]; int type; } server_messages[37];
 static int server_messages_count;
 static void add_server_message(char *message, int type) {
+	if (server_messages_count >= 37) server_messages_count = 0;
+
 	strncpy(server_messages[server_messages_count].text, message, 100);
 	server_messages[server_messages_count].type = type;
 	++server_messages_count;
@@ -102,12 +106,15 @@ static float menuitem_active(float menu_x, float bookmark_x, float bookmark_tx);
 
 // switch scenes
 static void switch_to_game_scene(struct engine_s *engine);
-static void switch_to_minigame_scene(struct engine_s *engine);
+static void switch_to_suika_scene(struct engine_s *engine);
+static void switch_to_asteroid_scene(struct engine_s *engine);
 
 // button callbacks
 static void on_start_game(struct engine_s *engine);
-void on_begin_search_friends(struct engine_s *);
-void on_end_search_friends(struct engine_s *);
+static void on_click_minigame_button(struct engine_s *engine);
+
+static void on_begin_search_friends(struct engine_s *);
+static void on_end_search_friends(struct engine_s *);
 
 //
 // scene callbacks
@@ -115,10 +122,10 @@ void on_end_search_friends(struct engine_s *);
 
 static void menu_load(struct scene_menu_s *menu, struct engine_s *engine) {
 	engine_set_clear_color(0.34f, 0.72f, 0.98f);
-	engine->console_visible = 0;
 
 	g_menu_camera = GLMS_VEC2_ZERO;
 	g_menu_camera_target_y = 0.0f;
+	g_minigame_selection_visible = 0;
 
 	g_search_friends_text = g_search_friends_texts[0];
 	id_of_current_lobby = 0;
@@ -129,9 +136,10 @@ static void menu_load(struct scene_menu_s *menu, struct engine_s *engine) {
 
 	// load font & icons
 	if (g_font == -1) g_font = nvgCreateFont(engine->vg, "Baloo", "res/font/Baloo-Regular.ttf");
-	if (g_menuicon_play == -1) g_menuicon_play = nvgCreateImage(engine->vg, "res/sprites/menuicon-dice.png", NVG_IMAGE_GENERATE_MIPMAPS);
-	if (g_menuicon_cards == -1) g_menuicon_cards = nvgCreateImage(engine->vg, "res/sprites/menuicon-cards.png", NVG_IMAGE_GENERATE_MIPMAPS);
-	if (g_menuicon_social == -1) g_menuicon_social = nvgCreateImage(engine->vg, "res/sprites/menuicon-camp.png", NVG_IMAGE_GENERATE_MIPMAPS);
+	if (g_menuicon_play == -1) g_menuicon_play = nvgCreateImage(engine->vg, "res/sprites/menuicon-dice.png", NVG_IMAGE_GENERATE_MIPMAPS | NVG_IMAGE_PREMULTIPLIED);
+	if (g_menuicon_cards == -1) g_menuicon_cards = nvgCreateImage(engine->vg, "res/sprites/menuicon-cards.png", NVG_IMAGE_GENERATE_MIPMAPS | NVG_IMAGE_PREMULTIPLIED);
+	if (g_menuicon_social == -1) g_menuicon_social = nvgCreateImage(engine->vg, "res/sprites/menuicon-camp.png", NVG_IMAGE_GENERATE_MIPMAPS | NVG_IMAGE_PREMULTIPLIED);
+	if (g_minigame_covers == -1) g_minigame_covers = nvgCreateImage(engine->vg, "res/image/covers/minigames.png", NVG_IMAGE_GENERATE_MIPMAPS);
 	// load sfx & music
 	if (g_sound_click == NULL) g_sound_click = Mix_LoadWAV("res/sounds/click_002.ogg");
 	if (g_sound_clickend == NULL) g_sound_clickend = Mix_LoadWAV("res/sounds/click_005.ogg");
@@ -248,7 +256,7 @@ static void menu_draw(struct scene_menu_s *menu, struct engine_s *engine) {
 				.bg1 = nvgRGBf(1.0f, 0.8f, 0.35f),
 				.bg2 = nvgRGBf(0.79f, 0.59f, 0.16f),
 				.outline = nvgRGBf(0.2f, 0.2f, 0.0f),
-				.on_click = &switch_to_minigame_scene,
+				.on_click = &on_click_minigame_button,
 			},
 			{
 				W2, H2 + 60.0f, W2 - 20.0f, H2 - 20.0f - 60.0f,
@@ -339,6 +347,78 @@ static void menu_draw(struct scene_menu_s *menu, struct engine_s *engine) {
 
 				ugui_mainmenu_button(engine, b->x, b->y, b->w, b->h, b->text1, b->text2, b->subtext, g_font, b->bg1, b->bg2, b->outline, (b == active_button) ? active_button_progress: 0.0f);
 			}
+
+			// Minigame Selection Modal Window
+			if (g_minigame_selection_visible) {
+				rendered_modal_t modal = ugui_modal_begin(engine);
+
+				// Title text
+				nvgFontFaceId(vg, g_font);
+				nvgTextAlign(vg, NVG_ALIGN_TOP | NVG_ALIGN_LEFT);
+				nvgFontSize(vg, 24.0f);
+				nvgFillColor(vg, nvgRGBf(0.4f, 0.41f, 0.24f));
+				nvgText(vg, 16.0f, 16.0f, "CHOOSE A GAME", NULL);
+
+				// Carousel Item
+				{
+					const NVGpaint image_paint = nvgImagePattern(vg,
+							75.0f, 60.0f, 512.0f, 256.0f,
+							0.0f, g_minigame_covers, 1.0f);
+					const NVGpaint shine_overlay = nvgRadialGradient(vg,
+							125.0f, 125.0f, 10.0f, 250.0f,
+							nvgRGBAf(1.0f, 1.0f, 1.0f, 0.03f), nvgRGBAf(1.0f, 1.0f, 1.0f, 0.0f));
+					// Cover Image
+					nvgBeginPath(vg);
+					nvgRoundedRect(vg, 75.0f, 60.0f, 150.0f, 256.0f, 8.0f);
+					nvgFillPaint(vg, image_paint);
+					nvgFill(vg);
+					// Shine Overlay
+					nvgBeginPath(vg);
+					nvgRoundedRect(vg, 75.0f, 60.0f, 150.0f, 256.0f, 8.0f);
+					nvgFillPaint(vg, shine_overlay);
+					nvgFill(vg);
+					// Outline
+					nvgBeginPath(vg);
+					nvgRoundedRect(vg, 75.0f, 60.0f, 150.0f, 256.0f, 8.0f);
+					nvgStrokeColor(vg, nvgRGBf(0.33f, 0.2f, 0.25f));
+					nvgStrokeWidth(vg, 2.5f);
+					nvgStroke(vg);
+
+					// Name Box
+					nvgBeginPath(vg);
+					nvgRoundedRect(vg, 75.0f, 60.0f + 256.0f + 13.0f, 150.0f, 36.0f, 8.0f);
+					nvgFillColor(vg, nvgRGBf(1.0f, 1.0f, 0.9f));
+					nvgFill(vg);
+
+					// Carousel Inner Shadows
+					{
+						NVGcolor inner = nvgRGBA(0, 0, 0, 100);
+						NVGcolor outer = nvgRGBA(0, 0, 0, 0);
+						// Body
+						NVGpaint gradient_shadow_left = nvgLinearGradient(vg, 0.0f, 0.0f, 20.0f, 0.0f, inner, outer);
+						nvgBeginPath(vg);
+						nvgRect(vg, 0.0f, 70.0f, 20.0f, modal.height - 2*70.0f);
+						nvgFillPaint(vg, gradient_shadow_left);
+						nvgFill(vg);
+
+						// Top Edge
+						NVGpaint gradient_shadow_topleft = nvgRadialGradient(vg, 0.0f, 50.0f + 20.0f, 0.0f, 20.0f, inner, outer);
+						nvgBeginPath(vg);
+						nvgRect(vg, 0.0f, 50.0f, 20.0f, 20.0f);
+						nvgFillPaint(vg, gradient_shadow_topleft);
+						nvgFill(vg);
+
+						// Bottom Edge
+						NVGpaint gradient_shadow_bottomleft = nvgRadialGradient(vg, 0.0f, modal.height - 70.0f, 0.0f, 20.0f, inner, outer);
+						nvgBeginPath(vg);
+						nvgRect(vg, 0.0f, modal.height - 70.0f, 20.0f, 20.0f);
+						nvgFillPaint(vg, gradient_shadow_bottomleft);
+						nvgFill(vg);
+					}
+				}
+
+				ugui_modal_end(modal);
+			}
 		}
 
 		// "social" menu
@@ -350,9 +430,14 @@ static void menu_draw(struct scene_menu_s *menu, struct engine_s *engine) {
 
 			// debug multiplayer
 			nvgBeginPath(vg);
-			nvgRect(vg, 50.0f, 200.0f, 400.0f, 300.0f);
-			nvgFillColor(vg, nvgRGBf(1.0f, 0.9f, 0.95f));
+			nvgRoundedRect(vg, 48.0f, 198.0f, engine->window_width - 48.0f * 2.0f, 312.0f, 8.0f);
+			nvgFillColor(vg, nvgRGBf(0.1f, 0.1f, 0.1f));
 			nvgFill(vg);
+			nvgFontSize(vg, 18.0f);
+			nvgFontFaceId(vg, g_font);
+			nvgTextAlign(vg, NVG_ALIGN_RIGHT | NVG_ALIGN_BOTTOM);
+			nvgFillColor(vg, nvgRGBf(0.2f, 0.25f, 0.18f));
+			nvgText(vg, engine->window_width - 48.0f - 8.0f, 198.0f + 312.0f - 4.0f, "Network debugger", NULL);
 
 			nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_TOP);
 			nvgFontSize(vg, 16.0f);
@@ -368,7 +453,11 @@ static void menu_draw(struct scene_menu_s *menu, struct engine_s *engine) {
 						nvgFillColor(vg, nvgRGBf(0.2f, 0.2f, 0.2f));
 						break;
 				}
-				nvgText(vg, 50.0f, 200.0f + 16.0f * i, server_messages[i].text, NULL);
+				if (i <= 18) {
+					nvgText(vg, 50.0f, 200.0f + 16.0f * i, server_messages[i].text, NULL);
+				} else {
+					nvgText(vg, 210.0f, 200.0f + 16.0f * (i - 19), server_messages[i].text, NULL);
+				}
 			}
 
 			// draw here...
@@ -430,7 +519,7 @@ static void menu_draw(struct scene_menu_s *menu, struct engine_s *engine) {
 static void menu_on_message(struct scene_menu_s *menu, struct engine_s *engine, struct message_header *msg) {
 	switch (msg->type) {
 		case WELCOME_RESPONSE: {
-			struct welcome_response *response = (struct welcome_response *)msg;
+			struct welcome_response *_response = (struct welcome_response *)msg;
 			add_server_message("Received welcome from server!", 1);
 			break;
 		}
@@ -454,6 +543,7 @@ static void menu_on_message(struct scene_menu_s *menu, struct engine_s *engine, 
 		}
 		case LOBBY_JOIN_RESPONSE: {
 			struct lobby_join_response *response = (struct lobby_join_response *)msg;
+			add_server_message("LOBBY_JOIN_RESPONSE", !response->join_error);
 			if (response->join_error) {
 				printf("Failed joining into lobby #%d...\n", response->lobby_id);
 				break;
@@ -472,7 +562,7 @@ static void menu_on_message(struct scene_menu_s *menu, struct engine_s *engine, 
 			break;
 		}
 		case LOBBY_LIST_RESPONSE: {
-			add_server_message("Lobby response!", 1);
+			add_server_message("LOBBY_LIST_RESPONSE", 1);
 			reset_ids_of_lobbies();
 
 			struct lobby_list_response *response = (struct lobby_list_response *)msg;
@@ -517,6 +607,10 @@ static void on_start_game(struct engine_s *engine) {
 	platform_vibrate(PLATFORM_VIBRATE_TAP);
 }
 
+static void on_click_minigame_button(struct engine_s *engine) {
+	g_minigame_selection_visible = 1;
+}
+
 static void switch_to_game_scene(struct engine_s *engine) {
 	struct scene_battle_s *game_scene_battle = malloc(sizeof(struct scene_battle_s));
 	scene_battle_init(game_scene_battle, engine);
@@ -525,15 +619,18 @@ static void switch_to_game_scene(struct engine_s *engine) {
 	platform_vibrate(PLATFORM_VIBRATE_TAP);
 }
 
-static void switch_to_minigame_scene(struct engine_s *engine) {
-	/*
-	struct scene_brickbreaker_s *scene = malloc(sizeof(struct scene_brickbreaker_s));
-	scene_brickbreaker_init(scene, engine);
-	//engine_setscene(engine, (struct scene_s *)game_scene_planes);
-	g_next_scene = (struct scene_s *)scene;
-	*/
+static void switch_to_suika_scene(struct engine_s *engine) {
 	struct scene_experiments_s *scene = malloc(sizeof(struct scene_experiments_s));
 	scene_experiments_init(scene, engine);
+	g_next_scene = (struct scene_s *)scene;
+
+
+	platform_vibrate(PLATFORM_VIBRATE_TAP);
+}
+
+static void switch_to_asteroid_scene(struct engine_s *engine) {
+	struct scene_brickbreaker_s *scene = malloc(sizeof(struct scene_brickbreaker_s));
+	scene_brickbreaker_init(scene, engine);
 	g_next_scene = (struct scene_s *)scene;
 
 
@@ -547,7 +644,7 @@ static float menuitem_active(float menu_x, float bookmark_x, float bookmark_tx) 
 	return 1.0f - (d / max_d);
 }
 
-void on_begin_search_friends(struct engine_s *engine) {
+static void on_begin_search_friends(struct engine_s *engine) {
 	g_search_friends_text = g_search_friends_texts[1];
 
 	// TODO: remove
@@ -567,7 +664,7 @@ void on_begin_search_friends(struct engine_s *engine) {
 	}
 }
 
-void on_end_search_friends(struct engine_s *engine) {
+static void on_end_search_friends(struct engine_s *engine) {
 	g_search_friends_text = g_search_friends_texts[0];
 }
 

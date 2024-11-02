@@ -114,7 +114,6 @@ static b2ShapeDef *body_shape_defs;
 static void load(struct scene_experiments_s *scene, struct engine_s *engine) {
 	// configure engine
 	engine_set_clear_color(palette[3].r, palette[3].g, palette[3].b);
-	engine->console_visible = 0;
 	
 	// assets
 	font_score = nvgCreateFont(engine->vg, "PlaypenSans", "res/font/PlaypenSans-Medium.ttf");

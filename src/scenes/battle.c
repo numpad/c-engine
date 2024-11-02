@@ -165,6 +165,7 @@ static void load(struct scene_battle_s *scene, struct engine_s *engine) {
 	g_handcards_updated = 0;
 	g_selected_card = 0;
 	g_next_turn = 0;
+	console_log(engine, "Hello Battle.c!");
 
 	static int loads = 0;
 	const char *models[] = {"res/models/Knight.glb", "res/models/Mage.glb", "res/models/Barbarian.glb", "res/models/Rogue.glb"};
@@ -586,52 +587,6 @@ static void draw(struct scene_battle_s *scene, struct engine_s *engine) {
 		glEnable(GL_DEPTH_TEST);
 		shader_set_uniform_mat3(&g_model.shader, "u_normalMatrix", (float*)normalMatrix);
 		model_draw(&g_model, perspective, view, model);
-		{
-			static float pos_x = 100.0f;
-			static float pos_y = 0.0f;
-			static float dir = 1.0f;
-			static float vel_y = 0.0f;
-			static float speed = 4.0f;
-
-			pos_x += speed * dir;
-			pos_y += vel_y;
-			vel_y -= 0.2f;
-			if (vel_y < -12.0f) vel_y = -12.0f;
-
-			if (pos_x + 35.0f >= g_engine->window_width) dir = -1.0f;
-			if (pos_x - 35.0f <= -g_engine->window_width) dir =  1.0f;
-			if (g_engine->input_drag.state == INPUT_DRAG_BEGIN) {
-
-				if (vel_y < 0.0f) {
-					pos_y += 30.0f;
-				}
-
-				vel_y = 8.0f;
-			}
-
-			if (pos_y + 150.0f < -g_engine->window_height) {
-				pos_y = 0.0f;
-			}
-
-			glm_mat4_identity(model);
-			glm_translate(model, (vec3){pos_x, pos_y, -100.0f});
-			glm_rotate_y(model, (engine->time_elapsed), model);
-			glm_scale(model, (vec3){ 100.0f, 100.0f, 100.0f});
-			model_draw(&g_model, perspective, view, model);
-
-			for (int i = 0; i < 7; ++i) {
-				const int x = i % 7;
-				const int y = i / 7.0f;
-				glm_mat4_identity(model);
-				glm_translate(model, (vec3){
-					-270.0f + 90.0f * x,
-					-engine->window_height,
-					-100.0f});
-				glm_rotate_y(model, GLM_PI * ((164^x) % 3 ? -1 : 1) * (g_engine->time_elapsed), model);
-				glm_scale(model, (vec3){ 60.0f, 60.0f, 60.0f});
-				model_draw(&g_model, perspective, view, model);
-			}
-		}
 		glDisable(GL_DEPTH_TEST);
 	}
 }
@@ -756,7 +711,7 @@ static void on_game_event_play_card(event_info_t *info) {
 	ecs_entity_t e = info->entity;
 
 	const c_card *card = ecs_get(g_world, e, c_card);
-	printf("played card '%s'\n", card->name);
+	console_log(g_engine, "Played card: \"%s\"...", card->name);
 
 	// remove card
 	ecs_delete(g_world, g_selected_card);

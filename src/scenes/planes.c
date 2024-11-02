@@ -324,7 +324,6 @@ ECS_SYSTEM_DECLARE(system_draw_sprites);
 static void load(struct scene_planes_s *scene, struct engine_s *engine) {
 	// configure engine
 	engine_set_clear_color(0.87f, 0.96f, 0.96f);
-	engine->console_visible = 0;
 	glm_mat4_identity(engine->u_view);
 	// seed rng
 	g_mapgen_seed = time(0);

@@ -1,8 +1,10 @@
 #include "brickbreaker.h"
 
 #include <assert.h>
+#include <box2d/box2d.h>
 #include <cglm/cglm.h>
 #include <cglm/struct.h>
+#include <flecs.h>
 #include <nanovg.h>
 #include "engine.h"
 #include "util/util.h"
@@ -15,6 +17,13 @@
 #define PARTICLES_MAX 1024
 #define BULLETS_MAX 1024
 
+// Components
+
+typedef struct {
+	vec2s pos;
+	vec2s vel;
+} c_object;
+ECS_COMPONENT_DECLARE(c_object);
 
 // Structs & Enums
 
@@ -203,7 +212,7 @@ void asteroid_draw(asteroid_t *as) {
 
 void player_draw(void) {
 	nvgBeginPath(vg);
-	nvgCircle(vg, P2d(G.player.pos), 20.0f);
+	nvgCircle(vg, P2d(G.player.pos), 17.0f);
 	nvgStrokeWidth(vg, 2.0f);
 	nvgFillColor(vg, nvgRGB(210, 210, 210));
 	nvgFill(vg);
