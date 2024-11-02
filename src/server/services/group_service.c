@@ -20,13 +20,22 @@ void group_service_create_lobby(struct gameserver *gserver, struct lobby_create_
 
 	if (requested_by->group_id > 0) {
 		//messagequeue_add("#%06d is already in lobby %d but requested to create %d", requested_by->id, requested_by->group_id, msg->lobby_id);
-		response.create_error = 1;
+		response.create_error = 1; // already in a lobby.
 		gameserver_send_to(gserver, &response.header, requested_by);
 
 		return;
 	}
 
-	// TODO: check if lobby already exists
+	// Check if lobby already exists.
+	for (int i = 0; i < stbds_arrlen(gserver->sessions); ++i) {
+		struct session *s = gserver->sessions[i];
+		if ((uint32_t)msg->lobby_id == s->group_id) {
+			response.create_error = 2; // lobby already exists.
+			gameserver_send_to(gserver, &response.header, requested_by);
+
+			return;
+		}
+	}
 
 	response.create_error = 0;
 	requested_by->group_id = msg->lobby_id;
@@ -62,7 +71,7 @@ void group_service_join_lobby(struct gameserver *gserver, struct lobby_join_requ
 	const int is_already_in_lobby = (requested_by->group_id > 0);
 	if (is_already_in_lobby && msg->lobby_id != 0) {
 		//messagequeue_add("Cannot join %d, Already in lobby %d", msg->lobby_id, requested_by->group_id);
-		join.join_error = 1; // can only LEAVE (-1) while in lobby
+		join.join_error = 1; // already in lobby - can only LEAVE (-1) while in lobby
 		join.lobby_id = requested_by->group_id; // shouldn't matter, just to be sure.
 		goto send_response;
 	}

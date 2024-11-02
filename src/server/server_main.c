@@ -176,7 +176,7 @@ static void serverui_on_input(const char *cmd, size_t cmd_len) {
 			console_log("Clients: %d", stbds_arrlen(gserver.sessions));
 			for (int i = 0; i < stbds_arrlen(gserver.sessions); ++i) {
 				struct session *s = gserver.sessions[i];
-				console_log(" - %d <%s>", s->id, gameserver_session_connection_type(s));
+				console_log(" - %d (Group #%d) <%s>", s->id, s->group_id, gameserver_session_connection_type(s));
 			}
 		} else if (serverui_is_input_command(input, "clear")) {
 			console_log("Not implemented :(");

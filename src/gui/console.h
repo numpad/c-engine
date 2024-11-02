@@ -38,6 +38,7 @@ void console_draw(struct console_s *, struct engine_s *);
 
 void console_add_input_text(struct console_s *, char *text);
 void console_log(struct engine_s *, char *fmt, ...);
+void console_log_ex(struct engine_s *, enum console_msg_type type, float duration, char *fmt, ...);
 
 #endif
 

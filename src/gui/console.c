@@ -131,9 +131,31 @@ void console_log(struct engine_s *engine, char *fmt, ...) {
 		.created_at = engine->time_elapsed,
 		.duration = 4.0f,
 		.fade_in_animation = 0.0f,
-		.type = (rand() % 2 == 0) ? CONSOLE_MSG_ERROR : CONSOLE_MSG_DEFAULT
+		.type = CONSOLE_MSG_DEFAULT
 	});
 }
+
+void console_log_ex(struct engine_s *engine, enum console_msg_type type, float duration, char *fmt, ...) {
+	va_list argp;
+
+	va_start(argp, fmt);
+	int len = vsnprintf(NULL, 0, fmt, argp);
+	char buf[len + 1];
+	va_end(argp);
+
+	va_start(argp, fmt);
+	vsnprintf(buf, len + 1, fmt, argp);
+	va_end(argp);
+
+	console_add_message(engine->console, (struct console_msg_s){
+		.message = buf,
+		.created_at = engine->time_elapsed,
+		.duration = duration,
+		.fade_in_animation = 0.0f,
+		.type = type
+	});
+}
+
 
 ////////////
 // STATIC //
@@ -149,6 +171,7 @@ static void console_add_message(struct console_s *console, struct console_msg_s 
 }
 
 static void console_remove_message(struct console_s *console, int message_i) {
+	free(console->messages[message_i].message);
 	for (size_t i = message_i; i < console->messages_count; ++i) {
 		console->messages[i] = console->messages[i + 1];
 	}
