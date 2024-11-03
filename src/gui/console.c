@@ -194,6 +194,12 @@ static void get_color_for_msg(struct console_msg_s *msg, NVGcolor *bg, NVGcolor 
 		*outline = nvgRGBAf(1.0f, 1.0f, 1.0f, 0.7f);
 		*muted   = nvgRGBf (0.9f, 0.9f, 0.9f);
 		break;
+	case CONSOLE_MSG_INFO:
+		*bg      = nvgRGBf (0.32f, 0.4f, 0.84f);
+		*fg      = nvgRGBf (1.0f, 1.0f, 1.0f);
+		*outline = nvgRGBAf(0.5f, 0.55f, 0.9f, 0.7f);
+		*muted   = nvgRGBf (0.22f, 0.3f, 0.74f);
+		break;
 	case CONSOLE_MSG_SUCCESS:
 		*bg      = nvgRGBf (0.4f, 0.84f, 0.32f);
 		*fg      = nvgRGBf (1.0f, 1.0f, 1.0f);

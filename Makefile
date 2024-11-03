@@ -43,15 +43,16 @@ ifeq ($(CC), emcc)
 endif
 
 SRC = main.c src/engine.c src/platform.c \
-	  src/gui/console.c src/gui/ugui.c \
+	  $(wildcard src/gui/*.c) \
 	  $(wildcard src/game/*.c) \
 	  $(wildcard src/util/*.c) \
 	  $(wildcard src/gl/*.c) \
 	  src/net/message.c \
-	  lib/nanovg/src/nanovg.c \
-	  lib/stb/stb_ds.c lib/stb/stb_perlin.c lib/stb/stb_image.c lib/stb/stb_rect_pack.c lib/stb/stb_truetype.c \
+	  src/server/errors.c \
+	  $(wildcard lib/stb/*.c) \
 	  $(wildcard lib/cglm/src/*.c) \
 	  $(wildcard lib/box2d/src/*.c) \
+	  lib/nanovg/src/nanovg.c \
 	  lib/cJSON/cJSON.c \
 	  lib/flecs/flecs.c \
 	  lib/cgltf/cgltf.c \

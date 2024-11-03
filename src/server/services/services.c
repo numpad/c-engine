@@ -18,6 +18,9 @@ void services_dispatcher(struct gameserver *gs, struct message_header *message, 
 			group_service_list_lobbies(gs, (struct lobby_list_request *)message, session);
 			break;
 		}
+		case MSG_DISCONNECTED: {
+			break;
+		}
 		case WELCOME_RESPONSE:
 		case LOBBY_CREATE_RESPONSE:
 		case LOBBY_JOIN_RESPONSE:

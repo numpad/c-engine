@@ -20,6 +20,7 @@
 #include "gl/graphics2d.h"
 #include "net/message.h"
 #include "util/util.h"
+#include "server/errors.h"
 #include "platform.h"
 
 //
@@ -503,8 +504,9 @@ static void menu_on_message(struct scene_menu_s *menu, struct engine_s *engine, 
 		}
 		case LOBBY_CREATE_RESPONSE: {
 			struct lobby_create_response *response = (struct lobby_create_response *)msg;
-			if (response->create_error) {
-				console_log_ex(engine, CONSOLE_MSG_ERROR, 4.0f, "Failed creating lobby #%d (reason: %d)", response->lobby_id, response->create_error);
+			if (response->create_error != SERVER_NO_ERROR) {
+				console_log_ex(engine, CONSOLE_MSG_ERROR, 4.0f, "Failed creating lobby #%d: \"%s\"",
+							   response->lobby_id, server_error_description(response->create_error));
 				break;
 			}
 
@@ -526,7 +528,8 @@ static void menu_on_message(struct scene_menu_s *menu, struct engine_s *engine, 
 			struct lobby_join_response *response = (struct lobby_join_response *)msg;
 
 			if (response->join_error) {
-				console_log_ex(engine, CONSOLE_MSG_ERROR, 4.0f, "Failed joining lobby #%d (reason: %d)", response->lobby_id, response->join_error);
+				console_log_ex(engine, CONSOLE_MSG_ERROR, 4.0f, "Failed joining lobby #%d: \"%s\"",
+							   response->lobby_id, server_error_description(response->join_error));
 				break;
 			}
 

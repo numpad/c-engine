@@ -7,6 +7,7 @@ struct engine_s;
 
 enum console_msg_type {
 	CONSOLE_MSG_DEFAULT,
+	CONSOLE_MSG_INFO,
 	CONSOLE_MSG_SUCCESS,
 	CONSOLE_MSG_ERROR,
 };
