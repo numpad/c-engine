@@ -46,6 +46,22 @@ static size_t messagequeue_len = 0;
 static struct gameserver gserver;
 
 int main(int argc, char **argv) {
+	int server_port = 9124;
+
+	// Arg parsing
+	for (int i = 1; i < argc; ++i) {
+		const char *next_arg = (i+1 < argc) ? argv[i+1] : NULL;
+		if ((strcmp(argv[i], "-h") == 0 || strcmp(argv[i], "--help") == 0)) {
+			printf(" --help, -h  : Print this message.\n");
+			printf(" --port, -p  : Specify the server port.\n");
+			return 0;
+		} else if ((strcmp(argv[i], "-p") == 0 || strcmp(argv[i], "--port") == 0) && next_arg != NULL) {
+			server_port = atoi(next_arg);
+			++i;
+		}
+	}
+
+	// UI setup.
 	initscr();
 	cbreak();
 	noecho();
@@ -62,7 +78,7 @@ int main(int argc, char **argv) {
 
 	// start bg services
 	pthread_t gameserver_thread;
-	pthread_create(&gameserver_thread, NULL, thread_run_gameserver, NULL);
+	pthread_create(&gameserver_thread, NULL, thread_run_gameserver, (void *)&server_port);
 
 	int running = 1;
 	while (running) {
@@ -303,7 +319,8 @@ static void console_log(char *fmt, ...) {
 //
 
 static void *thread_run_gameserver(void *data) {
-	const int port = 9123;
+	assert(data != NULL);
+	const int port = *(int *)data;
 
 	// init server
 	if (gameserver_init(&gserver, port)) {

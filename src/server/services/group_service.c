@@ -67,13 +67,12 @@ void group_service_join_lobby(struct gameserver *gserver, struct lobby_join_requ
 	join.join_error = SERVER_NO_ERROR;
 	join.lobby_id = 0;
 	
-	// if already in a lobby, leave.
-	const int is_already_in_lobby = (requested_by->group_id > 0);
+	// leave lobby.
 	const int is_leaving = (msg->lobby_id == 0);
-	if (is_already_in_lobby && is_leaving) {
-		//messagequeue_add("Cannot join %d, Already in lobby %d", msg->lobby_id, requested_by->group_id);
-		join.join_error = SERVER_ERROR_ALREADY_IN_A_LOBBY; // can only LEAVE (0) while in lobby
-		join.lobby_id = requested_by->group_id; // shouldn't matter, just to be sure.
+	const int is_already_in_lobby = (requested_by->group_id > 0);
+	if (is_leaving && is_already_in_lobby) {
+		join.join_error = 0;
+		join.lobby_id = 0;
 		goto send_response;
 	}
 
@@ -83,7 +82,7 @@ void group_service_join_lobby(struct gameserver *gserver, struct lobby_join_requ
 		const size_t sessions_len = stbds_arrlen(gserver->sessions);
 		for (size_t i = 0; i < sessions_len; ++i) {
 			struct session *s = gserver->sessions[i];
-			if ((uint32_t)msg->lobby_id == s->group_id) {
+			if (msg->lobby_id == s->group_id) {
 				lobby_exists = 1;
 				break;
 			}
@@ -92,8 +91,15 @@ void group_service_join_lobby(struct gameserver *gserver, struct lobby_join_requ
 
 	// lobby doesnt exist? then we cant join.
 	if (lobby_exists == 0) {
-		join.join_error = SERVER_ERROR_LOBBY_DOES_NOT_EXIST; // INFO: lobby does not exist.
-		join.lobby_id = 0;
+		join.join_error = SERVER_ERROR_LOBBY_DOES_NOT_EXIST;
+		join.lobby_id = msg->lobby_id;
+		goto send_response;
+	}
+
+	// Already in this lobby.
+	if (msg->lobby_id == requested_by->group_id) {
+		join.join_error = SERVER_ERROR_ALREADY_IN_A_LOBBY;
+		join.lobby_id = msg->lobby_id;
 		goto send_response;
 	}
 
