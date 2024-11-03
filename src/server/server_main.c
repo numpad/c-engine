@@ -303,7 +303,7 @@ static void console_log(char *fmt, ...) {
 //
 
 static void *thread_run_gameserver(void *data) {
-	const int port = 9124;
+	const int port = 9123;
 
 	// init server
 	if (gameserver_init(&gserver, port)) {

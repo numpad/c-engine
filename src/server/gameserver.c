@@ -52,7 +52,8 @@ int gameserver_init(struct gameserver *server, uint16_t port) {
 	info.gid = -1;
 	info.uid = -1;
 	// TODO: ADOPT_APPLY_LISTEN_ACCEPT_CONFIG fixes raw tcp not connecting immediately
-	info.options = LWS_SERVER_OPTION_FALLBACK_TO_RAW | LWS_SERVER_OPTION_ADOPT_APPLY_LISTEN_ACCEPT_CONFIG;
+	// TODO: This works on HTTPS: info.options = LWS_SERVER_OPTION_FALLBACK_TO_RAW;
+	info.options = LWS_SERVER_OPTION_FALLBACK_TO_RAW; // | LWS_SERVER_OPTION_ADOPT_APPLY_LISTEN_ACCEPT_CONFIG
 	info.user = (void *)server;
 
 	server->lws = lws_create_context(&info);
