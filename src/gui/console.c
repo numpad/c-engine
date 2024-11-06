@@ -21,17 +21,12 @@ static void get_color_for_msg(struct console_msg_s *, NVGcolor *bg, NVGcolor *fg
 void console_init(struct console_s *console) {
 	console->messages_max = 16;
 	console->messages_count = 0;
-	console->input_text_maxlen = 1024;
-	console->input_text = malloc(console->input_text_maxlen * sizeof(char));
 }
 
 void console_destroy(struct console_s *console) {
 	for (size_t i = 0; i < console->messages_count; ++i) {
 		free(console->messages[i].message);
 	}
-
-	free(console->input_text);
-	console->input_text_maxlen = 0;
 }
 
 void console_update(struct console_s *console, struct engine_s *engine, float dt) {
@@ -134,11 +129,6 @@ void console_draw(struct console_s *console, struct engine_s *engine) {
 		nvgText(vg, msg_x, msg_y + 1.0f, msg->message, NULL);
 	}
 
-}
-
-void console_add_input_text(struct console_s *console, char *text) {
-	// TODO: check length, realloc when needed.
-	strcat(console->input_text, text);
 }
 
 void console_log(struct engine_s *engine, char *fmt, ...) {

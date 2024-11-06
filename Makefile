@@ -98,7 +98,7 @@ scenes: CFLAGS += -DDEBUG -ggdb -O0
 scenes: LIBS += -ldl
 scenes:
 	$(CC) $(CFLAGS) -shared -o hotreload.so $(INCLUDES) $(LIBS) \
-		src/scenes/battle.c src/gui/console.c
+		src/scenes/battle.c
 
 clean:
 	rm -rf $(BIN) $(TARGET) "$(TARGET).data" "$(TARGET).html" "$(TARGET).js" "$(TARGET).wasm"

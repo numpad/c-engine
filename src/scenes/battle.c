@@ -532,22 +532,22 @@ static void draw(struct scene_battle_s *scene, struct engine_s *engine) {
 	// draw ui
 	pipeline_reset(&g_ui_pipeline);
 	{
-		drawcmd_t cmd = DRAWCMD_INIT;
-		cmd.size.x = 96 - 16;
-		cmd.size.y = 96 - 16;
-		cmd.position.x = 8.0f;
-		cmd.position.y = 8.0f;
-		cmd.position.z = 0.0f;
-		drawcmd_set_texture_subrect(&cmd, g_ui_pipeline.texture, ((int)engine->time_elapsed % 2) ? 0 : ((int)engine->time_elapsed % 7 == 0) ? 64 : 96, 112, 32, 32);
-		pipeline_emit(&g_ui_pipeline, &cmd);
-
+		drawcmd_t cmd;
 		cmd = DRAWCMD_INIT;
 		cmd.size.x = 96;
 		cmd.size.y = 96;
-		cmd.position.x = 0.0f;
-		cmd.position.y = 0.0f;
+		cmd.position.x = engine->window_width - 96 - 4;
+		cmd.position.y = 4;
 		cmd.position.z = 0.0f;
-		drawcmd_set_texture_subrect(&cmd, g_ui_pipeline.texture, 0, 0, 96, 96);
+		drawcmd_set_texture_subrect(&cmd, g_ui_pipeline.texture, 0, 0, 32, 32);
+		pipeline_emit(&g_ui_pipeline, &cmd);
+
+		cmd = DRAWCMD_INIT;
+		cmd.size.x = 48;
+		cmd.size.y = 196;
+		cmd.position.x = 1;
+		cmd.position.y = 4;
+		drawcmd_set_texture_subrect(&cmd, g_ui_pipeline.texture, 32, 0, 16, 64);
 		pipeline_emit(&g_ui_pipeline, &cmd);
 
 		float hp = fabsf(cosf(engine->time_elapsed));
@@ -570,7 +570,7 @@ static void draw(struct scene_battle_s *scene, struct engine_s *engine) {
 		glm_ortho(-size, size, -size * g_engine->window_aspect, size * g_engine->window_aspect, 1.0f, 500.0f, perspective);
 		mat4 view = GLM_MAT4_IDENTITY_INIT;
 		mat4 model = GLM_MAT4_IDENTITY_INIT;
-		glm_translate(model, (vec3){ -100.0f, 0.0f, -200.0f });
+		glm_translate(model, (vec3){ 0.0f, -200.0f, -300.0f });
 		glm_rotate_x(model, glm_rad(35.0f), model);
 		glm_rotate_y(model, glm_rad(sinf(g_engine->time_elapsed * 2.0f) * 80.0f), model);
 		glm_scale(model, (vec3){ 100.0f, 100.0f, 100.0f});
@@ -585,8 +585,22 @@ static void draw(struct scene_battle_s *scene, struct engine_s *engine) {
 
 		// draw
 		glEnable(GL_DEPTH_TEST);
+
 		shader_set_uniform_mat3(&g_model.shader, "u_normalMatrix", (float*)normalMatrix);
 		model_draw(&g_model, perspective, view, model);
+
+		// model 2
+		glm_mat4_identity(model);
+		glm_translate(model, (vec3){ engine->window_width - 100.0f, engine->window_height - 240.0f, -300.0f });
+		glm_rotate_x(model, glm_rad(10.0f + cosf(g_engine->time_elapsed) * 10.0f), model);
+		glm_rotate_y(model, glm_rad(sinf(g_engine->time_elapsed) * 40.0f), model);
+		glm_scale(model, (vec3){ 75.0f, 75.0f, 75.0f});
+		const float pr = engine->window_pixel_ratio;
+		glEnable(GL_SCISSOR_TEST);
+		glScissor(engine->window_width * pr - 85.0f * pr, engine->window_height * pr - 85.0f * pr, 66 * pr, 66 * pr);
+		model_draw(&g_model, perspective, view, model);
+		glDisable(GL_SCISSOR_TEST);
+
 		glDisable(GL_DEPTH_TEST);
 	}
 }
