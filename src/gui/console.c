@@ -37,18 +37,41 @@ void console_destroy(struct console_s *console) {
 void console_update(struct console_s *console, struct engine_s *engine, float dt) {
 	for (size_t i = 0; i < console->messages_count; ++i) {
 		struct console_msg_s *msg = &console->messages[i];
-		double alive_for = engine->time_elapsed - msg->created_at;
-
-		if (alive_for >= msg->duration) {
-			console_remove_message(console, i);
-			--i;
-			continue;
-		}
-
-		if (msg->fade_in_animation < 1.0f) {
-			msg->fade_in_animation += dt;
-			if (msg->fade_in_animation > 1.0f) msg->fade_in_animation = 1.0f;
-		}
+		const float state_duration = msg->duration[msg->state];
+		
+		switch (msg->state) {
+		case CONSOLE_MSG_STATE_IN:
+			msg->animation = glm_clamp(
+				(engine->time_elapsed - msg->created_at) / state_duration,
+				0.0f, 1.0f);
+			if (msg->animation >= 1.0f) {
+				msg->animation = 0.0f;
+				msg->state = CONSOLE_MSG_STATE_VISIBLE;
+			}
+			break;
+		case CONSOLE_MSG_STATE_VISIBLE:
+			msg->animation = glm_clamp(
+				(engine->time_elapsed - (msg->created_at + msg->duration[CONSOLE_MSG_STATE_IN])) / state_duration,
+				0.0f, 1.0f);
+			if (msg->animation >= 1.0f) {
+				msg->animation = 0.0f;
+				msg->state = CONSOLE_MSG_STATE_OUT;
+			}
+			break;
+		case CONSOLE_MSG_STATE_OUT:
+			msg->animation = glm_clamp(
+				(engine->time_elapsed - (msg->created_at + msg->duration[CONSOLE_MSG_STATE_IN] + msg->duration[CONSOLE_MSG_STATE_VISIBLE])) / state_duration,
+				0.0f, 1.0f);
+			if (msg->animation >= 1.0f) {
+				console_remove_message(console, i);
+				--i;
+				continue;
+			}
+			break;
+		case _CONSOLE_MSG_STATE_MAX:
+		default:
+			break;
+		};
 	}
 }
 
@@ -72,7 +95,11 @@ void console_draw(struct console_s *console, struct engine_s *engine) {
 		}
 
 		const float y_offset = (i + 1.0f) * (msg_h + 9.0f);
-		const float msg_x = con_x + glm_ease_elast_in(1.0f - msg->fade_in_animation) * 60.0f;
+		const float msg_x = con_x + (
+				(msg->state == CONSOLE_MSG_STATE_IN)  ? 60.0f * glm_ease_elast_in(1.0f - msg->animation) :
+				(msg->state == CONSOLE_MSG_STATE_OUT) ? (text_w + msg_h) * glm_ease_back_in(msg->animation):
+				0.0f);
+
 		const float msg_y = con_y + y_offset;
 
 		NVGcolor color_bg, color_fg, color_outline, color_muted;
@@ -90,7 +117,7 @@ void console_draw(struct console_s *console, struct engine_s *engine) {
 		nvgFill(vg);
 
 
-		const float time_remaining = glm_clamp(1.0f - ((engine->time_elapsed - msg->created_at) / msg->duration), 0.0f, 1.0f);
+		const float time_remaining = glm_clamp(1.0f - (engine->time_elapsed - msg->created_at) / ((msg->duration[0] + msg->duration[1] + msg->duration[2])), 0.0f, 1.0f);
 		const float angle_offset = glm_rad(-90.0f);
 		nvgBeginPath(vg);
 		nvgArc(vg, msg_x - text_w - msg_h * 0.5f, msg_y, msg_h * 0.5f - 4.0f, angle_offset, angle_offset + glm_rad(360.0f * glm_ease_quad_in(time_remaining)), NVG_CW);
@@ -129,9 +156,10 @@ void console_log(struct engine_s *engine, char *fmt, ...) {
 	console_add_message(engine->console, (struct console_msg_s){
 		.message = buf,
 		.created_at = engine->time_elapsed,
-		.duration = 4.0f,
-		.fade_in_animation = 0.0f,
-		.type = CONSOLE_MSG_DEFAULT
+		.duration = {1.0f, 4.0f, 0.4f},
+		.animation = 0.0f,
+		.type = CONSOLE_MSG_DEFAULT,
+		.state = CONSOLE_MSG_STATE_IN
 	});
 }
 
@@ -150,9 +178,10 @@ void console_log_ex(struct engine_s *engine, enum console_msg_type type, float d
 	console_add_message(engine->console, (struct console_msg_s){
 		.message = buf,
 		.created_at = engine->time_elapsed,
-		.duration = duration,
-		.fade_in_animation = 0.0f,
-		.type = type
+		.duration = {1.0f, duration, 0.4f},
+		.animation = 0.0f,
+		.type = type,
+		.state = CONSOLE_MSG_STATE_IN
 	});
 }
 

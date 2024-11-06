@@ -12,14 +12,21 @@ enum console_msg_type {
 	CONSOLE_MSG_ERROR,
 };
 
+enum console_msg_state {
+	CONSOLE_MSG_STATE_IN = 0,
+	CONSOLE_MSG_STATE_VISIBLE = 1,
+	CONSOLE_MSG_STATE_OUT = 2,
+	_CONSOLE_MSG_STATE_MAX
+};
+
 struct console_msg_s {
 	char *message;
 	double created_at;
-	float duration;
+	float duration[_CONSOLE_MSG_STATE_MAX];
 
+	float animation;
 	enum console_msg_type type;
-
-	float fade_in_animation;
+	enum console_msg_state state;
 };
 
 struct console_s {

@@ -105,6 +105,10 @@ struct engine_s *engine_new(int argc, char **argv) {
 	engine->freetype = NULL;
 	console_init(engine->console);
 
+#ifdef DEBUG
+	console_log_ex(engine, CONSOLE_MSG_INFO, 4.0f, "DEBUG BUILD");
+#endif
+
 	if (engine->window == NULL) {
 		SDL_LogError(SDL_LOG_CATEGORY_ERROR, "failed initializing SDL window.\n");
 		return NULL;
@@ -118,6 +122,7 @@ struct engine_s *engine_new(int argc, char **argv) {
 	engine->gl_ctx = SDL_GL_CreateContext(engine->window);
 	if (SDL_GL_SetSwapInterval(1) != 0) {
 		fprintf(stderr, "warning: failed enabling v-sync: %s\n", SDL_GetError());
+		console_log_ex(engine, CONSOLE_MSG_ERROR, 4.0f, "Failed enabling v-sync: %s", SDL_GetError());
 	}
 	
 	// libs
@@ -138,10 +143,12 @@ struct engine_s *engine_new(int argc, char **argv) {
 	// font system
 	if (FT_Init_FreeType(&engine->freetype) != 0) {
 		fprintf(stderr, "error: failed initializing freetype!\n");
+		console_log_ex(engine, CONSOLE_MSG_ERROR, 4.0f, "Failed initializing FreeType");
 	}
 
 	// scene
 	if (is_argv_set(argc, argv, "--nosplash")) {
+		console_log(engine, "Skipping Splash-Screen");
 		struct scene_menu_s *menu = malloc(sizeof(struct scene_menu_s));
 		scene_menu_init(menu, engine);
 		engine_setscene(engine, (struct scene_s *)menu);
@@ -226,7 +233,7 @@ static void on_window_resized(struct engine_s *engine, int w, int h) {
 
 void engine_setscene(struct engine_s *engine, struct scene_s *new_scene) {
 #ifdef DEBUG
-	console_log(engine, "Switching to scene %p", (void*)new_scene);
+	console_log_ex(engine, CONSOLE_MSG_INFO, 4.0f, "Switching to scene %p", (void*)new_scene);
 #endif
 
 	struct scene_s *old_scene = engine->scene;

@@ -20,10 +20,6 @@ static void intro_load(struct scene_intro_s *scene, struct engine_s *engine) {
 	scene->time_passed_max = 1.75f;
 
 	scene->logo_image_nvg = nvgCreateImage(engine->vg, "res/image/numpad.png", NVG_IMAGE_NEAREST);
-
-#ifdef DEBUG
-	console_log_ex(engine, CONSOLE_MSG_INFO, 12.0f, "DEBUG build enabled!");
-#endif
 }
 
 static void intro_destroy(struct scene_intro_s *scene, struct engine_s *engine) {
