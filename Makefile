@@ -1,11 +1,16 @@
 
 CC = clang
+
+# Sadly, flecs requires `gnu99`.
 CFLAGS = -std=gnu99 -fPIC -Wall -Wextra -pedantic \
 		 -D_GNU_SOURCE \
 		 -Wfloat-equal -Wshadow -Wno-unused-parameter -Wl,--export-dynamic \
 		 -Werror=switch-enum -Wcast-qual -Wnull-dereference -Wunused-result \
 		 -DFLECS_CUSTOM_BUILD -DFLECS_SYSTEM -DFLECS_MODULE -DFLECS_PIPELINE -DFLECS_TIMER -DFLECS_HTTP -DFLECS_SNAPSHOT -DFLECS_PARSER -DFLECS_APP -DFLECS_OS_API_IMPL \
-		 # flecs needs gnu99
+
+# TODO: We may want to provide SDL (& modules), freetype and harfbuzz?
+#       For now this is fine, as emscripten handles this for us as well.
+#       Also, harfbuzz needs to be compiled with C++.
 INCLUDES = -I src/ \
 		   -isystem /usr/include/SDL2 \
 		   -isystem /usr/include/freetype2 \
@@ -24,13 +29,16 @@ TARGET = soil_soldiers
 
 # when compiling with emscripten, add some specific flags
 ifeq ($(CC), emcc)
-	# TODO: dont add everything to cflags, some flags should be used only during linking
-	# TODO: Check if needed/better: -sASYNCIFY -sWEBSOCKET_SUBPROTOCOL="binary" -sMAX_WEBGL_VERSION=2
-	# TODO: Add in release? -sWEBSOCKET_URL="wss://"
+	# TODO: Let's not add everything to CFLAGS, some should only be used when linking.
+	# TODO: Does `-simd128 -msse2` reduce the devices we can target?
+	# TODO: Check these flags: `-sASYNCIFY -sWEBSOCKET_SUBPROTOCOL="binary"`
+	# TODO: Find out what implications or improvements this has `-sMIN_WEBGL_VERSION=2 -sMAX_WEBGL_VERSION=2`.
+	# TODO: Figure out if we want to support non-secure websockets as well? Maybe for local browser development? `-sWEBSOCKET_URL="wss://"`
 	CFLAGS += -sWASM=1 \
 			  -sUSE_SDL=2 -sUSE_SDL_NET=2 -sUSE_SDL_MIXER=2 -sUSE_SDL_IMAGE=0 -sUSE_SDL_TTF=0 -sUSE_FREETYPE=1 -sUSE_HARFBUZZ=1 \
 			  -sMIN_WEBGL_VERSION=2 -sMAX_WEBGL_VERSION=2 \
 			  -sALLOW_MEMORY_GROWTH=1 \
+			  -sWEBSOCKET_URL="wss://" \
 			  -sINITIAL_MEMORY=128MB -sTOTAL_STACK=64MB \
 			  -sEXPORTED_RUNTIME_METHODS=cwrap \
 			  -sEXPORTED_FUNCTIONS=_main,_on_siggoback \
@@ -65,6 +73,9 @@ all: $(TARGET)
 
 server:
 	$(MAKE) -f src/server/Makefile
+
+
+# TODO: Let's do a cleanup of the following mess...
 
 # debug-specific
 debug: CFLAGS += -DDEBUG -ggdb -O0
