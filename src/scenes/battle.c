@@ -149,6 +149,7 @@ static ecs_entity_t g_selected_card;
 static int          g_next_turn;
 static fontatlas_t  g_card_font;
 static model_t      g_model;
+static model_t      g_fun_models[3];
 
 // testing
 static Mix_Chunk    *g_place_card_sfx;
@@ -168,8 +169,13 @@ static void load(struct scene_battle_s *scene, struct engine_s *engine) {
 	console_log(engine, "Starting battle scene!");
 
 	static int loads = 0;
-	const char *models[] = {"res/models/Knight.glb", "res/models/Mage.glb", "res/models/Barbarian.glb", "res/models/Rogue.glb"};
+	const char *models[] = {"res/models/characters/Knight.glb", "res/models/characters/Mage.glb", "res/models/characters/Barbarian.glb", "res/models/characters/Rogue.glb"};
 	model_init_from_file(&g_model, models[loads++ % 4]);
+
+	const char *fun_models[] = {"res/models/decoration/props/target.gltf", "res/models/decoration/props/crate_A_big.gltf", "res/models/decoration/props/bucket_water.gltf"};
+	for (uint i = 0; i < count_of(fun_models); ++i) {
+		model_init_from_file(&g_fun_models[i], fun_models[i]);
+	}
 
 	// ecs
 	g_world = ecs_init();
@@ -588,6 +594,18 @@ static void draw(struct scene_battle_s *scene, struct engine_s *engine) {
 
 		shader_set_uniform_mat3(&g_model.shader, "u_normalMatrix", (float*)normalMatrix);
 		model_draw(&g_model, perspective, view, model);
+
+		for (int i = 0; i < 50; ++i) {
+			rng_seed(i);
+			float t = engine->time_elapsed * 0.6f * (1+i%3) + i * 0.14f;
+			shader_set_uniform_mat3(&g_fun_models[i % 3].shader, "u_normalMatrix", (float*)normalMatrix);
+			glm_mat4_identity(model);
+			glm_translate(model, (vec3){ cosf(t) * (200.0f + (i%3)*100.0f), -170.0f + sinf(t) * (200.0f + (i%3)*100.0f), -300.0f});
+			glm_rotate_x(model, glm_rad(10.0f + cosf(g_engine->time_elapsed) * 10.0f), model);
+			float s = 200.0f + rng_f() * 300.0f;
+			glm_scale(model, (vec3){ s, s, s });
+			model_draw(&g_fun_models[i % 3], perspective, view, model);
+		}
 
 		// model 2
 		glm_mat4_identity(model);
