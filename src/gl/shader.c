@@ -152,7 +152,8 @@ static int shader_stage_new(GLenum type, const char *path) {
 	}
 
 	int shader = glCreateShader(type);
-	glShaderSource(shader, 1, &shadersrc, NULL);
+	const GLchar *shadersrc_const = shadersrc; // TODO: Cringe, but required for now.
+	glShaderSource(shader, 1, &shadersrc_const, NULL);
 	glCompileShader(shader);
 
 	GLint status;
