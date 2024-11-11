@@ -1,5 +1,5 @@
 
-CC = clang
+CC = gcc
 
 # Sadly, flecs requires `gnu99`.
 CFLAGS = -std=gnu99 -fPIC -Wall -Wextra -pedantic \
@@ -73,6 +73,23 @@ all: $(TARGET)
 
 server:
 	$(MAKE) -f src/server/Makefile
+
+
+# Tests
+TEST_SRC = $(wildcard src/tests/framework/*.c) $(wildcard src/tests/test_*.c)
+TEST_OBJ = $(addprefix $(BIN),$(TEST_SRC:.c=.o))
+TEST_EXEC = run_tests
+
+SRC_NO_MAIN = $(filter-out main.c, $(SRC))
+OBJ_NO_MAIN = $(addprefix $(BIN),$(SRC_NO_MAIN:.c=.o))
+
+test: $(OBJ_NO_MAIN) $(TEST_OBJ)
+	$(CC) $(CFLAGS) $(INCLUDES) -o $(TEST_EXEC) $(OBJ_NO_MAIN) $(TEST_OBJ) $(LIBS)
+	./$(TEST_EXEC)
+
+$(BIN)tests/%.o: tests/%.c
+	mkdir -p $(@D)
+	$(CC) $(CFLAGS) $(INCLUDES) -c $< -o $@
 
 
 # TODO: Let's do a cleanup of the following mess...

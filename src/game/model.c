@@ -152,7 +152,11 @@ void model_init_from_file(model_t *model, const char *path) {
 			printf(" - name      : \"%s\"\n", data->images[i].name);
 			printf(" - uri       : %s\n", data->images[i].uri);
 			printf(" - mime-type : %s\n", data->images[i].mime_type);
-			printf(" - size      : %zu\n", data->images[i].buffer_view->size);
+			if (data->images[i].buffer_view) {
+				printf(" - size      : %zu\n", data->images[i].buffer_view->size);
+			} else {
+				printf(" - size      : (no buffer view)\n");
+			}
 		}
 
 		for (cgltf_size i = 0; i < data->textures_count; ++i) {

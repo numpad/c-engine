@@ -9,6 +9,7 @@ soil_soldiers.wasm
 soil_soldiers.html.mem
 soil_soldiers
 /server
+run_tests
 
 # cache, local settings
 .cache
