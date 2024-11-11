@@ -5,6 +5,7 @@
 #include <SDL_opengles2.h>
 #include <cglm/cglm.h>
 #include "util/util.h"
+#include "util/str.h"
 
 //////////////
 //  STATIC  //
@@ -216,8 +217,12 @@ void model_init_from_file(model_t *model, const char *path) {
 		}
 
 		if (texture_view->texture->image->uri != NULL) {
-			const char *image_path = texture_view->texture->image->uri;
-			fprintf(stderr, "[warn] loading image by uri is not supported & tested yet: \"%s\"...\n", image_path);
+			const char *relative_image_path = texture_view->texture->image->uri;
+			char image_path[256];
+			str_path_replace_filename(path, relative_image_path, 256, image_path);
+			fprintf(stderr, "[warn] loading image by uri is still experimental: \"%s\"...\n", image_path);
+
+			// TODO: Let's cache this, needs an asset manager.
 			texture_init_from_image(&model->texture0, image_path, &settings);
 		} else {
 			unsigned int image_data_len = data->images[i].buffer_view->size;
