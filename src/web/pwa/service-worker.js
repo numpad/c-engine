@@ -2,10 +2,10 @@
 
 const cacheName = 'app-cache-v1';
 const filesToCache = [
-	'soil_soldiers.html',
-	'soil_soldiers.js',
-	'soil_soldiers.wasm',
-	'soil_soldiers.data',
+	'cengine.html',
+	'cengine.js',
+	'cengine.wasm',
+	'cengine.data',
 ];
 
 self.addEventListener('install', (event) => {

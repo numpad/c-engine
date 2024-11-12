@@ -2,7 +2,7 @@
 	"name": "Soil Soldiers - A deckbuilding rogue-like.",
 	"short_name": "Soil Soldiers",
 	"description": "A deckbuilding rogue-like game to play alone or with friends.",
-	"start_url": "/soil_soldiers.html",
+	"start_url": "/cengine.html",
 	"display": "standalone",
 	"background_color": "#aabbff",
 	"theme_color": "#ffff00",

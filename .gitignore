@@ -2,12 +2,12 @@
 # compiler output
 *.o
 *.so
-soil_soldiers.html
-soil_soldiers.js
-soil_soldiers.data
-soil_soldiers.wasm
-soil_soldiers.html.mem
-soil_soldiers
+cengine.html
+cengine.js
+cengine.data
+cengine.wasm
+cengine.html.mem
+cengine
 /server
 run_tests
 
