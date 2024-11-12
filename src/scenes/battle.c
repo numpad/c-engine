@@ -17,7 +17,6 @@
 #include "gl/shader.h"
 #include "gl/graphics2d.h"
 #include "gl/text.h"
-#include "game/isoterrain.h"
 #include "game/background.h"
 #include "game/model.h"
 #include "gui/console.h"
@@ -27,14 +26,6 @@
 //
 // structs & enums
 //
-
-enum block_type {
-	BLOCK_AIR = -1,
-	BLOCK_DIRT = 0,
-	BLOCK_GRASS = 1,
-	BLOCK_STONE = 2,
-	BLOCK_ICE = 33,
-};
 
 enum event_type {
 	EVENT_PLAY_CARD,
@@ -87,46 +78,22 @@ typedef struct {
 	float added_at_time;
 } c_handcard;
 
-// position on the isoterrain grid
-typedef struct {
-	int x, y, z;
-} c_blockpos;
-
-typedef struct {
-	int x, y, z;
-} c_move_direction;
-
-typedef struct {
-	int tile_width;
-	int tile_height;
-	int tile_x;
-	int tile_y;
-	int flip_x;
-	int backside;
-} c_tileset_tile;
-
 ECS_COMPONENT_DECLARE(c_position);
 ECS_COMPONENT_DECLARE(c_card);
 ECS_COMPONENT_DECLARE(c_handcard);
 ECS_COMPONENT_DECLARE(c_blockpos);
-ECS_COMPONENT_DECLARE(c_move_direction);
-ECS_COMPONENT_DECLARE(c_tileset_tile);
 
 // queries
 static ecs_query_t *g_ordered_handcards;
 static int g_handcards_updated;
 
 // systems
-static void system_turn_move_entities   (ecs_iter_t *);
 static void system_move_cards           (ecs_iter_t *);
 static void system_draw_cards           (ecs_iter_t *);
-static void system_draw_entities        (ecs_iter_t *);
 static void observer_on_update_handcards(ecs_iter_t *);
 
-ECS_SYSTEM_DECLARE(system_turn_move_entities);
 ECS_SYSTEM_DECLARE(system_move_cards);
 ECS_SYSTEM_DECLARE(system_draw_cards);
-ECS_SYSTEM_DECLARE(system_draw_entities);
 
 //
 // vars
@@ -134,22 +101,19 @@ ECS_SYSTEM_DECLARE(system_draw_entities);
 static engine_t     *g_engine;
 
 // game state
-struct isoterrain_s g_terrain;
 static texture_t    g_cards_texture;
-static texture_t    g_entities_texture;
 static texture_t    g_ui_texture;
 static shader_t     g_sprite_shader;
 static shader_t     g_text_shader;
 static pipeline_t   g_cards_pipeline;
-static pipeline_t   g_entities_pipeline;
 static pipeline_t   g_ui_pipeline;
 static pipeline_t   g_text_pipeline;
 static ecs_world_t  *g_world;
 static ecs_entity_t g_selected_card;
-static int          g_next_turn;
 static fontatlas_t  g_card_font;
 static model_t      g_model;
 static model_t      g_fun_models[3];
+static float        g_pickup_next_card;
 
 // testing
 static Mix_Chunk    *g_place_card_sfx;
@@ -165,7 +129,7 @@ static void load(struct scene_battle_s *scene, struct engine_s *engine) {
 	g_engine = engine;
 	g_handcards_updated = 0;
 	g_selected_card = 0;
-	g_next_turn = 0;
+	g_pickup_next_card = -0.75f; // wait 0.75s before spawning.
 	console_log(engine, "Starting battle scene!");
 
 	static int loads = 0;
@@ -182,13 +146,8 @@ static void load(struct scene_battle_s *scene, struct engine_s *engine) {
 	ECS_COMPONENT_DEFINE(g_world, c_position);
 	ECS_COMPONENT_DEFINE(g_world, c_card);
 	ECS_COMPONENT_DEFINE(g_world, c_handcard);
-	ECS_COMPONENT_DEFINE(g_world, c_blockpos);
-	ECS_COMPONENT_DEFINE(g_world, c_move_direction);
-	ECS_COMPONENT_DEFINE(g_world, c_tileset_tile);
-	ECS_SYSTEM_DEFINE(g_world, system_turn_move_entities, 0, c_blockpos, c_move_direction);
 	ECS_SYSTEM_DEFINE(g_world, system_move_cards, 0, c_position, c_handcard);
 	ECS_SYSTEM_DEFINE(g_world, system_draw_cards, 0, c_card, ?c_handcard, c_position); _syntax_fix_label:
-	ECS_SYSTEM_DEFINE(g_world, system_draw_entities, 0, c_blockpos, c_tileset_tile);
 
 	g_ordered_handcards = ecs_query(g_world, {
 		.filter.terms = { {ecs_id(c_card)}, {ecs_id(c_handcard)} },
@@ -218,55 +177,6 @@ static void load(struct scene_battle_s *scene, struct engine_s *engine) {
 		ecs_set(g_world, e, c_card, { .name="Corruption", .image_id=5, .icon_ids_count=3, .icon_ids={3, 3, 4} });
 	}
 
-	// add some debug entities
-	{
-		ecs_entity_t e = ecs_new_id(g_world);
-		ecs_set_name(g_world, e, "player");
-		ecs_set(g_world, e, c_blockpos, { 4, 4, 19 });
-		ecs_set(g_world, e, c_tileset_tile, { .tile_width=16, .tile_height=17, .tile_x=0, .tile_y=0 });
-		e = ecs_new_id(g_world);
-		ecs_set(g_world, e, c_blockpos, { 1, 8, 20 });
-		ecs_set(g_world, e, c_tileset_tile, { .tile_width=16, .tile_height=17, .tile_x=8, .tile_y=6 });
-		e = ecs_new_id(g_world);
-		ecs_set(g_world, e, c_blockpos, { 7, 6, 19 });
-		ecs_set(g_world, e, c_tileset_tile, { .tile_width=16, .tile_height=17, .tile_x=4, .tile_y=0, .flip_x=1 });
-	}
-
-	// isoterrain
-	//isoterrain_init_from_file(&g_terrain, "res/data/levels/winter.json");
-	isoterrain_init(&g_terrain, 15, 15, 20);
-	for (int z = 0; z < g_terrain.layers; ++z) {
-		for (int y = 0; y < g_terrain.height; ++y) {
-			for (int x = 0; x < g_terrain.width; ++x) {
-				isoterrain_set_block(&g_terrain, x, y, z, -1);
-
-				if (x == g_terrain.width - 1 || y == 0) {
-					enum block_type b = BLOCK_AIR;
-					if (z < 12) {
-						b = BLOCK_STONE;
-					}
-					else if (z <= 17) {
-						float noise = stb_perlin_noise3_seed(x / 10.0f, y / 10.0f, z / 10.0f, 0, 0, 0, time(NULL))
-									+ stb_perlin_noise3_seed(x /  3.0f, y /  3.0f, z /  3.0f, 0, 0, 0, time(NULL));
-						if (noise > 0.0f) {
-							b = BLOCK_STONE;
-						} else {
-							b = BLOCK_DIRT;
-						}
-					}
-					isoterrain_set_block(&g_terrain, x, y, z, b);
-				}
-
-				if (z == 18) {
-					isoterrain_set_block(&g_terrain, x, y, z, BLOCK_GRASS);
-				}
-				else if (z == 19) {
-				}
-			}
-		}
-	}
-
-
 	// card renderer
 	{
 		struct texture_settings_s settings = TEXTURE_SETTINGS_INIT;
@@ -277,16 +187,6 @@ static void load(struct scene_battle_s *scene, struct engine_s *engine) {
 
 		pipeline_init(&g_cards_pipeline, &g_sprite_shader, 128);
 		g_cards_pipeline.z_sorting_enabled = 1;
-	}
-
-	// entity renderer
-	{
-		struct texture_settings_s settings = TEXTURE_SETTINGS_INIT;
-		settings.filter_min = GL_LINEAR;
-		settings.filter_mag = GL_NEAREST;
-		texture_init_from_image(&g_entities_texture, "res/sprites/entities-outline.png", &settings);
-
-		pipeline_init(&g_entities_pipeline, &g_sprite_shader, 128);
 	}
 
 	// ui
@@ -331,17 +231,14 @@ static void destroy(struct scene_battle_s *scene, struct engine_s *engine) {
 	Mix_FreeChunk(g_slide_card_sfx);
 
 	background_destroy();
-	isoterrain_destroy(&g_terrain);
 
 	texture_destroy(&g_cards_texture);
-	texture_destroy(&g_entities_texture);
 	texture_destroy(&g_ui_texture);
 
 	shader_destroy(&g_sprite_shader);
 	shader_destroy(&g_text_shader);
 
 	pipeline_destroy(&g_cards_pipeline);
-	pipeline_destroy(&g_entities_pipeline);
 	pipeline_destroy(&g_ui_pipeline);
 	pipeline_destroy(&g_text_pipeline);
 
@@ -384,58 +281,6 @@ static void update(struct scene_battle_s *scene, struct engine_s *engine, float 
 				Mix_PlayChannel(-1, g_slide_card_sfx, 0);
 			}
 		}
-		else {
-			// if not, assume movement swipe
-			float swipe_angle;
-			float swipe_dist;
-			{
-				vec2 begin = { drag->begin_x, drag->begin_y };
-				vec2 end = { drag->end_x, drag->end_y };
-				vec2 swipe_dir;
-				glm_vec2_sub(end, begin, swipe_dir);
-				swipe_dist = glm_vec2_norm(swipe_dir);
-				glm_vec2_normalize(swipe_dir);
-				swipe_angle = atan2f(swipe_dir[1], swipe_dir[0]);
-			}
-
-			if (swipe_dist > 10.0f) {
-				enum {
-					NE = 3,
-					SE = 0,
-					SW = 1,
-					NW = 2,
-				} segment = calculate_angle_segment(swipe_angle, 4);
-
-				int flip_x = 0;
-				int backside = 0;
-				ecs_entity_t e = ecs_lookup(g_world, "player");
-				switch (segment) {
-				case NE:
-					e = ecs_set(g_world, e, c_move_direction, { .x=0, .y=1, .z=0 });
-					backside = 1;
-					break;
-				case SE:
-					e = ecs_set(g_world, e, c_move_direction, { .x=1, .y=0, .z=0 });
-					break;
-				case SW:
-					e = ecs_set(g_world, e, c_move_direction, { .x=0, .y=-1, .z=0 });
-					flip_x = 1;
-					break;
-				case NW:
-					e = ecs_set(g_world, e, c_move_direction, { .x=-1, .y=0, .z=0 });
-					flip_x = 1;
-					backside = 1;
-					break;
-				}
-
-				c_tileset_tile *tile = ecs_get_mut(g_world, e, c_tileset_tile);
-				tile->flip_x = flip_x;
-				tile->backside = backside;
-				ecs_modified(g_world, e, c_tileset_tile);
-
-				g_next_turn = 1;
-			}
-		}
 	}
 
 	// move card
@@ -455,11 +300,10 @@ static void update(struct scene_battle_s *scene, struct engine_s *engine, float 
 	}
 
 	// add cards
-	static float card_add_accum = -0.5f; // wait half a second before starting
 	const float card_add_speed = 0.25f;
-	card_add_accum += dt;
-	if (card_add_accum >= card_add_speed) {
-		card_add_accum -= card_add_speed;
+	g_pickup_next_card += dt;
+	if (g_pickup_next_card >= card_add_speed) {
+		g_pickup_next_card -= card_add_speed;
 		
 		ecs_filter_t *filter = ecs_filter_init(g_world, &(ecs_filter_desc_t){
 			.terms = {
@@ -503,69 +347,10 @@ static void draw(struct scene_battle_s *scene, struct engine_s *engine) {
 
 	// draw terrain
 	const int t_padding = 40.0f;
-	const float t_scale = ((engine->window_width - t_padding) / (float)g_terrain.projected_width);
-	const int t_y = engine->window_height - g_terrain.projected_height * t_scale - 50.0f;
-
-	glm_mat4_identity(engine->u_view);
-	glm_translate_x(engine->u_view, (int)(t_padding * 0.5f));
-	glm_translate_y(engine->u_view, (int)(t_y));
-	glm_scale(engine->u_view, (float[]){t_scale, t_scale, t_scale});
-	isoterrain_draw(&g_terrain, engine);
 
 	// drawing systems
-	pipeline_reset(&g_entities_pipeline);
-	g_entities_pipeline.texture = &g_entities_texture;
-
 	pipeline_reset(&g_cards_pipeline);
 	g_cards_pipeline.texture = &g_cards_texture;
-
-	if (g_next_turn) {
-		g_next_turn = 0;
-		ecs_run(g_world, ecs_id(system_turn_move_entities), engine->dt, NULL);
-	}
-	ecs_run(g_world, ecs_id(system_move_cards), engine->dt, NULL);
-	ecs_run(g_world, ecs_id(system_draw_entities), engine->dt, NULL);
-	pipeline_draw(&g_entities_pipeline, engine);
-
-	ecs_run(g_world, ecs_id(system_draw_cards), engine->dt, NULL);
-
-	// draw cards
-	glEnable(GL_DEPTH_TEST);
-	glDepthFunc(GL_LEQUAL);
-	pipeline_draw_ortho(&g_cards_pipeline, g_engine->window_width, g_engine->window_height);
-	glDisable(GL_DEPTH_TEST);
-
-	// draw ui
-	pipeline_reset(&g_ui_pipeline);
-	{
-		drawcmd_t cmd;
-		cmd = DRAWCMD_INIT;
-		cmd.size.x = 96;
-		cmd.size.y = 96;
-		cmd.position.x = engine->window_width - 96 - 4;
-		cmd.position.y = 4;
-		cmd.position.z = 0.0f;
-		drawcmd_set_texture_subrect(&cmd, g_ui_pipeline.texture, 0, 0, 32, 32);
-		pipeline_emit(&g_ui_pipeline, &cmd);
-
-		cmd = DRAWCMD_INIT;
-		cmd.size.x = 48;
-		cmd.size.y = 196;
-		cmd.position.x = 1;
-		cmd.position.y = 4;
-		drawcmd_set_texture_subrect(&cmd, g_ui_pipeline.texture, 32, 0, 16, 64);
-		pipeline_emit(&g_ui_pipeline, &cmd);
-
-		float hp = fabsf(cosf(engine->time_elapsed));
-		cmd = DRAWCMD_INIT;
-		cmd.size.x = ceilf(112.0f * hp);
-		cmd.size.y = 16;
-		cmd.position.x = -6;
-		cmd.position.y = 90;
-		drawcmd_set_texture_subrect(&cmd, g_ui_pipeline.texture, 96, 0, ceilf(112.0f * hp), 16);
-		pipeline_emit(&g_ui_pipeline, &cmd);
-	}
-	pipeline_draw_ortho(&g_ui_pipeline, g_engine->window_width, g_engine->window_height);
 
 	// draw model
 	{
@@ -601,7 +386,6 @@ static void draw(struct scene_battle_s *scene, struct engine_s *engine) {
 			shader_set_uniform_mat3(&g_fun_models[i % 3].shader, "u_normalMatrix", (float*)normalMatrix);
 			glm_mat4_identity(model);
 			glm_translate(model, (vec3){ cosf(t) * (200.0f + (i%3)*100.0f), -170.0f + sinf(t) * (200.0f + (i%3)*100.0f), -300.0f});
-			glm_rotate_x(model, glm_rad(10.0f + cosf(g_engine->time_elapsed) * 10.0f), model);
 			float s = 200.0f + rng_f() * 300.0f;
 			glm_scale(model, (vec3){ s, s, s });
 			model_draw(&g_fun_models[i % 3], perspective, view, model);
@@ -621,6 +405,49 @@ static void draw(struct scene_battle_s *scene, struct engine_s *engine) {
 
 		glDisable(GL_DEPTH_TEST);
 	}
+
+	// draw cards
+	ecs_run(g_world, ecs_id(system_move_cards), engine->dt, NULL);
+	ecs_run(g_world, ecs_id(system_draw_cards), engine->dt, NULL);
+
+	// draw ui
+	pipeline_reset(&g_ui_pipeline);
+	{
+		drawcmd_t cmd;
+		
+		// Frame
+		cmd = DRAWCMD_INIT;
+		cmd.size.x = 96;
+		cmd.size.y = 96;
+		cmd.position.x = engine->window_width - 96 - 4;
+		cmd.position.y = 4;
+		cmd.position.z = -1.0f;
+		drawcmd_set_texture_subrect(&cmd, g_ui_pipeline.texture, 0, 0, 32, 32);
+		pipeline_emit(&g_ui_pipeline, &cmd);
+
+		// Healthbar frame
+		cmd = DRAWCMD_INIT;
+		cmd.size.x = 48;
+		cmd.size.y = 196;
+		cmd.position.x = 1;
+		cmd.position.y = 4;
+		drawcmd_set_texture_subrect(&cmd, g_ui_pipeline.texture, 32, 0, 16, 64);
+		pipeline_emit(&g_ui_pipeline, &cmd);
+
+		// Healthbar fill
+		float hp = fabsf(cosf(engine->time_elapsed));
+		cmd = DRAWCMD_INIT;
+		cmd.size.x = ceilf(112.0f * hp);
+		cmd.size.y = 16;
+		cmd.position.x = -6;
+		cmd.position.y = 90;
+		drawcmd_set_texture_subrect(&cmd, g_ui_pipeline.texture, 96, 0, ceilf(112.0f * hp), 16);
+		pipeline_emit(&g_ui_pipeline, &cmd);
+	}
+
+	glEnable(GL_DEPTH_TEST);
+	pipeline_draw_ortho(&g_ui_pipeline, g_engine->window_width, g_engine->window_height);
+	glDisable(GL_DEPTH_TEST);
 }
 
 
@@ -755,41 +582,6 @@ static void on_game_event_play_card(event_info_t *info) {
 // systems implementation
 //
 
-static void system_turn_move_entities(ecs_iter_t *it) {
-	c_blockpos *positions = ecs_field(it, c_blockpos, 1);
-	c_move_direction *moves = ecs_field(it, c_move_direction, 2);
-	
-	for (int i = 0; i < it->count; ++i) {
-		c_blockpos *pos = &positions[i];
-		c_move_direction *move = &moves[i];
-		assert(abs(move->x) <= 1);
-		assert(abs(move->y) <= 1);
-		assert(abs(move->z) <= 1);
-
-		iso_block *next_surface = isoterrain_get_block(&g_terrain, pos->x + move->x, pos->y + move->y, pos->z + move->z - 1);
-		iso_block *next_block = isoterrain_get_block(&g_terrain, pos->x + move->x, pos->y + move->y, pos->z + move->z);
-		if (next_block && *next_block == BLOCK_AIR) {
-			// slide on ice
-			while (next_block != NULL && next_surface != NULL && *next_surface == BLOCK_ICE) {
-				pos->x += move->x;
-				pos->y += move->y;
-				pos->z += move->z;
-				next_surface = isoterrain_get_block(&g_terrain, pos->x + move->x, pos->y + move->y, pos->z + move->z - 1);
-				next_block = isoterrain_get_block(&g_terrain, pos->x + move->x, pos->y + move->y, pos->z + move->z);
-			}
-			// normal move
-			if (next_block != NULL || (next_block && *next_block == BLOCK_AIR)) {
-				pos->x += move->x;
-				pos->y += move->y;
-				pos->z += move->z;
-			}
-		}
-
-		ecs_remove(g_world, it->entities[i], c_move_direction);
-	}
-}
-
-
 static void system_move_cards(ecs_iter_t *it) {
 	c_position *positions = ecs_field(it, c_position, 1);
 	c_handcard *handcards = ecs_field(it, c_handcard, 2);
@@ -904,34 +696,6 @@ static void system_draw_cards(ecs_iter_t *it) {
 		glm_translate(model, (vec3){5, 64 * extra_scale + 11 + 5, 0});
 		pipeline_set_transform(&g_text_pipeline, model);
 		pipeline_draw_ortho(&g_text_pipeline, g_engine->window_width, g_engine->window_height);
-	}
-}
-
-
-static void system_draw_entities(ecs_iter_t *it) {
-	c_blockpos *positions = ecs_field(it, c_blockpos, 1);
-	c_tileset_tile *tiles = ecs_field(it, c_tileset_tile, 2);
-	
-	for (int i = 0; i < it->count; ++i) {
-		vec2 screen_pos;
-		c_blockpos blockpos = positions[i];
-		isoterrain_pos_block_to_screen(&g_terrain, blockpos.x, blockpos.y, blockpos.z, screen_pos);
-
-		c_tileset_tile *tile = &tiles[i];
-
-		drawcmd_t cmd = DRAWCMD_INIT;
-		cmd.size.x = 16;
-		cmd.size.y = 16;
-		glm_vec2(screen_pos, cmd.position.raw);
-		cmd.position.y = g_terrain.projected_height - cmd.position.y;
-		cmd.position.z = 0.0f;
-		drawcmd_set_texture_subrect_tile(&cmd, g_entities_pipeline.texture,
-			tile->tile_width, tile->tile_height,
-			tile->tile_x, tile->tile_y + tile->backside);
-		drawcmd_flip_texture_subrect(&cmd, tile->flip_x, 0);
-
-		pipeline_emit(&g_entities_pipeline, &cmd);
-		
 	}
 }
 
