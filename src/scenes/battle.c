@@ -1,5 +1,6 @@
 #include "battle.h"
 
+#include <assert.h>
 #include <math.h>
 #include <time.h>
 #include <SDL_opengles2.h>
@@ -51,6 +52,9 @@ static ecs_entity_t find_closest_handcard(float x, float y, float max_distance);
 static int order_handcards(ecs_entity_t e1, const void *data1, ecs_entity_t e2, const void *data2);
 static void on_game_event(enum event_type, event_info_t *);
 static void on_game_event_play_card(event_info_t *info);
+
+static void load_hextile_models(void);
+static void draw_hextile_map(void);
 
 //
 // ecs
@@ -113,7 +117,12 @@ static ecs_entity_t g_selected_card;
 static fontatlas_t  g_card_font;
 static model_t      g_model;
 static model_t      g_fun_models[3];
+static model_t      g_hextiles[1];
 static float        g_pickup_next_card;
+static struct {
+	mat4 projection;
+	mat4 view;
+} g_camera;
 
 // testing
 static Mix_Chunk    *g_place_card_sfx;
@@ -132,14 +141,30 @@ static void load(struct scene_battle_s *scene, struct engine_s *engine) {
 	g_pickup_next_card = -0.75f; // wait 0.75s before spawning.
 	console_log(engine, "Starting battle scene!");
 
+	// initialize camera
+	//glm_perspective(glm_rad(50.0f), g_engine->window_width / (float)g_engine->window_height, 1.0f, 50.0f, g_camera.projection);
+	glm_mat4_identity(g_camera.view);
+	glm_rotate_x(g_camera.view, glm_rad(35.0f), g_camera.view);
+	glm_translate(g_camera.view, (vec3){ 0.0f, -400.0f, -700.0f });
+	glm_mat4_identity(g_camera.projection);
+
 	static int loads = 0;
 	const char *models[] = {"res/models/characters/Knight.glb", "res/models/characters/Mage.glb", "res/models/characters/Barbarian.glb", "res/models/characters/Rogue.glb"};
-	model_init_from_file(&g_model, models[loads++ % 4]);
+	int load_error = model_init_from_file(&g_model, models[loads++ % 4]);
+	assert(load_error == 0);
 
-	const char *fun_models[] = {"res/models/decoration/props/target.gltf", "res/models/decoration/props/crate_A_big.gltf", "res/models/decoration/props/bucket_water.gltf"};
+	// some random props
+	const char *fun_models[] = {
+		"res/models/decoration/props/bucket_water.gltf",
+		"res/models/decoration/props/target.gltf",
+		"res/models/decoration/props/crate_A_big.gltf",
+	};
 	for (uint i = 0; i < count_of(fun_models); ++i) {
-		model_init_from_file(&g_fun_models[i], fun_models[i]);
+		int load_fun_error = model_init_from_file(&g_fun_models[i], fun_models[i]);
+		assert(load_fun_error == 0);
 	}
+	
+	load_hextile_models();
 
 	// ecs
 	g_world = ecs_init();
@@ -342,33 +367,31 @@ static void draw(struct scene_battle_s *scene, struct engine_s *engine) {
 	engine_set_clear_color(0.34f, 0.72f, 0.98f);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
+	// TODO: Update camera, do this on window resize instead.
+	float size = engine->window_width;
+	glm_ortho(-size, size, -size * g_engine->window_aspect, size * g_engine->window_aspect, 1.0f, 2000.0f, g_camera.projection);
+
 	// draw background
 	background_draw(engine);
 
 	// draw terrain
-	const int t_padding = 40.0f;
+	draw_hextile_map();
 
 	// drawing systems
 	pipeline_reset(&g_cards_pipeline);
 	g_cards_pipeline.texture = &g_cards_texture;
 
-	// draw model
+	// Player model
 	{
 		// calculate matrices
-		mat4 perspective = GLM_MAT4_IDENTITY_INIT;
-		//glm_perspective(glm_rad(50.0f), g_engine->window_width / (float)g_engine->window_height, 1.0f, 50.0f, perspective);
-		float size = engine->window_width;
-		glm_ortho(-size, size, -size * g_engine->window_aspect, size * g_engine->window_aspect, 1.0f, 500.0f, perspective);
-		mat4 view = GLM_MAT4_IDENTITY_INIT;
 		mat4 model = GLM_MAT4_IDENTITY_INIT;
-		glm_translate(model, (vec3){ 0.0f, -200.0f, -300.0f });
-		glm_rotate_x(model, glm_rad(35.0f), model);
+		glm_translate(model, (vec3){ 100.0f, 0.0f, sqrtf(3.0f) * 200.0f });
 		glm_rotate_y(model, glm_rad(sinf(g_engine->time_elapsed * 2.0f) * 80.0f), model);
 		glm_scale(model, (vec3){ 100.0f, 100.0f, 100.0f});
 
 		// TODO: also do this for every node, as the model matrix changes...
 		mat4 modelView = GLM_MAT4_IDENTITY_INIT;
-		glm_mat4_mul(view, model, modelView);
+		glm_mat4_mul(g_camera.view, model, modelView);
 		mat3 normalMatrix = GLM_MAT3_IDENTITY_INIT;
 		glm_mat4_pick3(modelView, normalMatrix);
 		glm_mat3_inv(normalMatrix, normalMatrix);
@@ -378,20 +401,27 @@ static void draw(struct scene_battle_s *scene, struct engine_s *engine) {
 		glEnable(GL_DEPTH_TEST);
 
 		shader_set_uniform_mat3(&g_model.shader, "u_normalMatrix", (float*)normalMatrix);
-		model_draw(&g_model, perspective, view, model);
+		model_draw(&g_model, g_camera.projection, g_camera.view, model);
 
+		rng_seed(123);
 		for (int i = 0; i < 50; ++i) {
-			rng_seed(i);
-			float t = engine->time_elapsed * 0.6f * (1+i%3) + i * 0.14f;
-			shader_set_uniform_mat3(&g_fun_models[i % 3].shader, "u_normalMatrix", (float*)normalMatrix);
+			int c = (i % 3);
+			float t = engine->time_elapsed * 0.6f * (1+c) + i * 0.14f;
+			shader_set_uniform_mat3(&g_fun_models[c].shader, "u_normalMatrix", (float*)normalMatrix);
 			glm_mat4_identity(model);
-			glm_translate(model, (vec3){ cosf(t) * (200.0f + (i%3)*100.0f), -170.0f + sinf(t) * (200.0f + (i%3)*100.0f), -300.0f});
+			glm_translate(model, (vec3){ cosf(t) * (200.0f + c*100.0f), -170.0f + sinf(t) * (200.0f + c*100.0f) + 70.0f * c, -460.0f + c * 150.0f});
+			float ay = rng_f();
+			float az = rng_f();
+			vec3 axis = {0.0f, ay, az};
+			glm_normalize(axis);
+			glm_rotate(model, glm_rad(fmodf(engine->time_elapsed * (45.0f * (rng_f() + 0.5f)) + rng_f() * 360.0f, 360.0f)), axis);
 			float s = 200.0f + rng_f() * 300.0f;
 			glm_scale(model, (vec3){ s, s, s });
-			model_draw(&g_fun_models[i % 3], perspective, view, model);
+			model_draw(&g_fun_models[c], g_camera.projection, g_camera.view, model);
 		}
 
-		// model 2
+		// Portrait model
+		mat4 portrait_view = GLM_MAT4_IDENTITY_INIT;
 		glm_mat4_identity(model);
 		glm_translate(model, (vec3){ engine->window_width - 100.0f, engine->window_height - 240.0f, -300.0f });
 		glm_rotate_x(model, glm_rad(10.0f + cosf(g_engine->time_elapsed) * 10.0f), model);
@@ -400,7 +430,7 @@ static void draw(struct scene_battle_s *scene, struct engine_s *engine) {
 		const float pr = engine->window_pixel_ratio;
 		glEnable(GL_SCISSOR_TEST);
 		glScissor(engine->window_width * pr - 85.0f * pr, engine->window_height * pr - 85.0f * pr, 66 * pr, 66 * pr);
-		model_draw(&g_model, perspective, view, model);
+		model_draw(&g_model, g_camera.projection, portrait_view, model);
 		glDisable(GL_SCISSOR_TEST);
 
 		glDisable(GL_DEPTH_TEST);
@@ -421,7 +451,7 @@ static void draw(struct scene_battle_s *scene, struct engine_s *engine) {
 		cmd.size.y = 96;
 		cmd.position.x = engine->window_width - 96 - 4;
 		cmd.position.y = 4;
-		cmd.position.z = -1.0f;
+		cmd.position.z = -0.9f;
 		drawcmd_set_texture_subrect(&cmd, g_ui_pipeline.texture, 0, 0, 32, 32);
 		pipeline_emit(&g_ui_pipeline, &cmd);
 
@@ -575,6 +605,45 @@ static void on_game_event_play_card(event_info_t *info) {
 	// remove card
 	ecs_delete(g_world, g_selected_card);
 	g_selected_card = 0;
+}
+
+static void load_hextile_models(void) {
+	const char *models[] = {
+		"res/models/tiles/base/hex_grass.gltf",
+	};
+
+	for (uint i = 0; i < count_of(models); ++i) {
+		int err = model_init_from_file(&g_hextiles[i], models[i]);
+		assert(err == 0);
+	}
+}
+
+static void draw_hextile_map(void) {
+	glEnable(GL_DEPTH_TEST);
+
+	float hex_size = 115.0f;
+	float horiz = sqrtf(3) * hex_size;
+	float vert = (3.0f/2) * hex_size;
+	for (int i = 0; i < 15; ++i) {
+		int q = i % 3;
+		int r = floorf(i / 3.0f);
+		float horiz_offset = (r % 2 == 0) ? horiz * 0.5f : 0.0f;
+
+		mat4 model = GLM_MAT4_IDENTITY_INIT;
+		glm_translate(model, (vec3){ q * horiz + horiz_offset, 0.0f, r * vert });
+		glm_scale(model, (vec3){ 100.0f, 100.0f, 100.0f});
+
+		mat4 modelView = GLM_MAT4_IDENTITY_INIT;
+		glm_mat4_mul(g_camera.view, model, modelView);
+		mat3 normalMatrix = GLM_MAT3_IDENTITY_INIT;
+		glm_mat4_pick3(modelView, normalMatrix);
+		glm_mat3_inv(normalMatrix, normalMatrix);
+		glm_mat3_transpose(normalMatrix);
+
+		shader_set_uniform_mat3(&g_hextiles[0].shader, "u_normalMatrix", (float*)normalMatrix);
+		model_draw(&g_hextiles[0], g_camera.projection, g_camera.view, model);
+	}
+	glDisable(GL_DEPTH_TEST);
 }
 
 

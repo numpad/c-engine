@@ -123,7 +123,8 @@ static void draw_node(model_t *model, cgltf_node *node, mat4 modelmatrix) {
 //  PUBLIC  //
 //////////////
 
-void model_init_from_file(model_t *model, const char *path) {
+int model_init_from_file(model_t *model, const char *path) {
+	// TODO: This needs an error return value, and handle error cases...
 	assert(model != NULL);
 	assert(path != NULL);
 
@@ -132,7 +133,7 @@ void model_init_from_file(model_t *model, const char *path) {
 	cgltf_result result = cgltf_parse_file(&options, path, &data);
 	if (result != cgltf_result_success) {
 		fprintf(stderr, "[warn] couldn't load model from \"%s\" (error=%d)...\n", path, result);
-		return;
+		return 1;
 	}
 
 	model->gltf_data = data;
@@ -140,7 +141,7 @@ void model_init_from_file(model_t *model, const char *path) {
 	result = cgltf_load_buffers(&options, data, path);
 	if (result != cgltf_result_success) {
 		fprintf(stderr, "[warn] couldn't load buffers from \"%s\"...\n", path);
-		return;
+		return 1;
 	}
 
 	{ // find images
@@ -250,6 +251,8 @@ void model_init_from_file(model_t *model, const char *path) {
 	}
 	glUseProgram(0);
 #endif
+
+	return 0;
 }
 
 void model_draw(model_t *model, mat4 projection, mat4 view, mat4 modelmatrix) {

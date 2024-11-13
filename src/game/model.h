@@ -15,7 +15,7 @@ typedef struct model_s {
 } model_t;
 
 
-void model_init_from_file(model_t *, const char *path);
+int  model_init_from_file(model_t *, const char *path);
 void model_destroy(model_t *);
 
 void model_draw(model_t *, mat4 projection, mat4 view, mat4 modelmatrix);
