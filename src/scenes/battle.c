@@ -51,7 +51,7 @@ struct camera {
 struct hexmap {
 	int w, h;
 	float tilesize;
-	int *tiles;
+	struct {short tile; short rotation;} *tiles;
 	vec2s tile_offsets;
 };
 
@@ -131,7 +131,7 @@ static ecs_entity_t  g_selected_card;
 static fontatlas_t   g_card_font;
 static model_t       g_model;
 static model_t       g_fun_models[3];
-static model_t       g_hextiles[1];
+static model_t       g_hextiles[6];
 static float         g_pickup_next_card;
 static struct camera g_camera;
 static struct hexmap g_hexmap;
@@ -625,6 +625,12 @@ static void on_game_event_play_card(event_info_t *info) {
 static void load_hextile_models(void) {
 	const char *models[] = {
 		"res/models/tiles/base/hex_grass.gltf",
+		"res/models/tiles/base/hex_water.gltf",
+		"res/models/tiles/coast/hex_coast_A.gltf",
+		"res/models/tiles/coast/hex_coast_B.gltf",
+		"res/models/tiles/coast/hex_coast_C.gltf",
+		"res/models/tiles/coast/hex_coast_D.gltf",
+		"res/models/tiles/coast/hex_coast_E.gltf",
 	};
 
 	for (uint i = 0; i < count_of(models); ++i) {
@@ -637,6 +643,24 @@ static void hexmap_init(struct hexmap *map) {
 	map->h = 9;
 	map->tilesize = 115.0f;
 	map->tiles = calloc(map->w * map->h, sizeof(*map->tiles));
+
+	// Make some map
+#define M(x, y, T, R) map->tiles[x + map->w * y].tile = T; map->tiles[x + map->w * y].rotation = R;
+	M(0, 0, 1,  0);
+	M(1, 0, 4, -1);
+	M(2, 0, 6, -1);
+	M(0, 1, 1,  0);
+	M(1, 1, 1,  0);
+	M(2, 1, 4, -2);
+	M(0, 2, 1,  0);
+	M(1, 2, 5, -3);
+	M(2, 2, 6, -2);
+	M(0, 3, 3, -4);
+	M(1, 3, 4, -3);
+	M(2, 3, 6, -2);
+	M(0, 4, 6, -3);
+
+#undef M
 
 	// precomputed
 	map->tile_offsets = (vec2s){
@@ -669,6 +693,7 @@ static void hexmap_draw(struct hexmap *map) {
 		mat4 model = GLM_MAT4_IDENTITY_INIT;
 		glm_translate(model, (vec3){ -horiz * 3.f, 0.0f, vert * -2.0f });
 		glm_translate(model, (vec3){ pos.x, 0.0f, pos.y });
+		glm_rotate_y(model, map->tiles[i].rotation * glm_rad(60.0f), model);
 		glm_scale(model, (vec3){ 100.0f, 100.0f, 100.0f});
 
 		mat4 modelView = GLM_MAT4_IDENTITY_INIT;
@@ -679,7 +704,7 @@ static void hexmap_draw(struct hexmap *map) {
 		glm_mat3_transpose(normalMatrix);
 
 		shader_set_uniform_mat3(&g_hextiles[0].shader, "u_normalMatrix", (float*)normalMatrix);
-		model_draw(&g_hextiles[0], g_camera.projection, g_camera.view, model);
+		model_draw(&g_hextiles[map->tiles[i].tile], g_camera.projection, g_camera.view, model);
 	}
 	glDisable(GL_DEPTH_TEST);
 }

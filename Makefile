@@ -101,6 +101,10 @@ clean:
 # TODO: Let's do a cleanup of the following mess...
 
 # Main Target
+
+extra_debug: CFLAGS += $(CFLAGS_EXTRA_SAFE)
+extra_debug: debug
+
 # Debug Flags
 debug: CFLAGS += -DDEBUG -ggdb -O0
 debug: LIBS += -ldl
