@@ -43,7 +43,19 @@ typedef struct event_info {
 	ecs_entity_t entity;
 } event_info_t;
 
-// 
+struct camera {
+	mat4 projection;
+	mat4 view;
+};
+
+struct hexmap {
+	int w, h;
+	float tilesize;
+	int *tiles;
+	vec2s tile_offsets;
+};
+
+//
 // private functions
 //
 
@@ -54,7 +66,9 @@ static void on_game_event(enum event_type, event_info_t *);
 static void on_game_event_play_card(event_info_t *info);
 
 static void load_hextile_models(void);
-static void draw_hextile_map(void);
+static void hexmap_init(struct hexmap *);
+static void hexmap_destroy(struct hexmap *);
+static void hexmap_draw(struct hexmap *);
 
 //
 // ecs
@@ -105,24 +119,22 @@ ECS_SYSTEM_DECLARE(system_draw_cards);
 static engine_t     *g_engine;
 
 // game state
-static texture_t    g_cards_texture;
-static texture_t    g_ui_texture;
-static shader_t     g_sprite_shader;
-static shader_t     g_text_shader;
-static pipeline_t   g_cards_pipeline;
-static pipeline_t   g_ui_pipeline;
-static pipeline_t   g_text_pipeline;
+static texture_t     g_cards_texture;
+static texture_t     g_ui_texture;
+static shader_t      g_sprite_shader;
+static shader_t      g_text_shader;
+static pipeline_t    g_cards_pipeline;
+static pipeline_t    g_ui_pipeline;
+static pipeline_t    g_text_pipeline;
 static ecs_world_t  *g_world;
-static ecs_entity_t g_selected_card;
-static fontatlas_t  g_card_font;
-static model_t      g_model;
-static model_t      g_fun_models[3];
-static model_t      g_hextiles[1];
-static float        g_pickup_next_card;
-static struct {
-	mat4 projection;
-	mat4 view;
-} g_camera;
+static ecs_entity_t  g_selected_card;
+static fontatlas_t   g_card_font;
+static model_t       g_model;
+static model_t       g_fun_models[3];
+static model_t       g_hextiles[1];
+static float         g_pickup_next_card;
+static struct camera g_camera;
+static struct hexmap g_hexmap;
 
 // testing
 static Mix_Chunk    *g_place_card_sfx;
@@ -134,7 +146,7 @@ static Mix_Chunk    *g_slide_card_sfx;
 // scene functions
 //
 
-static void load(struct scene_battle_s *scene, struct engine_s *engine) {
+static void load(struct scene_battle_s *battle, struct engine_s *engine) {
 	g_engine = engine;
 	g_handcards_updated = 0;
 	g_selected_card = 0;
@@ -142,10 +154,9 @@ static void load(struct scene_battle_s *scene, struct engine_s *engine) {
 	console_log(engine, "Starting battle scene!");
 
 	// initialize camera
-	//glm_perspective(glm_rad(50.0f), g_engine->window_width / (float)g_engine->window_height, 1.0f, 50.0f, g_camera.projection);
 	glm_mat4_identity(g_camera.view);
+	glm_translate(g_camera.view, (vec3){ 0.0f, 0.0f, -1000.0f });
 	glm_rotate_x(g_camera.view, glm_rad(35.0f), g_camera.view);
-	glm_translate(g_camera.view, (vec3){ 0.0f, -400.0f, -700.0f });
 	glm_mat4_identity(g_camera.projection);
 
 	static int loads = 0;
@@ -165,6 +176,7 @@ static void load(struct scene_battle_s *scene, struct engine_s *engine) {
 	}
 	
 	load_hextile_models();
+	hexmap_init(&g_hexmap);
 
 	// ecs
 	g_world = ecs_init();
@@ -250,12 +262,13 @@ static void load(struct scene_battle_s *scene, struct engine_s *engine) {
 }
 
 
-static void destroy(struct scene_battle_s *scene, struct engine_s *engine) {
+static void destroy(struct scene_battle_s *battle, struct engine_s *engine) {
 	Mix_FreeChunk(g_place_card_sfx);
 	Mix_FreeChunk(g_pick_card_sfx);
 	Mix_FreeChunk(g_slide_card_sfx);
 
 	background_destroy();
+	hexmap_destroy(&g_hexmap);
 
 	texture_destroy(&g_cards_texture);
 	texture_destroy(&g_ui_texture);
@@ -274,7 +287,7 @@ static void destroy(struct scene_battle_s *scene, struct engine_s *engine) {
 }
 
 
-static void update(struct scene_battle_s *scene, struct engine_s *engine, float dt) {
+static void update(struct scene_battle_s *battle, struct engine_s *engine, float dt) {
 	const struct input_drag_s *drag = &(engine->input_drag);
 
 	// pick up card
@@ -363,19 +376,20 @@ static void update(struct scene_battle_s *scene, struct engine_s *engine, float 
 }
 
 
-static void draw(struct scene_battle_s *scene, struct engine_s *engine) {
+static void draw(struct scene_battle_s *battle, struct engine_s *engine) {
 	engine_set_clear_color(0.34f, 0.72f, 0.98f);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 	// TODO: Update camera, do this on window resize instead.
 	float size = engine->window_width;
 	glm_ortho(-size, size, -size * g_engine->window_aspect, size * g_engine->window_aspect, 1.0f, 2000.0f, g_camera.projection);
+	//glm_perspective(glm_rad(100.0f), g_engine->window_width / (float)g_engine->window_height, 1.0f, 2000.0f, g_camera.projection);
 
 	// draw background
 	background_draw(engine);
 
 	// draw terrain
-	draw_hextile_map();
+	hexmap_draw(&g_hexmap);
 
 	// drawing systems
 	pipeline_reset(&g_cards_pipeline);
@@ -400,6 +414,7 @@ static void draw(struct scene_battle_s *scene, struct engine_s *engine) {
 		// draw
 		glEnable(GL_DEPTH_TEST);
 
+		// Draw character
 		shader_set_uniform_mat3(&g_model.shader, "u_normalMatrix", (float*)normalMatrix);
 		model_draw(&g_model, g_camera.projection, g_camera.view, model);
 
@@ -617,20 +632,43 @@ static void load_hextile_models(void) {
 		assert(err == 0);
 	}
 }
+static void hexmap_init(struct hexmap *map) {
+	map->w = 7;
+	map->h = 9;
+	map->tilesize = 115.0f;
+	map->tiles = calloc(map->w * map->h, sizeof(*map->tiles));
 
-static void draw_hextile_map(void) {
+	// precomputed
+	map->tile_offsets = (vec2s){
+		.x = sqrtf(3.f) * map->tilesize,
+		.y = (3.f / 2.f) * map->tilesize,
+	};
+}
+
+static void hexmap_destroy(struct hexmap *map) {
+	free(map->tiles);
+}
+
+static void hexmap_draw(struct hexmap *map) {
 	glEnable(GL_DEPTH_TEST);
 
-	float hex_size = 115.0f;
-	float horiz = sqrtf(3) * hex_size;
-	float vert = (3.0f/2) * hex_size;
-	for (int i = 0; i < 15; ++i) {
-		int q = i % 3;
-		int r = floorf(i / 3.0f);
+	float horiz = map->tile_offsets.x;
+	float vert = map->tile_offsets.y;
+	int n_tiles = map->w * map->h;
+
+	for (int i = 0; i < n_tiles; ++i) {
+		int q = i % map->w;
+		int r = floorf(i / (float)map->w);
 		float horiz_offset = (r % 2 == 0) ? horiz * 0.5f : 0.0f;
 
+		vec2s pos = {
+			.x = q * horiz + horiz_offset,
+			.y = r * vert,
+		};
+
 		mat4 model = GLM_MAT4_IDENTITY_INIT;
-		glm_translate(model, (vec3){ q * horiz + horiz_offset, 0.0f, r * vert });
+		glm_translate(model, (vec3){ -horiz * 3.f, 0.0f, vert * -2.0f });
+		glm_translate(model, (vec3){ pos.x, 0.0f, pos.y });
 		glm_scale(model, (vec3){ 100.0f, 100.0f, 100.0f});
 
 		mat4 modelView = GLM_MAT4_IDENTITY_INIT;

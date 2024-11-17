@@ -131,7 +131,7 @@ void console_draw(struct console_s *console, struct engine_s *engine) {
 
 }
 
-void console_log(struct engine_s *engine, char *fmt, ...) {
+void console_log(struct engine_s *engine, const char *fmt, ...) {
 	va_list argp;
 
 	va_start(argp, fmt);
@@ -153,7 +153,7 @@ void console_log(struct engine_s *engine, char *fmt, ...) {
 	});
 }
 
-void console_log_ex(struct engine_s *engine, enum console_msg_type type, float duration, char *fmt, ...) {
+void console_log_ex(struct engine_s *engine, enum console_msg_type type, float duration, const char *fmt, ...) {
 	va_list argp;
 
 	va_start(argp, fmt);

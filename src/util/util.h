@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 #include <stddef.h>
+#include <cglm/types-struct.h>
 
 
 typedef unsigned int uint;
@@ -24,6 +25,9 @@ int point_in_rect(float px, float py, float x, float y, float w, float h);
 int nearest_pow2(int value);
 // angle in radians, segments are clockwise.
 float calculate_angle_segment(float angle, int segments);
+
+// coordinate systems
+vec2s world_to_screen(float vw, float vh, mat4 projection, mat4 view, mat4 model, vec3s point);
 
 // string utils
 const char *str_match_bracket(const char *str, size_t len, char open, char close);

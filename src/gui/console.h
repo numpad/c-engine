@@ -41,8 +41,8 @@ void console_destroy(struct console_s *);
 void console_update(struct console_s *, struct engine_s *, float dt);
 void console_draw(struct console_s *, struct engine_s *);
 
-void console_log(struct engine_s *, char *fmt, ...);
-void console_log_ex(struct engine_s *, enum console_msg_type type, float duration, char *fmt, ...);
+void console_log(struct engine_s *, const char *fmt, ...);
+void console_log_ex(struct engine_s *, enum console_msg_type type, float duration, const char *fmt, ...);
 
 #endif
 

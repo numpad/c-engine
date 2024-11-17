@@ -6,6 +6,7 @@
 #include <math.h>
 #include <assert.h>
 #include <SDL_opengles2.h>
+#include <cglm/cglm.h>
 
 int point_in_rect(float px, float py, float x, float y, float w, float h) {
 	return (px >= x && py >= y && px <= x + w && py <= y + h);
@@ -53,6 +54,26 @@ float calculate_angle_segment(float angle, int segments) {
 	int div = (int)(angle / segment);
 
 	return div;
+}
+
+vec2s world_to_screen(float vw, float vh, mat4 projection, mat4 view, mat4 model, vec3s point) {
+	mat4 mvp = GLM_MAT4_IDENTITY_INIT;
+	glm_mat4_mulN((mat4 *[]){projection, view, model}, 3, mvp);
+
+	vec4 point_world = { point.x, point.y, point.z, 1.0f };
+	vec4 point_clipspace = GLM_VEC3_ZERO_INIT;
+	glm_mat4_mulv(mvp, point_world, point_clipspace);
+
+	vec3s point_ndc = (vec3s) {
+		.x = point_clipspace[0] / point_clipspace[3],
+		.y = point_clipspace[1] / point_clipspace[3],
+		.z = point_clipspace[2] / point_clipspace[3],
+	};
+
+	return (vec2s) {
+		.x = ((point_ndc.x + 1.f) * 0.5f) * vw,
+		.y = ((1.f - point_ndc.y) * 0.5f) * vh
+	};
 }
 
 int gl_check_error(const char *file, int line) {

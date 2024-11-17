@@ -32,6 +32,7 @@ typedef struct {
 	float x, y, w, h;
 	const char *text1, *text2, *subtext;
 	NVGcolor bg1, bg2, outline;
+	int id;
 	
 	btn_callback_fn on_press_begin;
 	btn_callback_fn on_press_end;
@@ -68,6 +69,7 @@ static shader_t g_shader_entities;
 static pipeline_t g_pipeline_entities;
 static int g_minigame_selection_visible = 0;
 static int g_minigame_covers = -1;
+
 
 // sfx
 static Mix_Chunk *g_sound_click = NULL;
@@ -237,6 +239,7 @@ static void menu_draw(struct scene_menu_s *menu, struct engine_s *engine) {
 		mainbutton_t buttons[] = {
 			{
 				20.0f, H2 + 60.0f, W2 - 40.0f, H2 * 0.5f - 50.0f,
+				.id = 1,
 				.text1 = "Settings",
 				.bg1 = nvgRGBf(1.0f, 0.5f, 0.35f),
 				.bg2 = nvgRGBf(0.79f, 0.3f, 0.16f),
@@ -244,6 +247,7 @@ static void menu_draw(struct scene_menu_s *menu, struct engine_s *engine) {
 			},
 			{
 				20.0f, H2 + H2 * 0.5f + 30.0f, W2 - 40.0f, H2 * 0.5f - 50.0f,
+				.id = 2,
 				.text1 = "Mini",
 				.text2 = "Game",
 				.bg1 = nvgRGBf(1.0f, 0.8f, 0.35f),
@@ -253,6 +257,7 @@ static void menu_draw(struct scene_menu_s *menu, struct engine_s *engine) {
 			},
 			{
 				W2, H2 + 60.0f, W2 - 20.0f, H2 - 20.0f - 60.0f,
+				.id = 3,
 				.text1 = "Start",
 				.text2 = "Game",
 				.subtext = "(Singleplayer)",
@@ -264,6 +269,7 @@ static void menu_draw(struct scene_menu_s *menu, struct engine_s *engine) {
 			// "social"
 			{
 				W2 - 120.0f + engine->window_width, engine->window_height - 240.0f, 240.0f, 190.0f,
+				.id = 4,
 				.text1 = "Search",
 				.text2 = "Friends",
 				.subtext = g_search_friends_text,
@@ -275,6 +281,7 @@ static void menu_draw(struct scene_menu_s *menu, struct engine_s *engine) {
 			},
 			{
 				W2 - 210.0f + engine->window_width, engine->window_height - 430.0f, 190.0f, 170.0f,
+				.id = 5,
 				.text1 = "Create",
 				.text2 = "Lobby",
 				.bg1 = nvgRGBf(0.80f, 0.4f, 0.42f),
@@ -284,6 +291,7 @@ static void menu_draw(struct scene_menu_s *menu, struct engine_s *engine) {
 			},
 			{
 				W2 + 50.0f + engine->window_width, engine->window_height - 430.0f, 190.0f, 170.0f,
+				.id = 6,
 				.text1 = "Join",
 				.text2 = "Lobby",
 				.bg1 = nvgRGBf(0.80f, 0.4f, 0.42f),
@@ -294,6 +302,7 @@ static void menu_draw(struct scene_menu_s *menu, struct engine_s *engine) {
 			// start game
 			{
 				engine->window_width * 0.125f, -150.0f - engine->window_width * 0.125f, engine->window_width * 0.75f, 150.0f,
+				.id = 7,
 				.text1 = "Start →",
 				.text2 = NULL,
 				.subtext = NULL,
@@ -305,7 +314,7 @@ static void menu_draw(struct scene_menu_s *menu, struct engine_s *engine) {
 			{ .text1 = NULL } // "null" elem
 		};
 
-		static mainbutton_t *active_button = NULL;
+		static int active_button_id = 0;
 		static float active_button_progress = 0.0f;
 
 		// draw menu tabs/screens
@@ -329,7 +338,7 @@ static void menu_draw(struct scene_menu_s *menu, struct engine_s *engine) {
 			for (mainbutton_t *b = &buttons[0]; b->text1 != NULL; ++b) {
 				if (drag->state == INPUT_DRAG_BEGIN && point_in_rect(drag->begin_x - g_menu_camera.x, drag->begin_y - g_menu_camera.y, b->x, b->y, b->w, b->h)) {
 					Mix_PlayChannel(-1, g_sound_click, 0);
-					active_button = b;
+					active_button_id = b->id;
 					active_button_progress = 0.0f;
 					if (b->on_press_begin != NULL) {
 						b->on_press_begin(engine);
@@ -339,7 +348,7 @@ static void menu_draw(struct scene_menu_s *menu, struct engine_s *engine) {
 					active_button_progress += engine->dt;
 					active_button_progress = fminf(active_button_progress, 1.0f);
 				}
-				if (drag->state == INPUT_DRAG_END && b == active_button) {
+				if (drag->state == INPUT_DRAG_END && b->id == active_button_id) {
 					if (b->on_click != NULL && point_in_rect(drag->end_x - g_menu_camera.x, drag->end_y - g_menu_camera.y, b->x, b->y, b->w, b->h)) {
 						b->on_click(engine);
 					}
@@ -348,15 +357,15 @@ static void menu_draw(struct scene_menu_s *menu, struct engine_s *engine) {
 					}
 					Mix_PlayChannel(-1, g_sound_clickend, 0); // TODO: this gets deleted in menu_destroy and wont play
 				}
-				if (active_button != NULL && drag->state == INPUT_DRAG_NONE) {
+				if (active_button_id != 0 && drag->state == INPUT_DRAG_NONE) {
 					active_button_progress *= 0.83f; // FIXME: framerate independent
-					if (active_button_progress < 0.01f) {
+					if (active_button_progress <= 0.01f) {
 						active_button_progress = 0.0f;
-						active_button = NULL;
+						active_button_id = 0;
 					}
 				}
 
-				ugui_mainmenu_button(engine, b->x, b->y, b->w, b->h, b->text1, b->text2, b->subtext, g_font, b->bg1, b->bg2, b->outline, (b == active_button) ? active_button_progress: 0.0f);
+				ugui_mainmenu_button(engine, b->x, b->y, b->w, b->h, b->text1, b->text2, b->subtext, g_font, b->bg1, b->bg2, b->outline, (b->id == active_button_id) ? active_button_progress: 0.0f);
 			}
 
 			// Minigame Selection Modal Window
@@ -664,184 +673,4 @@ static void on_join_lobby(struct engine_s *engine) {
 	req.lobby_id = 123;
 	engine_gameserver_send(engine, (struct message_header *)&req);
 }
-
-
-/* Old Nuklear Menu Rendering
-static void draw_menu(struct engine_s *engine, struct nk_context *nk) {
-	const float padding_bottom = 80.0f;
-	const float padding_x = 40.0f;
-	const float menu_height = 270.0f;
-	const int row_height = 55;
-
-	static int multiplayer_window = 0;
-
-	if (nk_begin_titled(nk, "Main Menu", "Main Menu", nk_rect( padding_x, engine->window_height - menu_height - padding_bottom, engine->window_width - padding_x * 2.0f, menu_height), NK_WINDOW_TITLE | NK_WINDOW_NO_SCROLLBAR | NK_WINDOW_BACKGROUND)) {
-		// play game
-		nk_style_push_color(nk, &nk->style.button.text_normal, nk_rgb(60, 170, 30));
-		nk_style_push_color(nk, &nk->style.button.text_hover, nk_rgb(50, 140, 10));
-
-		nk_layout_row_dynamic(nk, row_height, 1);
-		if (nk_button_symbol_label(nk, NK_SYMBOL_TRIANGLE_RIGHT, "Play Game", NK_TEXT_ALIGN_RIGHT)) {
-			platform_vibrate(PLATFORM_VIBRATE_TAP);
-			on_start_game(engine);
-		}
-
-		nk_style_pop_color(nk);
-		nk_style_pop_color(nk);
-
-		// multiplayer
-		nk_layout_row_dynamic(nk, row_height, 1);
-		if (nk_button_symbol_label(nk, NK_SYMBOL_CIRCLE_OUTLINE, "Multiplayer", NK_TEXT_ALIGN_RIGHT)) {
-			multiplayer_window = 1;
-			platform_vibrate(PLATFORM_VIBRATE_TAP);
-			nk_window_show(nk, "Multiplayer", NK_SHOWN);
-		}
-
-		// minigame
-		nk_layout_row_dynamic(nk, row_height, 1);
-		if (nk_button_symbol_label(nk, NK_SYMBOL_PLUS, "Minigame", NK_TEXT_ALIGN_RIGHT)) {
-			platform_vibrate(PLATFORM_VIBRATE_TAP);
-			switch_to_minigame_scene(engine);
-		}
-
-
-		// settings, about
-		nk_layout_row_dynamic(nk, row_height, 2);
-		if (nk_button_label(nk, "Settings")) {
-			platform_vibrate(PLATFORM_VIBRATE_TAP);
-		}
-		if (nk_button_label(nk, "About")) {
-			platform_vibrate(PLATFORM_VIBRATE_TAP);
-			platform_open_website("https://xn--schl-noa.com/");
-		}
-	}
-	nk_end(nk);
-
-	if (multiplayer_window) {
-		const int cx = engine->window_width / 2;
-		const int cy = engine->window_height / 2;
-		const int w = 280, h = 300;
-		// state
-		static const char *server_ips[] = {"-- Offline --", "gameserver.xn--schl-noa.com", "localhost.schäl.com", "files.xn--schl-noa.com", "192.168.0.17"};
-		static int server_ips_i = 0;
-		const int is_connected = (engine->gameserver_tcp != NULL);
-
-		if (nk_begin_titled(nk, "Multiplayer", "Multiplayer", nk_rect(cx - w * 0.5f, cy - h * 0.5f, w, h), NK_WINDOW_TITLE | NK_WINDOW_NO_SCROLLBAR | NK_WINDOW_CLOSABLE | NK_WINDOW_BORDER | NK_WINDOW_MOVABLE)) {
-			nk_layout_row_dynamic(nk, row_height * 0.5f, 2 + (is_connected ? 1 : 0));
-			nk_label(nk, "Server:", NK_TEXT_ALIGN_MIDDLE | NK_TEXT_ALIGN_LEFT);
-
-			// connection status
-			if (is_connected) {
-				nk_label(nk, server_ips[server_ips_i], NK_TEXT_ALIGN_MIDDLE | NK_TEXT_ALIGN_LEFT);
-				if (nk_button_label(nk, "Disconnect")) {
-					engine_gameserver_disconnect(engine);
-					server_ips_i = 0;
-					id_of_current_lobby = 0;
-					others_in_lobby = 0;
-					reset_ids_of_lobbies();
-				}
-			} else {
-				const int new_server_ips_i = nk_combo(nk, server_ips, 5, server_ips_i, 30.0f, nk_vec2(200.0f, 200.0f));
-				if (new_server_ips_i != server_ips_i) {
-					server_ips_i = new_server_ips_i;
-
-					engine_gameserver_connect(engine, server_ips[server_ips_i]);
-				}
-			}
-
-			// status "not connected"
-			if (server_ips_i > 0 && !is_connected) {
-				nk_layout_row_dynamic(nk, row_height * 0.5f, 1);
-				nk_label(nk, "Not connected...", NK_TEXT_ALIGN_MIDDLE);
-			}
-
-			// toolbar
-			if (is_connected) {
-				// refresh
-				nk_layout_row_dynamic(nk, row_height * 0.5f, 3);
-				if (nk_button_label(nk, "Refresh")) {
-					printf("Refresh requested...\n");
-					reset_ids_of_lobbies();
-
-					struct lobby_list_request req;
-					message_header_init((struct message_header *)&req, LOBBY_LIST_REQUEST);
-					engine_gameserver_send(engine, (struct message_header *)&req);
-				}
-
-				nk_label(nk, "", 0);
-
-				// create or leave
-				if (id_of_current_lobby > 0) {
-				} else {
-					if (nk_button_label(nk, "Create Lobby")) {
-						struct lobby_create_request req;
-						message_header_init(&req.header, LOBBY_CREATE_REQUEST);
-						req.lobby_id = rand() % 950 + 17;
-						req.lobby_name = "Created Lobby";
-						engine_gameserver_send(engine, (struct message_header *)&req);
-					}
-				}
-			}
-
-			// list lobbies
-			if (is_connected && id_of_current_lobby == 0) {
-				nk_layout_row_dynamic(nk, row_height * 0.5f, 1);
-				nk_label(nk, "Server Browser:", NK_TEXT_ALIGN_LEFT | NK_TEXT_ALIGN_BOTTOM);
-
-				int lobbies_len = stbds_arrlen(ids_of_lobbies);
-				if (lobbies_len == 0) {
-					nk_layout_row_dynamic(nk, row_height * 0.8f, 1);
-					nk_label_colored(nk, "No lobbies found :(", NK_TEXT_ALIGN_MIDDLE | NK_TEXT_ALIGN_CENTERED, nk_rgb(88, 88, 88));
-				}
-				for (int i = 0; i < lobbies_len; ++i) {
-					nk_layout_row_dynamic(nk, row_height * 0.5f, 2);
-					nk_labelf(nk, NK_TEXT_ALIGN_LEFT | NK_TEXT_ALIGN_MIDDLE, "#%d", ids_of_lobbies[i]);
-
-					if (nk_button_label(nk, "Join")) {
-						platform_vibrate(PLATFORM_VIBRATE_TAP);
-
-						struct lobby_join_request req;
-						message_header_init(&req.header, LOBBY_JOIN_REQUEST);
-						req.lobby_id = ids_of_lobbies[i];
-						engine_gameserver_send(engine, (struct message_header *)&req);
-					}
-				}
-			}
-
-			// show current lobby
-			if (is_connected && id_of_current_lobby > 0) {
-				// title
-				nk_layout_row_dynamic(nk, row_height * 0.5f, 1);
-				nk_labelf(nk, NK_TEXT_ALIGN_LEFT | NK_TEXT_ALIGN_BOTTOM, "Lobby #%d", id_of_current_lobby);
-
-				// player list
-				nk_layout_row_dynamic(nk, row_height * 0.4f, 1);
-				nk_label(nk, " * You", NK_TEXT_ALIGN_LEFT | NK_TEXT_ALIGN_MIDDLE);
-				for (int i = 0; i < others_in_lobby; ++i) {
-					nk_layout_row_dynamic(nk, row_height * 0.4f, 1);
-					nk_label(nk, " * Other user", NK_TEXT_ALIGN_LEFT | NK_TEXT_ALIGN_MIDDLE);
-				}
-				nk_layout_row_dynamic(nk, row_height * 0.4f, 1);
-				nk_label_colored(nk, " * Waiting for others...", NK_TEXT_ALIGN_LEFT | NK_TEXT_ALIGN_MIDDLE, nk_rgb(88, 88, 88));
-
-				// leave
-				nk_layout_row_dynamic(nk, row_height * 0.5f, 2);
-				nk_label(nk, "", 0);
-				if (nk_button_label(nk, "Leave Lobby")) {
-					struct lobby_join_request req;
-					message_header_init(&req.header, LOBBY_JOIN_REQUEST);
-					req.lobby_id = 0;
-					others_in_lobby = 0;
-					engine_gameserver_send(engine, (struct message_header *)&req);
-				}
-			}
-		}
-
-		if (multiplayer_window && nk_window_is_closed(nk, "Multiplayer")) {
-			multiplayer_window = 0;
-		}
-		nk_end(nk);
-	}
-}
-*/
 
