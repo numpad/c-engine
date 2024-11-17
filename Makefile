@@ -11,6 +11,19 @@ CFLAGS = -std=gnu99 -fPIC -Wall -Wextra -pedantic                            \
 		 -DFLECS_TIMER -DFLECS_HTTP -DFLECS_SNAPSHOT -DFLECS_PARSER          \
 		 -DFLECS_APP -DFLECS_OS_API_IMPL
 
+# Sanitizer runtime is not compatible with RTLD_DEEPBIND, so hot reload does not work.
+CFLAGS_EXTRA_SAFE = -Warray-bounds -Warray-bounds-pointer-arithmetic        \
+					-Wassign-enum -Wbad-function-cast -Wcast-align          \
+					-Wcast-qual -Wdouble-promotion                          \
+					-Wformat=2 -Wformat-security                            \
+					-Wframe-larger-than=2048 -Wlogical-op                   \
+					-Wnull-dereference -Wpointer-arith                      \
+					-Wstrict-overflow=5 -Wwrite-strings                     \
+					-fstack-protector-strong -fno-strict-aliasing           \
+					-fno-delete-null-pointer-checks -fno-omit-frame-pointer \
+					-fsanitize=address -fsanitize=undefined -fsanitize=leak \
+					-D_FORTIFY_SOURCE=2
+
 # TODO: We may want to provide SDL (& modules), freetype and harfbuzz?
 #       For now this is fine, as emscripten handles this for us as well.
 #       Also, harfbuzz needs to be compiled with C++.
@@ -71,6 +84,7 @@ SRC = main.c                        \
 	  lib/flecs/flecs.c             \
 	  lib/cgltf/cgltf.c             \
 	  $(wildcard src/scenes/*.c)
+
 OBJ = $(addprefix $(BIN),$(SRC:.c=.o))
 
 
