@@ -473,20 +473,21 @@ static void draw(struct scene_battle_s *battle, struct engine_s *engine) {
 		// Healthbar frame
 		cmd = DRAWCMD_INIT;
 		cmd.size.x = 48;
-		cmd.size.y = 196;
+		cmd.size.y = 192;
 		cmd.position.x = 1;
 		cmd.position.y = 4;
 		drawcmd_set_texture_subrect(&cmd, g_ui_pipeline.texture, 32, 0, 16, 64);
 		pipeline_emit(&g_ui_pipeline, &cmd);
 
 		// Healthbar fill
-		float hp = fabsf(cosf(engine->time_elapsed));
+		int hp = 64.0f * fabsf(cosf(engine->time_elapsed));
 		cmd = DRAWCMD_INIT;
-		cmd.size.x = ceilf(112.0f * hp);
-		cmd.size.y = 16;
-		cmd.position.x = -6;
-		cmd.position.y = 90;
-		drawcmd_set_texture_subrect(&cmd, g_ui_pipeline.texture, 96, 0, ceilf(112.0f * hp), 16);
+		cmd.size.x = 48;
+		cmd.size.y = hp * 3.0f;
+		cmd.position.x = 1;
+		cmd.position.y = 4;
+		cmd.position.z = 0.1f;
+		drawcmd_set_texture_subrect(&cmd, g_ui_pipeline.texture, 48, 0, 16, hp);
 		pipeline_emit(&g_ui_pipeline, &cmd);
 	}
 
@@ -631,6 +632,9 @@ static void load_hextile_models(void) {
 		"res/models/tiles/coast/hex_coast_C.gltf",
 		"res/models/tiles/coast/hex_coast_D.gltf",
 		"res/models/tiles/coast/hex_coast_E.gltf",
+		"res/models/tiles/roads/hex_road_A.gltf",
+		"res/models/tiles/roads/hex_road_B.gltf",
+		"res/models/tiles/roads/hex_road_E.gltf",
 	};
 
 	for (uint i = 0; i < count_of(models); ++i) {
@@ -659,6 +663,19 @@ static void hexmap_init(struct hexmap *map) {
 	M(1, 3, 4, -3);
 	M(2, 3, 6, -2);
 	M(0, 4, 6, -3);
+
+	M(4, 0, 8,  1);
+	M(4, 1, 8, -2);
+	M(4, 2, 9, -1);
+	M(5, 2, 7,  0);
+	M(6, 2, 7,  0);
+	M(5, 3, 8,  1);
+	M(4, 4, 7, -2);
+	M(4, 5, 8, -2);
+	M(4, 6, 8,  1);
+	M(4, 7, 8, -2);
+	M(4, 8, 7, -1);
+
 
 #undef M
 
