@@ -248,7 +248,7 @@ static void load(struct scene_battle_s *battle, struct engine_s *engine) {
 		pipeline_init(&g_text_pipeline, &g_text_shader, 2048);
 		g_text_pipeline.texture = &g_card_font.texture_atlas;
 		pipeline_reset(&g_text_pipeline);
-		fontatlas_writef(&g_card_font, &g_text_pipeline, "   $BCARD$0 $1TIT$0LE");
+		fontatlas_writef(&g_card_font, &g_text_pipeline, "   $0CARD$0 $B$1T$2I$3T$1L$2E$0");
 	}
 
 	// background

@@ -50,6 +50,11 @@ void fontatlas_init(fontatlas_t *fa, FT_Library library) {
 	settings.filter_mag = GL_LINEAR;
 	settings.internal_format = GL_ALPHA;
 	texture_init(&fa->texture_atlas, 2048, 2048, &settings);
+
+	// TODO: Is this really required? Feels like a wasteful
+	//       way to prevent oversampling artifacts.
+	//       Can FreeType generate empty padding?
+	texture_clear(&fa->texture_atlas);
 }
 
 void fontatlas_destroy(fontatlas_t *fa) {
