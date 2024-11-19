@@ -5,6 +5,7 @@
 #include <stdint.h>
 #include <math.h>
 #include <assert.h>
+#include <SDL.h>
 #include <SDL_opengles2.h>
 #include <cglm/cglm.h>
 
@@ -113,6 +114,20 @@ int is_argv_set(int argc, char **argv, char *arg_to_check) {
 		}
 	}
 	return 0;
+}
+
+
+// measure performance
+
+Uint64 profile_begin(void) {
+	return SDL_GetPerformanceCounter();
+}
+
+double profile_end_ms(Uint64 begin) {
+	Uint64 end = SDL_GetPerformanceCounter();
+	Uint64 freq = SDL_GetPerformanceFrequency();
+	double seconds_elapsed = (double)(end - begin) / freq;
+	return seconds_elapsed * 1000.0;
 }
 
 

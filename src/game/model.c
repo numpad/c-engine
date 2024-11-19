@@ -144,7 +144,8 @@ int model_init_from_file(model_t *model, const char *path) {
 		return 1;
 	}
 
-	{ // find images
+#ifdef DEBUG_ignore_this_for_now
+		// find images
 		for (cgltf_size i = 0; i < data->materials_count; ++i) {
 			printf("Material #%ld:\n", i);
 			printf(" - name : \"%s\"\n", data->materials[i].name);
@@ -170,9 +171,8 @@ int model_init_from_file(model_t *model, const char *path) {
 			printf("Sampler #%ld:\n", i);
 			printf(" - name : \"%s\"\n", data->samplers[i].name);
 		}
-	}
 
-	{ // animations
+		// animations
 		for (cgltf_size skin_index = 0; skin_index < data->skins_count; ++skin_index) {
 			cgltf_skin *skin = &data->skins[skin_index];
 			printf("Skin: %s\n", skin->name);
@@ -181,7 +181,7 @@ int model_init_from_file(model_t *model, const char *path) {
 			cgltf_animation *anim = &data->animations[anim_index];
 			printf("Anim: %s\n", anim->name);
 		}
-	}
+#endif
 
 	// setup shader
 	shader_init_from_dir(&model->shader, "res/shader/model/");
@@ -232,7 +232,7 @@ int model_init_from_file(model_t *model, const char *path) {
 		}
 	}
 
-#ifndef NDEBUG
+#ifdef DEBUG
 	// Perform some validation: unused attributes, ...
 	glUseProgram(model->shader.program);
 	for (cgltf_size mesh_index = 0; mesh_index < model->gltf_data->meshes_count; ++mesh_index) {

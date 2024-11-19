@@ -1,6 +1,7 @@
 #ifndef UTIL_H
 #define UTIL_H
 
+#include <SDL.h>
 #include <stdint.h>
 #include <stddef.h>
 #include <cglm/types-struct.h>
@@ -38,6 +39,15 @@ int gl_check_error(const char *file, int line);
 // arg parsing
 int is_argv_set(int argc, char **argv, char *arg_to_check);
 
+// measure performance
+Uint64 profile_begin(void);
+double profile_end_ms(Uint64 begin);
+#if DEBUG
+#define PROFILE \
+	for (Uint64 __once = 1, begin = profile_begin(); __once--; printf("\x1b[33m[PROFILER]\x1b[0m %.1f ms at %s:%d\n", profile_end_ms(begin), __FILE__, __LINE__))
+#else
+#define PROFILE
+#endif
 
 // random numbers
 
