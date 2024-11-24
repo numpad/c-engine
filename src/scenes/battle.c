@@ -18,8 +18,8 @@
 #include "gl/shader.h"
 #include "gl/graphics2d.h"
 #include "gl/text.h"
+#include "gl/model.h"
 #include "game/background.h"
-#include "game/model.h"
 #include "gui/console.h"
 #include "scenes/menu.h"
 #include "util/util.h"
@@ -174,7 +174,7 @@ static void load(struct scene_battle_s *battle, struct engine_s *engine) {
 		int load_fun_error = model_init_from_file(&g_fun_models[i], fun_models[i]);
 		assert(load_fun_error == 0);
 	}
-	
+
 	load_hextile_models();
 	hexmap_init(&g_hexmap);
 
@@ -675,8 +675,6 @@ static void hexmap_init(struct hexmap *map) {
 	M(4, 6, 8,  1);
 	M(4, 7, 8, -2);
 	M(4, 8, 7, -1);
-
-
 #undef M
 
 	// precomputed

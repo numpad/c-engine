@@ -1,11 +1,17 @@
 #include "model.h"
 
 #include <stdio.h>
+#include <string.h>
 #include <assert.h>
 #include <SDL_opengles2.h>
 #include <cglm/cglm.h>
 #include "util/util.h"
 #include "util/str.h"
+
+
+///////////////
+//  STRUCTS  //
+///////////////
 
 //////////////
 //  STATIC  //
@@ -285,5 +291,21 @@ void model_destroy(model_t *model) {
 	shader_destroy(&model->shader);
 
 	texture_destroy(&model->texture0);
+}
+
+void model_set_node_hidden(model_t *model, const char *name, int is_hidden) {
+	assert(model != NULL);
+	assert(name != NULL);
+
+#ifdef DEBUG
+	int node_with_name_exists = 0;
+#endif
+	
+	for (cgltf_size node_index = 0; node_index < model->gltf_data->nodes_count; ++node_index) {
+	}
+
+#ifdef DEBUG
+	assert(node_with_name_exists == 1);
+#endif
 }
 

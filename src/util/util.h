@@ -6,9 +6,20 @@
 #include <stddef.h>
 #include <cglm/types-struct.h>
 
+// Int types, TODO: check if "fast" is just a meme.
+typedef uint_fast8_t   u8;
+typedef  int_fast8_t   i8;
+typedef uint_fast16_t u16;
+typedef  int_fast16_t i16;
+typedef uint_fast32_t u32;
+typedef  int_fast32_t i32;
+typedef uint_fast64_t u64;
+typedef  int_fast64_t i64;
 
+typedef unsigned char uchar;
 typedef unsigned int uint;
 typedef size_t usize;
+typedef i64 isize;
 
 // defines
 #define UTIL_FOR(_i, max) for (size_t _i = 0; _i < max; ++_i)
@@ -20,6 +31,27 @@ typedef size_t usize;
 	 || (filter) == GL_NEAREST_MIPMAP_LINEAR  \
 	 || (filter) == GL_LINEAR_MIPMAP_NEAREST  \
 	 || (filter) == GL_LINEAR_MIPMAP_LINEAR)
+
+// Data Structures
+
+#define RINGBUFFER(TYPE, NAME, CAPACITY) \
+	TYPE __buffer_##NAME[CAPACITY];                              \
+	struct { usize head, len, capacity; TYPE *items; } NAME = {  \
+		.head=0, .len=0, .capacity=CAPACITY, .items = (TYPE *)__buffer_##NAME };
+
+#define RINGBUFFER_APPEND(NAME, VALUE) \
+	do {                                                              \
+		NAME.items[(NAME.head + NAME.len) % NAME.capacity] = (VALUE); \
+		if (NAME.len < NAME.capacity) ++NAME.len;                     \
+	} while (0);
+
+#define RINGBUFFER_CONSUME(NAME) \
+	NAME.items[NAME.head];                           \
+	do {                                             \
+		NAME.items[NAME.head] = 0;                   \
+		NAME.head = (NAME.head + 1) % NAME.capacity; \
+		--NAME.len;                                  \
+	} while (0)
 
 // math
 int point_in_rect(float px, float py, float x, float y, float w, float h);
