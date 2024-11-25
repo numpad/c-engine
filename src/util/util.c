@@ -77,6 +77,46 @@ vec2s world_to_screen(float vw, float vh, mat4 projection, mat4 view, mat4 model
 	};
 }
 
+vec3s screen_to_world(float vw, float vh, mat4 projection, mat4 view, float screen_x, float screen_y) {
+	const float floor_y = 0.0f;
+	vec2s ndc = {
+		.x = (2.0f * screen_x) / vw - 1.0f,
+		.y = 1.0f - (2.0f * screen_y) / vh
+	};
+
+	vec4s clip_start = {{ndc.x, ndc.y, -1.0f, 1.0f}};
+	vec4s clip_end = {{ndc.x, ndc.y, 1.0f, 1.0f}};
+
+	// Convert clip space -> world space
+	mat4 inv_proj_view;
+	glm_mat4_mul(projection, view, inv_proj_view);
+	glm_mat4_inv(inv_proj_view, inv_proj_view);
+
+	vec4s world_start, world_end;
+	glm_mat4_mulv(inv_proj_view, clip_start.raw, world_start.raw);
+	glm_mat4_mulv(inv_proj_view, clip_end.raw, world_end.raw);
+
+	// Perspective divide (w should be 1 already, but its good practice it seems)
+	if (world_start.w != 0.0f) {
+		glm_vec3_divs(world_start.raw, world_start.w, world_start.raw);
+	}
+	if (world_end.w != 0.0f) {
+		glm_vec3_divs(world_end.raw, world_end.w, world_end.raw);
+	}
+
+	vec3s ray_dir;
+	glm_vec3_sub(world_end.raw, world_start.raw, ray_dir.raw);
+	glm_vec3_normalize(ray_dir.raw);
+
+	float t = (floor_y - world_start.y) / ray_dir.y;
+	return (vec3s) {
+		.x = world_start.x + ray_dir.x * t,
+		.y = floor_y,
+		.z = world_start.z + ray_dir.z * t
+	};
+}
+
+
 int gl_check_error(const char *file, int line) {
 	// TODO: only in DEBUG
 	GLenum errorCode;

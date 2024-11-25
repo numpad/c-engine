@@ -61,6 +61,7 @@ float calculate_angle_segment(float angle, int segments);
 
 // coordinate systems
 vec2s world_to_screen(float vw, float vh, mat4 projection, mat4 view, mat4 model, vec3s point);
+vec3s screen_to_world(float vw, float vh, mat4 projection, mat4 view, float screen_x, float screen_y);
 
 // string utils
 const char *str_match_bracket(const char *str, size_t len, char open, char close);

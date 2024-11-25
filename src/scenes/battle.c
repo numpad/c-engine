@@ -135,6 +135,7 @@ static model_t       g_hextiles[6];
 static float         g_pickup_next_card;
 static struct camera g_camera;
 static struct hexmap g_hexmap;
+static vec3s         g_character_position;
 
 // testing
 static Mix_Chunk    *g_place_card_sfx;
@@ -177,6 +178,7 @@ static void load(struct scene_battle_s *battle, struct engine_s *engine) {
 
 	load_hextile_models();
 	hexmap_init(&g_hexmap);
+	g_character_position = (vec3s){ .x=200.0f, .y=0.0f, .z=300.0f };
 
 	// ecs
 	g_world = ecs_init();
@@ -397,11 +399,19 @@ static void draw(struct scene_battle_s *battle, struct engine_s *engine) {
 
 	// Player model
 	{
+		if (engine->input_drag.state == INPUT_DRAG_IN_PROGRESS) {
+			g_character_position = screen_to_world(
+				engine->window_width, engine->window_height, g_camera.projection, g_camera.view,
+				engine->input_drag.x, engine->input_drag.y);
+		}
+
 		// calculate matrices
 		mat4 model = GLM_MAT4_IDENTITY_INIT;
-		glm_translate(model, (vec3){ 100.0f, 0.0f, sqrtf(3.0f) * 200.0f });
+		//glm_translate(model, (vec3){ 100.0f, 0.0f, sqrtf(3.0f) * 200.0f });
+		glm_translate(model, g_character_position.raw);
 		glm_rotate_y(model, glm_rad(sinf(g_engine->time_elapsed * 2.0f) * 80.0f), model);
-		glm_scale(model, (vec3){ 100.0f, 100.0f, 100.0f});
+		const float scale = 80.0f;
+		glm_scale(model, (vec3){ scale, scale, scale });
 
 		// TODO: also do this for every node, as the model matrix changes...
 		mat4 modelView = GLM_MAT4_IDENTITY_INIT;
