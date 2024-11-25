@@ -79,6 +79,16 @@ static void hexmap_draw(struct hexmap *);
 // pos
 typedef vec2s c_position;
 
+typedef struct {
+	vec3s pos;
+	int model_index;
+	float scale;
+} c_model;
+
+typedef struct {
+	vec3s vel;
+} c_velocity;
+
 // general information about a card
 typedef struct {
 	char *name;
@@ -99,7 +109,8 @@ typedef struct {
 ECS_COMPONENT_DECLARE(c_position);
 ECS_COMPONENT_DECLARE(c_card);
 ECS_COMPONENT_DECLARE(c_handcard);
-ECS_COMPONENT_DECLARE(c_blockpos);
+ECS_COMPONENT_DECLARE(c_model);
+ECS_COMPONENT_DECLARE(c_velocity);
 
 // queries
 static ecs_query_t *g_ordered_handcards;
@@ -107,11 +118,16 @@ static int g_handcards_updated;
 
 // systems
 static void system_move_cards           (ecs_iter_t *);
+static void system_move_models          (ecs_iter_t *);
 static void system_draw_cards           (ecs_iter_t *);
+static void system_draw_models          (ecs_iter_t *);
 static void observer_on_update_handcards(ecs_iter_t *);
 
 ECS_SYSTEM_DECLARE(system_move_cards);
+ECS_SYSTEM_DECLARE(system_move_models);
 ECS_SYSTEM_DECLARE(system_draw_cards);
+ECS_SYSTEM_DECLARE(system_draw_models);
+
 
 //
 // vars
@@ -185,8 +201,12 @@ static void load(struct scene_battle_s *battle, struct engine_s *engine) {
 	ECS_COMPONENT_DEFINE(g_world, c_position);
 	ECS_COMPONENT_DEFINE(g_world, c_card);
 	ECS_COMPONENT_DEFINE(g_world, c_handcard);
+	ECS_COMPONENT_DEFINE(g_world, c_model);
+	ECS_COMPONENT_DEFINE(g_world, c_velocity);
 	ECS_SYSTEM_DEFINE(g_world, system_move_cards, 0, c_position, c_handcard);
+	ECS_SYSTEM_DEFINE(g_world, system_move_models, 0, c_model, c_velocity);
 	ECS_SYSTEM_DEFINE(g_world, system_draw_cards, 0, c_card, ?c_handcard, c_position); _syntax_fix_label:
+	ECS_SYSTEM_DEFINE(g_world, system_draw_models, 0, c_model);
 
 	g_ordered_handcards = ecs_query(g_world, {
 		.filter.terms = { {ecs_id(c_card)}, {ecs_id(c_handcard)} },
@@ -255,7 +275,7 @@ static void load(struct scene_battle_s *battle, struct engine_s *engine) {
 
 	// background
 	background_set_parallax("res/image/bg-glaciers/%d.png", 4);
-	background_set_parallax_offset(-0.4f);
+	background_set_parallax_offset(-0.7f);
 
 	// audio
 	g_place_card_sfx = Mix_LoadWAV("res/sounds/place_card.ogg");
@@ -428,6 +448,8 @@ static void draw(struct scene_battle_s *battle, struct engine_s *engine) {
 		shader_set_uniform_mat3(&g_model.shader, "u_normalMatrix", (float*)normalMatrix);
 		model_draw(&g_model, g_camera.projection, g_camera.view, model);
 
+		ecs_run(g_world, ecs_id(system_draw_models), engine->dt, NULL);
+		/*
 		rng_seed(123);
 		for (int i = 0; i < 50; ++i) {
 			int c = (i % 3);
@@ -443,7 +465,17 @@ static void draw(struct scene_battle_s *battle, struct engine_s *engine) {
 			float s = 200.0f + rng_f() * 300.0f;
 			glm_scale(model, (vec3){ s, s, s });
 			model_draw(&g_fun_models[c], g_camera.projection, g_camera.view, model);
+
+			// TODO: remove
+			NVGcontext *vg = engine->vg;
+			vec2s d2 = world_to_screen(engine->window_width, engine->window_height, g_camera.projection, g_camera.view, model, (vec3s){ 0.0f, 0.0f, 0.0f });
+			nvgBeginPath(vg);
+			nvgCircle(vg, d2.x, d2.y, 6.f);
+			nvgFillColor(vg, nvgRGBf(0, 1.0f, 1.0f));
+			nvgFill(vg);
+
 		}
+		*/
 
 		// Portrait model
 		mat4 portrait_view = GLM_MAT4_IDENTITY_INIT;
@@ -463,6 +495,7 @@ static void draw(struct scene_battle_s *battle, struct engine_s *engine) {
 
 	// draw cards
 	ecs_run(g_world, ecs_id(system_move_cards), engine->dt, NULL);
+	ecs_run(g_world, ecs_id(system_move_models), engine->dt, NULL);
 	ecs_run(g_world, ecs_id(system_draw_cards), engine->dt, NULL);
 
 	// draw ui
@@ -623,10 +656,48 @@ static void on_game_event_play_card(event_info_t *info) {
 	assert(info->entity != 0);
 	assert(ecs_is_valid(g_world, info->entity));
 
-	ecs_entity_t e = info->entity;
+	ecs_entity_t card_entity = info->entity;
 
-	const c_card *card = ecs_get(g_world, e, c_card);
+	const c_card *card = ecs_get(g_world, card_entity, c_card);
 	console_log(g_engine, "Played card: \"%s\"...", card->name);
+
+	vec3s world_position = screen_to_world(
+			g_engine->window_width, g_engine->window_height, g_camera.projection, g_camera.view,
+			g_engine->input_drag.x, g_engine->input_drag.y);
+	// Attack Card
+	if (card->image_id == 0) {
+		for (int i = 0; i < 20; ++i) {
+			ecs_entity_t e = ecs_new_id(g_world);
+			ecs_set(g_world, e, c_model, {
+				.pos=world_position, .model_index=2, .scale=200.0f + 100.0f * rng_f() });
+			ecs_set(g_world, e, c_velocity, {
+				.vel={{rng_f() * 20.0f - 10.0f, 10.0f + rng_f() * 10.0f, rng_f() * 20.0f - 10.0f}}});
+		}
+	} else if (card->image_id == 1) {
+		for (int i = 0; i < 30; ++i) {
+			ecs_entity_t e = ecs_new_id(g_world);
+			ecs_set(g_world, e, c_model, {
+				.pos=world_position, .model_index=0, .scale=300.0f });
+			ecs_set(g_world, e, c_velocity, {
+				.vel={
+					.x=cosf((i / 30.0f) * 3.1415926f) * 9.0f,
+					.y=10.0f + rng_f() * 10.0f,
+					.z=sinf((i / 15.0f) * 3.1415926f) * 20.0f,
+				} });
+		}
+	} else if (card->image_id == 2) {
+		for (int i = 0; i < 30; ++i) {
+			ecs_entity_t e = ecs_new_id(g_world);
+			ecs_set(g_world, e, c_model, {
+				.pos=world_position, .model_index=1, .scale=150.0f + 150.0f * rng_f() });
+			ecs_set(g_world, e, c_velocity, {
+				.vel={
+					.x=cosf(((i*2.0f) / 30.0f) * M_PI) * 8.0f,
+					.y=10.0f + rng_f() * 10.0f,
+					.z=sinf(((i*2.0f) / 30.0f) * M_PI) * 20.0f,
+				} });
+		}
+	}
 
 	// remove card
 	ecs_delete(g_world, g_selected_card);
@@ -755,6 +826,29 @@ static void system_move_cards(ecs_iter_t *it) {
 	}
 }
 
+static void system_move_models(ecs_iter_t *it) {
+	c_model *model_it = ecs_field(it, c_model, 1);
+	c_velocity *velocity_it = ecs_field(it, c_velocity, 2);
+
+	for (int i = 0; i < it->count; ++i) {
+		c_model *model = &model_it[i];
+		c_velocity *velocity = &velocity_it[i];
+
+		glm_vec3_add(model->pos.raw, velocity->vel.raw, model->pos.raw);
+
+		vec3 drag = {0.96f, 1.0f, 0.92f};
+		glm_vec3_mul(velocity->vel.raw, drag, velocity->vel.raw);
+		velocity->vel.y -= 0.8f;
+
+		if (model->pos.y < 0.0f && velocity->vel.y < 0.0f) {
+			model->pos.y = 0.0f;
+			velocity->vel.y = fabsf(velocity->vel.y) * 0.6f;
+			if (velocity->vel.y < 5.0f) {
+				velocity->vel.y = 0.0f;
+			}
+		}
+	}
+}
 
 static void system_draw_cards(ecs_iter_t *it) {
 	c_card *cards = ecs_field(it, c_card, 1);
@@ -856,6 +950,21 @@ static void system_draw_cards(ecs_iter_t *it) {
 	}
 }
 
+static void system_draw_models(ecs_iter_t *it) {
+	c_model *models_it = ecs_field(it, c_model, 1);
+
+	for (int i = 0; i < it->count; ++i) {
+		c_model *model = &models_it[i];
+
+		mat4 model_matrix = GLM_MAT4_IDENTITY_INIT;
+
+		shader_set_uniform_mat3(&g_fun_models[model->model_index].shader, "u_normalMatrix", (float*)model_matrix);
+		glm_mat4_identity(model_matrix);
+		glm_translate(model_matrix, model->pos.raw);
+		glm_scale(model_matrix, (vec3){ model->scale, model->scale, model->scale });
+		model_draw(&g_fun_models[model->model_index], g_camera.projection, g_camera.view, model_matrix);
+	}
+}
 
 static void observer_on_update_handcards(ecs_iter_t *it) {
 	c_card *changed_cards = ecs_field(it, c_card, 1);
