@@ -187,7 +187,7 @@ static void spawn_homing_shot(vec2 p, float angle, ecs_entity_t target, enum fac
 // vars
 //
 
-static engine_t *g_engine; // engine reference for ecs callbacks
+static struct engine *g_engine; // engine reference for ecs callbacks
 
 // assets
 static int g_font;
@@ -321,7 +321,7 @@ ECS_SYSTEM_DECLARE(system_draw_sprites);
 // scene functions
 //
 
-static void load(struct scene_planes_s *scene, struct engine_s *engine) {
+static void load(struct scene_planes_s *scene, struct engine *engine) {
 	// configure engine
 	engine_set_clear_color(0.87f, 0.96f, 0.96f);
 	glm_mat4_identity(engine->u_view);
@@ -490,7 +490,7 @@ static void load(struct scene_planes_s *scene, struct engine_s *engine) {
 
 }
 
-static void destroy(struct scene_planes_s *scene, struct engine_s *engine) {
+static void destroy(struct scene_planes_s *scene, struct engine *engine) {
 	ecs_filter_t *f = ecs_filter(g_ecs, {
 		.terms = {
 			{ ecs_id(c_mapchunk) },
@@ -514,13 +514,13 @@ static void destroy(struct scene_planes_s *scene, struct engine_s *engine) {
 	pipeline_destroy(&g_pipeline);
 }
 
-static void tick(struct scene_planes_s *scene, struct engine_s *engine, float dt) {
+static void tick(struct scene_planes_s *scene, struct engine *engine, float dt) {
 	ecs_run(g_ecs, ecs_id(system_animate_sprites),     dt, NULL);
 	ecs_run(g_ecs, ecs_id(system_move_particles),      dt, NULL);
 	ecs_run(g_ecs, ecs_id(system_move_bullets),        dt, NULL);
 }
 
-static void update(struct scene_planes_s *scene, struct engine_s *engine, float dt) {
+static void update(struct scene_planes_s *scene, struct engine *engine, float dt) {
 	if (!g_game_started) {
 		if (engine->input_drag.state == INPUT_DRAG_BEGIN) {
 			g_game_started = 1;
@@ -604,7 +604,7 @@ static void update(struct scene_planes_s *scene, struct engine_s *engine, float 
 	
 }
 
-static void draw(struct scene_planes_s *scene, struct engine_s *engine) {
+static void draw(struct scene_planes_s *scene, struct engine *engine) {
 	glEnable(GL_DEPTH_TEST);
 	glDepthFunc(GL_LEQUAL);
 	glEnable(GL_BLEND);
@@ -759,7 +759,7 @@ static void draw(struct scene_planes_s *scene, struct engine_s *engine) {
 	}
 }
 
-void scene_planes_init(struct scene_planes_s *scene, struct engine_s *engine) {
+void scene_planes_init(struct scene_planes_s *scene, struct engine *engine) {
 	// init scene base
 	scene_init((struct scene_s *)scene, engine);
 	

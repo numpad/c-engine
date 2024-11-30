@@ -95,7 +95,7 @@ typedef struct {
 // State
 
 static NVGcontext *vg;
-static struct engine_s *g_engine;
+static struct engine *g_engine;
 static vec2s wsize;
 
 static double g_time_elapsed;
@@ -340,7 +340,7 @@ void draw_gs_flying(void) {
 
 // Callbacks
 
-static void load(struct scene_brickbreaker_s *scene, struct engine_s *engine) {
+static void load(struct scene_brickbreaker_s *scene, struct engine *engine) {
 	vg = engine->vg;
 	g_engine = engine;
 	wsize = (vec2s){ .x = engine->window_width, .y = engine->window_height };
@@ -374,10 +374,10 @@ static void load(struct scene_brickbreaker_s *scene, struct engine_s *engine) {
 	engine_set_clear_color(0.16f, 0.16f, 0.16f);
 }
 
-static void destroy(struct scene_brickbreaker_s *scene, struct engine_s *engine) {
+static void destroy(struct scene_brickbreaker_s *scene, struct engine *engine) {
 }
 
-static void update(struct scene_brickbreaker_s *scene, struct engine_s *engine, float dt) {
+static void update(struct scene_brickbreaker_s *scene, struct engine *engine, float dt) {
 	wsize = (vec2s){ .x = engine->window_width, .y = engine->window_height };
 
 	const float FIXED_TIME_STEP = (1.0f / 60.0f);
@@ -409,7 +409,7 @@ static void update(struct scene_brickbreaker_s *scene, struct engine_s *engine, 
 	g_time_elapsed += dt;
 }
 
-static void draw(struct scene_brickbreaker_s *scene, struct engine_s *engine) {
+static void draw(struct scene_brickbreaker_s *scene, struct engine *engine) {
 	draw_background_stars();
 
 	// Draw Asteroids
@@ -447,7 +447,7 @@ static void draw(struct scene_brickbreaker_s *scene, struct engine_s *engine) {
 	nvgText(vg, 10.0f, wsize.y - 130.0f, txt_money, NULL);
 }
 
-void scene_brickbreaker_init(struct scene_brickbreaker_s *scene, struct engine_s *engine) {
+void scene_brickbreaker_init(struct scene_brickbreaker_s *scene, struct engine *engine) {
 	scene_init((struct scene_s *)scene, engine);
 
 	scene->base.load    = (scene_load_fn)load;

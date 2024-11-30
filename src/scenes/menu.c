@@ -27,7 +27,7 @@
 // structs & enums
 //
 
-typedef void(*btn_callback_fn)(struct engine_s *engine);
+typedef void(*btn_callback_fn)(struct engine *engine);
 typedef struct {
 	float x, y, w, h;
 	const char *text1, *text2, *subtext;
@@ -100,24 +100,24 @@ void reset_ids_of_lobbies(void) {
 static float menuitem_active(float menu_x, float bookmark_x, float bookmark_tx);
 
 // switch scenes
-static void switch_to_game_scene(struct engine_s *engine);
-static void switch_to_suika_scene(struct engine_s *engine);
-static void switch_to_asteroid_scene(struct engine_s *engine);
+static void switch_to_game_scene(struct engine *engine);
+static void switch_to_suika_scene(struct engine *engine);
+static void switch_to_asteroid_scene(struct engine *engine);
 
 // button callbacks
-static void on_start_game(struct engine_s *engine);
-static void on_click_minigame_button(struct engine_s *engine);
+static void on_start_game(struct engine *engine);
+static void on_click_minigame_button(struct engine *engine);
 
-static void on_begin_search_friends(struct engine_s *);
-static void on_end_search_friends(struct engine_s *);
-static void on_create_lobby(struct engine_s *);
-static void on_join_lobby(struct engine_s *);
+static void on_begin_search_friends(struct engine *);
+static void on_end_search_friends(struct engine *);
+static void on_create_lobby(struct engine *);
+static void on_join_lobby(struct engine *);
 
 //
 // scene callbacks
 //
 
-static void menu_load(struct scene_menu_s *menu, struct engine_s *engine) {
+static void menu_load(struct scene_menu_s *menu, struct engine *engine) {
 	engine_set_clear_color(0.34f, 0.72f, 0.98f);
 
 	g_menu_camera = GLMS_VEC2_ZERO;
@@ -175,7 +175,7 @@ static void menu_load(struct scene_menu_s *menu, struct engine_s *engine) {
 	g_entities[2].tile[1] = 4;
 }
 
-static void menu_destroy(struct scene_menu_s *menu, struct engine_s *engine) {
+static void menu_destroy(struct scene_menu_s *menu, struct engine *engine) {
 	pipeline_destroy(&g_pipeline_entities);
 	shader_destroy(&g_shader_entities);
 	isoterrain_destroy(&g_terrain);
@@ -189,14 +189,14 @@ static void menu_destroy(struct scene_menu_s *menu, struct engine_s *engine) {
 	texture_destroy(&g_entity_tex);
 }
 
-static void menu_update(struct scene_menu_s *menu, struct engine_s *engine, float dt) {
+static void menu_update(struct scene_menu_s *menu, struct engine *engine, float dt) {
 	if (g_next_scene != NULL) {
 		engine_setscene(engine, g_next_scene);
 		g_next_scene = NULL;
 	}
 }
 
-static void menu_draw(struct scene_menu_s *menu, struct engine_s *engine) {
+static void menu_draw(struct scene_menu_s *menu, struct engine *engine) {
 	NVGcontext *vg = engine->vg;
 	const float W2 = engine->window_width * 0.5f;
 	const float H2 = engine->window_height * 0.5f;
@@ -504,7 +504,7 @@ static void menu_draw(struct scene_menu_s *menu, struct engine_s *engine) {
 	pipeline_draw(&g_pipeline_entities, engine);
 }
 
-static void menu_on_message(struct scene_menu_s *menu, struct engine_s *engine, struct message_header *msg) {
+static void menu_on_message(struct scene_menu_s *menu, struct engine *engine, struct message_header *msg) {
 	switch (msg->type) {
 		case WELCOME_RESPONSE: {
 			struct welcome_response *_response = (struct welcome_response *)msg;
@@ -578,7 +578,7 @@ static void menu_on_message(struct scene_menu_s *menu, struct engine_s *engine, 
 	}
 }
 
-void scene_menu_init(struct scene_menu_s *menu, struct engine_s *engine) {
+void scene_menu_init(struct scene_menu_s *menu, struct engine *engine) {
 	// init scene base
 	scene_init((struct scene_s *)menu, engine);
 
@@ -595,17 +595,17 @@ void scene_menu_init(struct scene_menu_s *menu, struct engine_s *engine) {
 // private impls
 //
 
-static void on_start_game(struct engine_s *engine) {
+static void on_start_game(struct engine *engine) {
 	g_menu_camera_target_y = -1.0f;
 
 	platform_vibrate(PLATFORM_VIBRATE_TAP);
 }
 
-static void on_click_minigame_button(struct engine_s *engine) {
+static void on_click_minigame_button(struct engine *engine) {
 	g_minigame_selection_visible = 1;
 }
 
-static void switch_to_game_scene(struct engine_s *engine) {
+static void switch_to_game_scene(struct engine *engine) {
 	struct scene_battle_s *game_scene_battle = malloc(sizeof(struct scene_battle_s));
 	scene_battle_init(game_scene_battle, engine);
 	g_next_scene = (struct scene_s *)game_scene_battle;
@@ -613,7 +613,7 @@ static void switch_to_game_scene(struct engine_s *engine) {
 	platform_vibrate(PLATFORM_VIBRATE_TAP);
 }
 
-static void switch_to_suika_scene(struct engine_s *engine) {
+static void switch_to_suika_scene(struct engine *engine) {
 	struct scene_experiments_s *scene = malloc(sizeof(struct scene_experiments_s));
 	scene_experiments_init(scene, engine);
 	g_next_scene = (struct scene_s *)scene;
@@ -622,7 +622,7 @@ static void switch_to_suika_scene(struct engine_s *engine) {
 	platform_vibrate(PLATFORM_VIBRATE_TAP);
 }
 
-static void switch_to_asteroid_scene(struct engine_s *engine) {
+static void switch_to_asteroid_scene(struct engine *engine) {
 	struct scene_brickbreaker_s *scene = malloc(sizeof(struct scene_brickbreaker_s));
 	scene_brickbreaker_init(scene, engine);
 	g_next_scene = (struct scene_s *)scene;
@@ -638,7 +638,7 @@ static float menuitem_active(float menu_x, float bookmark_x, float bookmark_tx) 
 	return 1.0f - (d / max_d);
 }
 
-static void on_begin_search_friends(struct engine_s *engine) {
+static void on_begin_search_friends(struct engine *engine) {
 	g_search_friends_text = g_search_friends_texts[1];
 
 	// TODO: remove
@@ -655,11 +655,11 @@ static void on_begin_search_friends(struct engine_s *engine) {
 	}
 }
 
-static void on_end_search_friends(struct engine_s *engine) {
+static void on_end_search_friends(struct engine *engine) {
 	g_search_friends_text = g_search_friends_texts[0];
 }
 
-static void on_create_lobby(struct engine_s *engine) {
+static void on_create_lobby(struct engine *engine) {
 	struct lobby_create_request req;
 	message_header_init((struct message_header *)&req, LOBBY_CREATE_REQUEST);
 	req.lobby_id = 123;
@@ -667,7 +667,7 @@ static void on_create_lobby(struct engine_s *engine) {
 	engine_gameserver_send(engine, (struct message_header *)&req);
 }
 
-static void on_join_lobby(struct engine_s *engine) {
+static void on_join_lobby(struct engine *engine) {
 	struct lobby_join_request req;
 	message_header_init((struct message_header *)&req, LOBBY_JOIN_REQUEST);
 	req.lobby_id = 123;

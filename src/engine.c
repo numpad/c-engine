@@ -20,9 +20,9 @@ static Uint32 USR_EVENT_RELOAD = ((Uint32)-1);
 static Uint32 USR_EVENT_NOTIFY = ((Uint32)-1);
 static Uint32 USR_EVENT_GOBACK = ((Uint32)-1);
 
-static void on_window_resized(struct engine_s *engine, int w, int h);
-static void engine_poll_events(struct engine_s *engine);
-static void engine_gameserver_receive(struct engine_s *engine);
+static void on_window_resized(struct engine *engine, int w, int h);
+static void engine_poll_events(struct engine *engine);
+static void engine_gameserver_receive(struct engine *engine);
 
 #ifdef __unix__
 #include <signal.h>
@@ -65,7 +65,7 @@ void on_siggoback(void) {
 }
 
 
-struct engine_s *engine_new(int argc, char **argv) {
+struct engine *engine_new(int argc, char **argv) {
 	if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_TIMER | SDL_INIT_GAMECONTROLLER | SDL_INIT_EVENTS) < 0) {
 		SDL_LogError(SDL_LOG_CATEGORY_ERROR, "failed initializing SDL: %s.\n", SDL_GetError());
 		return NULL;
@@ -88,7 +88,7 @@ struct engine_s *engine_new(int argc, char **argv) {
 	SDL_GL_SetAttribute(SDL_GL_MULTISAMPLEBUFFERS, 1);
 	SDL_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES, 4);
 
-	struct engine_s *engine = calloc(1, sizeof(struct engine_s));
+	struct engine *engine = calloc(1, sizeof(struct engine));
 	engine->window_width = 550;
 	engine->window_height = 800;
 	engine->time_elapsed = 0.0f;
@@ -166,7 +166,7 @@ struct engine_s *engine_new(int argc, char **argv) {
 	return engine;
 }
 
-int engine_destroy(struct engine_s *engine) {
+int engine_destroy(struct engine *engine) {
 	// scene
 	engine_setscene(engine, NULL);
 
@@ -206,7 +206,7 @@ void engine_set_clear_color(float r, float g, float b) {
 // system stuff
 //
 
-static void on_window_resized(struct engine_s *engine, int w, int h) {
+static void on_window_resized(struct engine *engine, int w, int h) {
 	engine->window_width = w;
 	engine->window_height = h;
 	engine->window_aspect = h / (float)w;
@@ -230,7 +230,7 @@ static void on_window_resized(struct engine_s *engine, int w, int h) {
 // scene handling
 //
 
-void engine_setscene(struct engine_s *engine, struct scene_s *new_scene) {
+void engine_setscene(struct engine *engine, struct scene_s *new_scene) {
 #ifdef DEBUG
 	console_log_ex(engine, CONSOLE_MSG_INFO, 4.0f, "Switching to scene %p", (void*)new_scene);
 #endif
@@ -252,7 +252,7 @@ void engine_setscene(struct engine_s *engine, struct scene_s *new_scene) {
 
 #ifdef DEBUG
 #include <dlfcn.h>
-void engine_setscene_dll(struct engine_s *engine, const char *filename) {
+void engine_setscene_dll(struct engine *engine, const char *filename) {
 	engine_setscene(engine, NULL);
 
 	static void *handle = NULL;
@@ -265,7 +265,7 @@ void engine_setscene_dll(struct engine_s *engine, const char *filename) {
 #define SCENE_STRUCT scene_battle_s
 #define SCENE_INIT_FN "scene_battle_init"
 	struct SCENE_STRUCT *modscene = malloc(sizeof(*modscene));
-	void(*init_fn)(struct SCENE_STRUCT *scene, struct engine_s *) = dlsym(handle, SCENE_INIT_FN);
+	void(*init_fn)(struct SCENE_STRUCT *scene, struct engine *) = dlsym(handle, SCENE_INIT_FN);
 	init_fn(modscene, engine);
 #undef SCENE_STRUCT
 #undef SCENE_INIT_FN
@@ -274,7 +274,7 @@ void engine_setscene_dll(struct engine_s *engine, const char *filename) {
 
 }
 #else
-void engine_setscene_dll(struct engine_s *engine, const char *filename) {
+void engine_setscene_dll(struct engine *engine, const char *filename) {
 	fprintf(stderr, "dll loading disabled for non-debug builds!\n");
 }
 #endif
@@ -283,7 +283,7 @@ void engine_setscene_dll(struct engine_s *engine, const char *filename) {
 // networking
 //
 
-int engine_gameserver_connect(struct engine_s *engine, const char *address) {
+int engine_gameserver_connect(struct engine *engine, const char *address) {
 	assert(engine->gameserver_ip.host == 0);
 	assert(engine->gameserver_ip.port == 0);
 
@@ -316,7 +316,7 @@ int engine_gameserver_connect(struct engine_s *engine, const char *address) {
 	return 0;
 }
 
-void engine_gameserver_disconnect(struct engine_s *engine) {
+void engine_gameserver_disconnect(struct engine *engine) {
 	engine->gameserver_ip.host = engine->gameserver_ip.port = 0;
 
 	if (engine->gameserver_tcp != NULL) {
@@ -334,7 +334,7 @@ void engine_gameserver_disconnect(struct engine_s *engine) {
 	}
 }
 
-void engine_gameserver_send(struct engine_s *engine, struct message_header *msg) {
+void engine_gameserver_send(struct engine *engine, struct message_header *msg) {
 	assert(engine != NULL);
 	assert(msg != NULL);
 	if (engine->gameserver_tcp == NULL) {
@@ -359,7 +359,7 @@ void engine_gameserver_send(struct engine_s *engine, struct message_header *msg)
 }
 
 // main loop
-void engine_update(struct engine_s *engine, double dt) {
+void engine_update(struct engine *engine, double dt) {
 	// poll server
 	if (engine->gameserver_tcp != NULL) {
 		engine_gameserver_receive(engine);
@@ -373,7 +373,7 @@ void engine_update(struct engine_s *engine, double dt) {
 	scene_update(engine->scene, engine, dt);
 }
 
-void engine_draw(struct engine_s *engine) {
+void engine_draw(struct engine *engine) {
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
 	
 	nvgBeginFrame(engine->vg, engine->window_width, engine->window_height, engine->window_pixel_ratio);
@@ -417,7 +417,7 @@ void engine_draw(struct engine_s *engine) {
 	SDL_GL_SwapWindow(engine->window);
 }
 
-void engine_enter_mainloop(struct engine_s *engine) {
+void engine_enter_mainloop(struct engine *engine) {
 	Uint64 current_time = SDL_GetPerformanceCounter();
 	while (engine->scene != NULL) {
 		const Uint64 new_time = SDL_GetPerformanceCounter();
@@ -435,7 +435,7 @@ void engine_enter_mainloop(struct engine_s *engine) {
 
 // TODO: merge with engine_enter_mainloop
 void engine_mainloop_emcc(void *engine_ptr) {
-	struct engine_s *engine = engine_ptr;
+	struct engine *engine = engine_ptr;
 
 	static Uint64 current_time = -1;
 	if (current_time == (Uint64)-1) {
@@ -454,7 +454,7 @@ void engine_mainloop_emcc(void *engine_ptr) {
 }
 
 // event polling
-static void engine_poll_events(struct engine_s *engine) {
+static void engine_poll_events(struct engine *engine) {
 	struct input_drag_s prev_input_drag = engine->input_drag;
 
 	if (prev_input_drag.state == INPUT_DRAG_END) {
@@ -543,7 +543,7 @@ static void engine_poll_events(struct engine_s *engine) {
 }
 
 // receive & parse messages
-static void propagate_received_message(struct engine_s *engine, const char *data, size_t data_len) {
+static void propagate_received_message(struct engine *engine, const char *data, size_t data_len) {
 	// we received something, but maybe it is no json/valid message?
 	cJSON *json = cJSON_ParseWithLength(data, data_len);
 	if (json != NULL) {
@@ -559,7 +559,7 @@ static void propagate_received_message(struct engine_s *engine, const char *data
 	}
 }
 
-static void engine_gameserver_receive(struct engine_s *engine) {
+static void engine_gameserver_receive(struct engine *engine) {
 	assert(engine != NULL);
 
 	const int readable_sockets = 1;

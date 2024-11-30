@@ -52,7 +52,7 @@ void terrain_destroy(struct terrain_s *terrain) {
 	stbds_arrfree(terrain->polygon_edges);
 }
 
-void terrain_draw(struct terrain_s *terrain, struct engine_s *engine) {
+void terrain_draw(struct terrain_s *terrain, struct engine *engine) {
 	for (int y = 0; y < terrain->height; ++y) {
 		for (int x = 0; x < terrain->width; ++x) {
 			const unsigned char density = *terrain_density_at(terrain, x, y);

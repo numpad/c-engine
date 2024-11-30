@@ -3,7 +3,7 @@
 
 #include <stdlib.h>
 
-struct engine_s;
+struct engine;
 
 enum console_msg_type {
 	CONSOLE_MSG_DEFAULT,
@@ -38,11 +38,11 @@ struct console_s {
 void console_init(struct console_s *);
 void console_destroy(struct console_s *);
 
-void console_update(struct console_s *, struct engine_s *, float dt);
-void console_draw(struct console_s *, struct engine_s *);
+void console_update(struct console_s *, struct engine *, float dt);
+void console_draw(struct console_s *, struct engine *);
 
-void console_log(struct engine_s *, const char *fmt, ...);
-void console_log_ex(struct engine_s *, enum console_msg_type type, float duration, const char *fmt, ...);
+void console_log(struct engine *, const char *fmt, ...);
+void console_log_ex(struct engine *, enum console_msg_type type, float duration, const char *fmt, ...);
 
 #endif
 

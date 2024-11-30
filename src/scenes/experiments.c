@@ -111,7 +111,7 @@ static b2ShapeDef *body_shape_defs;
 // scene functions
 //
 
-static void load(struct scene_experiments_s *scene, struct engine_s *engine) {
+static void load(struct scene_experiments_s *scene, struct engine *engine) {
 	// configure engine
 	engine_set_clear_color(palette[3].r, palette[3].g, palette[3].b);
 	
@@ -184,7 +184,7 @@ static void load(struct scene_experiments_s *scene, struct engine_s *engine) {
 	dragged_emoji->tile = TILE_APPLE;
 }
 
-static void destroy(struct scene_experiments_s *scene, struct engine_s *engine) {
+static void destroy(struct scene_experiments_s *scene, struct engine *engine) {
 	nvgDeleteImage(engine->vg, img_food);
 
 	// free physics world
@@ -201,7 +201,7 @@ static void destroy(struct scene_experiments_s *scene, struct engine_s *engine) 
 
 }
 
-static void update(struct scene_experiments_s *scene, struct engine_s *engine, float dt) {
+static void update(struct scene_experiments_s *scene, struct engine *engine, float dt) {
 	if (engine->input_drag.state == INPUT_DRAG_BEGIN) {
 		dragging = 1;
 		dragging_x = engine->input_drag.begin_x;
@@ -299,7 +299,7 @@ static void update(struct scene_experiments_s *scene, struct engine_s *engine, f
 	camera_pos[1] = engine->window_height * 0.5f;
 }
 
-static void draw(struct scene_experiments_s *scene, struct engine_s *engine) {
+static void draw(struct scene_experiments_s *scene, struct engine *engine) {
 	const float W = engine->window_width;
 	const float H = engine->window_height;
 	NVGcontext *vg = engine->vg;
@@ -338,7 +338,7 @@ static void draw(struct scene_experiments_s *scene, struct engine_s *engine) {
 	draw_input(vg);
 }
 
-void scene_experiments_init(struct scene_experiments_s *scene, struct engine_s *engine) {
+void scene_experiments_init(struct scene_experiments_s *scene, struct engine *engine) {
 	// init scene base
 	scene_init((struct scene_s *)scene, engine);
 	

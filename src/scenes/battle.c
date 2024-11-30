@@ -132,7 +132,7 @@ ECS_SYSTEM_DECLARE(system_draw_models);
 //
 // vars
 //
-static engine_t     *g_engine;
+static struct engine *g_engine;
 
 // game state
 static texture_t     g_cards_texture;
@@ -163,7 +163,7 @@ static Mix_Chunk    *g_slide_card_sfx;
 // scene functions
 //
 
-static void load(struct scene_battle_s *battle, struct engine_s *engine) {
+static void load(struct scene_battle_s *battle, struct engine *engine) {
 	g_engine = engine;
 	g_handcards_updated = 0;
 	g_selected_card = 0;
@@ -284,7 +284,7 @@ static void load(struct scene_battle_s *battle, struct engine_s *engine) {
 }
 
 
-static void destroy(struct scene_battle_s *battle, struct engine_s *engine) {
+static void destroy(struct scene_battle_s *battle, struct engine *engine) {
 	Mix_FreeChunk(g_place_card_sfx);
 	Mix_FreeChunk(g_pick_card_sfx);
 	Mix_FreeChunk(g_slide_card_sfx);
@@ -309,7 +309,7 @@ static void destroy(struct scene_battle_s *battle, struct engine_s *engine) {
 }
 
 
-static void update(struct scene_battle_s *battle, struct engine_s *engine, float dt) {
+static void update(struct scene_battle_s *battle, struct engine *engine, float dt) {
 	const struct input_drag_s *drag = &(engine->input_drag);
 
 	// pick up card
@@ -398,7 +398,7 @@ static void update(struct scene_battle_s *battle, struct engine_s *engine, float
 }
 
 
-static void draw(struct scene_battle_s *battle, struct engine_s *engine) {
+static void draw(struct scene_battle_s *battle, struct engine *engine) {
 	engine_set_clear_color(0.34f, 0.72f, 0.98f);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
@@ -540,7 +540,7 @@ static void draw(struct scene_battle_s *battle, struct engine_s *engine) {
 }
 
 
-void scene_battle_init(struct scene_battle_s *scene_battle, struct engine_s *engine) {
+void scene_battle_init(struct scene_battle_s *scene_battle, struct engine *engine) {
 	// init scene base
 	scene_init((struct scene_s *)scene_battle, engine);
 

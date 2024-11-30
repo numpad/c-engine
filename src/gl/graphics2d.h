@@ -5,7 +5,7 @@
 #include <cglm/struct.h>
 #include "gl/shader.h"
 
-typedef struct engine_s engine_t;
+struct engine;
 
 #define DRAWCMD_INIT \
 (drawcmd_t) {                                    \
@@ -63,7 +63,7 @@ void pipeline_reset(pipeline_t *);
 void pipeline_emit(pipeline_t *, drawcmd_t *);
 void pipeline_set_transform(pipeline_t *, mat4 model);
 
-void pipeline_draw(pipeline_t *, engine_t *);
+void pipeline_draw(pipeline_t *, struct engine *);
 void pipeline_draw_ortho(pipeline_t *, float w, float h);
 
 #endif

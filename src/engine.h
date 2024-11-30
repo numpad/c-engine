@@ -15,16 +15,16 @@
 // forward decls & typedefs
 //
 
-struct engine_s;
+struct engine;
 struct console_s;
 struct message_header;
-typedef void(*engine_callback_fn)(struct engine_s*);
+typedef void(*engine_callback_fn)(struct engine*);
 
 //
 // structs & enums
 //
 
-struct engine_s {
+struct engine {
 	// windowing
 	SDL_Window *window;
 	Uint32 window_id;
@@ -66,25 +66,25 @@ struct engine_s {
 };
 
 // init & cleanup
-struct engine_s *engine_new(int argc, char **argv);
-int engine_destroy(struct engine_s *engine);
+struct engine *engine_new(int argc, char **argv);
+int engine_destroy(struct engine *engine);
 
 // settings
 void engine_set_clear_color(float r, float g, float b);
 
 // scene handling
-void engine_setscene(struct engine_s *engine, struct scene_s *scene);
-void engine_setscene_dll(struct engine_s *engine, const char *filename);
+void engine_setscene(struct engine *engine, struct scene_s *scene);
+void engine_setscene_dll(struct engine *engine, const char *filename);
 
 // networking
-int engine_gameserver_connect(struct engine_s *, const char *address);
-void engine_gameserver_disconnect(struct engine_s *);
-void engine_gameserver_send(struct engine_s *, struct message_header *msg);
+int engine_gameserver_connect(struct engine *, const char *address);
+void engine_gameserver_disconnect(struct engine *);
+void engine_gameserver_send(struct engine *, struct message_header *msg);
 
 // main loop
-void engine_update(struct engine_s *engine, double dt);
-void engine_draw(struct engine_s *engine);
-void engine_enter_mainloop(struct engine_s *engine);
+void engine_update(struct engine *engine, double dt);
+void engine_draw(struct engine *engine);
+void engine_enter_mainloop(struct engine *engine);
 void engine_mainloop_emcc(void *engine);
 
 #endif

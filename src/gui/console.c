@@ -29,7 +29,7 @@ void console_destroy(struct console_s *console) {
 	}
 }
 
-void console_update(struct console_s *console, struct engine_s *engine, float dt) {
+void console_update(struct console_s *console, struct engine *engine, float dt) {
 	for (size_t i = 0; i < console->messages_count; ++i) {
 		struct console_msg_s *msg = &console->messages[i];
 		const float state_duration = msg->duration[msg->state];
@@ -70,7 +70,7 @@ void console_update(struct console_s *console, struct engine_s *engine, float dt
 	}
 }
 
-void console_draw(struct console_s *console, struct engine_s *engine) {
+void console_draw(struct console_s *console, struct engine *engine) {
 	NVGcontext *vg = engine->vg;
 
 	const float msg_h = 30.0f;
@@ -131,7 +131,7 @@ void console_draw(struct console_s *console, struct engine_s *engine) {
 
 }
 
-void console_log(struct engine_s *engine, const char *fmt, ...) {
+void console_log(struct engine *engine, const char *fmt, ...) {
 	va_list argp;
 
 	va_start(argp, fmt);
@@ -153,7 +153,7 @@ void console_log(struct engine_s *engine, const char *fmt, ...) {
 	});
 }
 
-void console_log_ex(struct engine_s *engine, enum console_msg_type type, float duration, const char *fmt, ...) {
+void console_log_ex(struct engine *engine, enum console_msg_type type, float duration, const char *fmt, ...) {
 	va_list argp;
 
 	va_start(argp, fmt);

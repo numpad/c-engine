@@ -210,7 +210,7 @@ void pipeline_set_transform(pipeline_t *pl, mat4 model) {
 	shader_set_uniform_mat4(pl->shader, "u_model", (float *)model);
 }
 
-void pipeline_draw(pipeline_t *pl, engine_t *engine) {
+void pipeline_draw(pipeline_t *pl, struct engine *engine) {
 	draw_pipeline(pl, engine->u_projection, engine->u_view);
 }
 

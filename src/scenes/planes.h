@@ -3,13 +3,13 @@
 
 #include "scene.h"
 
-struct engine_s;
+struct engine;
 
 struct scene_planes_s {
 	struct scene_s base;
 };
 
-void scene_planes_init(struct scene_planes_s *, struct engine_s *);
+void scene_planes_init(struct scene_planes_s *, struct engine *);
 
 #endif
 

@@ -8,13 +8,13 @@
 #include "menu.h"
 #include "gui/console.h"
 
-static void switch_to_menu_scene(struct engine_s *engine) {
+static void switch_to_menu_scene(struct engine *engine) {
 	struct scene_menu_s *menu = malloc(sizeof(struct scene_menu_s));
 	scene_menu_init(menu, engine);
 	engine_setscene(engine, (struct scene_s *)menu);
 }
 
-static void intro_load(struct scene_intro_s *scene, struct engine_s *engine) {
+static void intro_load(struct scene_intro_s *scene, struct engine *engine) {
 	scene->timer = 0.0f;
 	scene->time_passed = 0.0f;
 	scene->time_passed_max = 1.75f;
@@ -22,11 +22,11 @@ static void intro_load(struct scene_intro_s *scene, struct engine_s *engine) {
 	scene->logo_image_nvg = nvgCreateImage(engine->vg, "res/image/numpad.png", NVG_IMAGE_NEAREST);
 }
 
-static void intro_destroy(struct scene_intro_s *scene, struct engine_s *engine) {
+static void intro_destroy(struct scene_intro_s *scene, struct engine *engine) {
 	nvgDeleteImage(engine->vg, scene->logo_image_nvg);
 }
 
-static void intro_update(struct scene_intro_s *scene, struct engine_s *engine, float dt) {
+static void intro_update(struct scene_intro_s *scene, struct engine *engine, float dt) {
 	scene->time_passed += dt;
 
 	if (scene->time_passed >= scene->time_passed_max) {
@@ -38,7 +38,7 @@ static inline float ease_out_expo(float n) {
 	return 1.0 - pow(2.0, -10.0 * n);
 }
 
-static void intro_draw(struct scene_intro_s *scene, struct engine_s *engine) {
+static void intro_draw(struct scene_intro_s *scene, struct engine *engine) {
 	engine_set_clear_color(0.24f, 0.58f, 1.0f);
 	int mx, my;
 	const Uint32 buttons = SDL_GetMouseState(&mx, &my);
@@ -73,7 +73,7 @@ static void intro_draw(struct scene_intro_s *scene, struct engine_s *engine) {
 
 }
 
-void scene_intro_init(struct scene_intro_s *intro, struct engine_s *engine) {
+void scene_intro_init(struct scene_intro_s *intro, struct engine *engine) {
 	// init scene base
 	scene_init((struct scene_s *)intro, engine);
 

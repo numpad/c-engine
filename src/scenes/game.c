@@ -5,16 +5,16 @@
 #include "scenes/scene.h"
 #include "game/terrain.h"
 
-static void game_load(struct scene_game_s *game, struct engine_s *engine) {
+static void game_load(struct scene_game_s *game, struct engine *engine) {
 	terrain_init(&game->terrain, 25, 45);
 }
 
-static void game_destroy(struct scene_game_s *game, struct engine_s *engine) {
+static void game_destroy(struct scene_game_s *game, struct engine *engine) {
 	terrain_destroy(&game->terrain);
 
 }
 
-static void game_update(struct scene_game_s *game, struct engine_s *engine, float dt) {
+static void game_update(struct scene_game_s *game, struct engine *engine, float dt) {
 	int mx, my;
 	const Uint32 mstate = SDL_GetMouseState(&mx, &my);
 
@@ -38,11 +38,11 @@ static void game_update(struct scene_game_s *game, struct engine_s *engine, floa
 
 }
 
-static void game_draw(struct scene_game_s *game, struct engine_s *engine) {
+static void game_draw(struct scene_game_s *game, struct engine *engine) {
 	terrain_draw(&game->terrain, engine);
 }
 
-void scene_game_init(struct scene_game_s *game, struct engine_s *engine, int w, int h) {
+void scene_game_init(struct scene_game_s *game, struct engine *engine, int w, int h) {
 	scene_init((struct scene_s *)game, engine);
 
 	game->base.load = (scene_load_fn)game_load;

@@ -8,7 +8,7 @@ struct scene_battle_s {
 	struct scene_s base;
 };
 
-void scene_battle_init(struct scene_battle_s *, struct engine_s *);
+void scene_battle_init(struct scene_battle_s *, struct engine *);
 
 #endif
 

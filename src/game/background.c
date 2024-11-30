@@ -81,7 +81,7 @@ void background_destroy(void) {
 	g_textures_len = 0;
 }
 
-void background_draw(struct engine_s *engine) {
+void background_draw(struct engine *engine) {
 	if (g_shader.program == 0) return;
 
 	glEnable(GL_BLEND);

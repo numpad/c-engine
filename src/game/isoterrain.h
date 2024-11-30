@@ -35,7 +35,7 @@ void isoterrain_destroy(struct isoterrain_s *);
 cJSON *isoterrain_to_json(struct isoterrain_s *);
 
 // logic
-void isoterrain_draw(struct isoterrain_s *, engine_t *engine);
+void isoterrain_draw(struct isoterrain_s *, struct engine *engine);
 
 // api
 void isoterrain_get_projected_size(struct isoterrain_s *, int *width, int *height);

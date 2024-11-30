@@ -23,7 +23,7 @@ static void mix_color(NVGcolor *out, NVGcolor a, NVGcolor b, float v);
 // public api
 //
 
-void ugui_mainmenu_bar(engine_t *engine) {
+void ugui_mainmenu_bar(struct engine *engine) {
 	const float W = engine->window_width;
 	NVGcontext *vg = engine->vg;
 
@@ -42,7 +42,7 @@ void ugui_mainmenu_bar(engine_t *engine) {
 	nvgStroke(vg);
 }
 
-void ugui_mainmenu_bookmark(engine_t *engine, float x) {
+void ugui_mainmenu_bookmark(struct engine *engine, float x) {
 	NVGcontext *vg = engine->vg;
 	// shadow
 	const float sh_x = 2.0f;
@@ -91,7 +91,7 @@ void ugui_mainmenu_bookmark(engine_t *engine, float x) {
 	nvgStroke(vg);
 }
 
-void ugui_mainmenu_icon(engine_t *engine, float x, const char *label, int icon, int font, float active) {
+void ugui_mainmenu_icon(struct engine *engine, float x, const char *label, int icon, int font, float active) {
 	NVGcontext *vg = engine->vg;
 
 	float label_y = g_bar_height * 0.5f + 4.0f;
@@ -131,7 +131,7 @@ void ugui_mainmenu_icon(engine_t *engine, float x, const char *label, int icon, 
 // Modals & Windows //
 //////////////////////
 
-rendered_modal_t ugui_modal_begin(engine_t *engine) {
+rendered_modal_t ugui_modal_begin(struct engine *engine) {
 	NVGcontext *vg = engine->vg;
 
 	const float padding_x = 60.0f;
@@ -195,7 +195,7 @@ void ugui_modal_end(rendered_modal_t modal) {
 // UI Components //
 ///////////////////
 
-void ugui_mainmenu_button(engine_t *engine, float x, float y, float w, float h, const char *text1, const char *text2, const char *subtext, int font, NVGcolor color_bg, NVGcolor color_bg_darker, NVGcolor color_text_outline, float is_pressed) {
+void ugui_mainmenu_button(struct engine *engine, float x, float y, float w, float h, const char *text1, const char *text2, const char *subtext, int font, NVGcolor color_bg, NVGcolor color_bg_darker, NVGcolor color_text_outline, float is_pressed) {
 	assert(text1 != NULL);
 	NVGcontext *vg = engine->vg;
 	const float height_3d = 10.0f;
@@ -292,7 +292,7 @@ void ugui_mainmenu_button(engine_t *engine, float x, float y, float w, float h, 
 	nvgRestore(vg);
 }
 
-void ugui_mainmenu_checkbox(engine_t *engine, float x, float y, float w, float h, int font, const char *text, float is_checked) {
+void ugui_mainmenu_checkbox(struct engine *engine, float x, float y, float w, float h, int font, const char *text, float is_checked) {
 	assert(text != NULL);
 	NVGcontext *vg = engine->vg;
 	const float hp = glm_ease_exp_inout(is_checked);

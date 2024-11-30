@@ -138,7 +138,7 @@ cJSON *isoterrain_to_json(struct isoterrain_s *terrain) {
 // logic
 //
 
-void isoterrain_draw(struct isoterrain_s *terrain, engine_t *engine) {
+void isoterrain_draw(struct isoterrain_s *terrain, struct engine *engine) {
 	pipeline_reset(&terrain->pipeline);
 
 	// draw left to right, top to bottom
