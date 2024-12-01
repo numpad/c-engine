@@ -46,7 +46,7 @@
 				startButton.disabled = true;
 
 				// Clear all caches
-				if (document.querySelector('#start-with-fullscreen').checked) {
+				if (document.querySelector('#start-with-clean-cache').checked) {
 					if ('caches' in window) {
 						caches.keys().then(cacheNames => {
 							cacheNames.forEach(cacheName => {
