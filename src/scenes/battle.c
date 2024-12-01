@@ -19,6 +19,7 @@
 #include "gl/graphics2d.h"
 #include "gl/text.h"
 #include "gl/model.h"
+#include "gl/gbuffer.h"
 #include "game/background.h"
 #include "gui/console.h"
 #include "scenes/menu.h"
@@ -133,6 +134,7 @@ ECS_SYSTEM_DECLARE(system_draw_models);
 // vars
 //
 static struct engine *g_engine;
+static struct gbuffer g_gbuffer;
 
 // game state
 static texture_t     g_cards_texture;
@@ -169,6 +171,7 @@ static void load(struct scene_battle_s *battle, struct engine *engine) {
 	g_selected_card = 0;
 	g_pickup_next_card = -0.75f; // wait 0.75s before spawning.
 	console_log(engine, "Starting battle scene!");
+	gbuffer_init(&g_gbuffer, engine);
 
 	// initialize camera
 	glm_mat4_identity(g_camera.view);
@@ -306,6 +309,7 @@ static void destroy(struct scene_battle_s *battle, struct engine *engine) {
 	ecs_fini(g_world);
 
 	model_destroy(&g_model);
+	gbuffer_destroy(&g_gbuffer);
 }
 
 
@@ -411,7 +415,11 @@ static void draw(struct scene_battle_s *battle, struct engine *engine) {
 	background_draw(engine);
 
 	// draw terrain
+	gbuffer_bind(g_gbuffer);
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 	hexmap_draw(&g_hexmap);
+	gbuffer_unbind(g_gbuffer);
+	gbuffer_display(g_gbuffer, engine);
 
 	// drawing systems
 	pipeline_reset(&g_cards_pipeline);
@@ -449,33 +457,6 @@ static void draw(struct scene_battle_s *battle, struct engine *engine) {
 		model_draw(&g_model, g_camera.projection, g_camera.view, model);
 
 		ecs_run(g_world, ecs_id(system_draw_models), engine->dt, NULL);
-		/*
-		rng_seed(123);
-		for (int i = 0; i < 50; ++i) {
-			int c = (i % 3);
-			float t = engine->time_elapsed * 0.6f * (1+c) + i * 0.14f;
-			shader_set_uniform_mat3(&g_fun_models[c].shader, "u_normalMatrix", (float*)normalMatrix);
-			glm_mat4_identity(model);
-			glm_translate(model, (vec3){ cosf(t) * (200.0f + c*100.0f), -170.0f + sinf(t) * (200.0f + c*100.0f) + 70.0f * c, -460.0f + c * 150.0f});
-			float ay = rng_f();
-			float az = rng_f();
-			vec3 axis = {0.0f, ay, az};
-			glm_normalize(axis);
-			glm_rotate(model, glm_rad(fmodf(engine->time_elapsed * (45.0f * (rng_f() + 0.5f)) + rng_f() * 360.0f, 360.0f)), axis);
-			float s = 200.0f + rng_f() * 300.0f;
-			glm_scale(model, (vec3){ s, s, s });
-			model_draw(&g_fun_models[c], g_camera.projection, g_camera.view, model);
-
-			// TODO: remove
-			NVGcontext *vg = engine->vg;
-			vec2s d2 = world_to_screen(engine->window_width, engine->window_height, g_camera.projection, g_camera.view, model, (vec3s){ 0.0f, 0.0f, 0.0f });
-			nvgBeginPath(vg);
-			nvgCircle(vg, d2.x, d2.y, 6.f);
-			nvgFillColor(vg, nvgRGBf(0, 1.0f, 1.0f));
-			nvgFill(vg);
-
-		}
-		*/
 
 		// Portrait model
 		mat4 portrait_view = GLM_MAT4_IDENTITY_INIT;

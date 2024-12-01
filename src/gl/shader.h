@@ -32,6 +32,7 @@ void shader_use(shader_t *);
 
 // uniform setters
 void shader_set_uniform_texture(shader_t *, const char *uniform_name, GLenum texture_unit, texture_t *texture);
+void shader_set_uniform_int    (shader_t *, const char *uniform_name, GLint value);
 void shader_set_uniform_float  (shader_t *, const char *uniform_name, float);
 void shader_set_uniform_vec2   (shader_t *, const char *uniform_name, float[2]);
 void shader_set_uniform_vec3   (shader_t *, const char *uniform_name, float[3]);

@@ -82,6 +82,15 @@ void shader_set_uniform_texture(shader_t *shader, const char *uniform_name, GLen
 	
 }
 
+void shader_set_uniform_int(shader_t *shader, const char *uniform_name, GLint value) {
+	assert(shader != NULL);
+	assert(uniform_name != NULL);
+
+	glUseProgram(shader->program);
+	GLint u_location = uniform_location(shader, uniform_name);
+	glUniform1i(u_location, value);
+}
+
 void shader_set_uniform_float(shader_t *shader, const char *uniform_name, float v) {
 	assert(shader != NULL);
 	assert(uniform_name != NULL);

@@ -190,7 +190,7 @@ int model_init_from_file(model_t *model, const char *path) {
 #endif
 
 	// setup shader
-	shader_init_from_dir(&model->shader, "res/shader/model/");
+	shader_init_from_dir(&model->shader, "res/shader/model/gbuffer_pass/");
 
 	// load buffer data
 	assert(data->buffers_count < count_of(model->vertex_buffers));

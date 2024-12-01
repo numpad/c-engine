@@ -80,7 +80,7 @@ struct engine *engine_new(int argc, char **argv) {
 	SDL_SetHint(SDL_HINT_VIDEO_HIGHDPI_DISABLED, "0");
 	SDL_SetHint(SDL_HINT_VIDEO_ALLOW_SCREENSAVER, "1");
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
-	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 2);
+	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
 	SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
 	SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
@@ -120,11 +120,23 @@ struct engine *engine_new(int argc, char **argv) {
 	}
 
 	engine->gl_ctx = SDL_GL_CreateContext(engine->window);
+	if (SDL_GL_MakeCurrent(engine->window, engine->gl_ctx) != 0) {
+		console_log_ex(engine, CONSOLE_MSG_ERROR, 4.0f, "Failed making context current: %s", SDL_GetError());
+	}
+
 	if (SDL_GL_SetSwapInterval(1) != 0) {
-		fprintf(stderr, "warning: failed enabling v-sync: %s\n", SDL_GetError());
 		console_log_ex(engine, CONSOLE_MSG_ERROR, 4.0f, "Failed enabling v-sync: %s", SDL_GetError());
 	}
-	
+
+	// Do some OpenGL checks
+	const char* gl_version = (const char*)glGetString(GL_VERSION);
+	console_log(engine, "%s", gl_version);
+	GLint max_draw_buffers;
+	glGetIntegerv(GL_MAX_DRAW_BUFFERS_EXT, &max_draw_buffers);
+	if (max_draw_buffers < 4) {
+		console_log_ex(engine, CONSOLE_MSG_ERROR, 8.0f, "Not enough draw_buffers: %d", max_draw_buffers);
+	}
+
 	// libs
 	// TODO: _STENCIL_STROKES is a bit slower, check if needed
 	engine->vg = nvgCreateGLES2(NVG_ANTIALIAS | NVG_STENCIL_STROKES);
@@ -212,10 +224,9 @@ static void on_window_resized(struct engine *engine, int w, int h) {
 	engine->window_aspect = h / (float)w;
 
 	// highdpi scaling
-	int draw_w, draw_h;
-	SDL_GL_GetDrawableSize(engine->window, &draw_w, &draw_h);
-	float window_dpi_scale_x = (float)draw_w / engine->window_width;
-	float window_dpi_scale_y = (float)draw_h / engine->window_height;
+	SDL_GL_GetDrawableSize(engine->window, &engine->window_highdpi_width, &engine->window_highdpi_height);
+	float window_dpi_scale_x = (float)engine->window_highdpi_width / engine->window_width;
+	float window_dpi_scale_y = (float)engine->window_highdpi_height / engine->window_height;
 
 	engine->window_pixel_ratio = fmaxf(window_dpi_scale_x, window_dpi_scale_y);
 

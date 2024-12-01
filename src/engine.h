@@ -34,6 +34,7 @@ struct engine {
 	
 	// window
 	int window_width, window_height;
+	int window_highdpi_width, window_highdpi_height;
 	float window_pixel_ratio;
 	float window_aspect;
 

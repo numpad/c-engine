@@ -77,16 +77,25 @@ void console_draw(struct console_s *console, struct engine *engine) {
 	const float con_x = engine->window_width - 23.0f;
 	const float con_y = 60.0f;
 
+	nvgTextLetterSpacing(engine->vg, 1.0f);
 	nvgFontFaceId(vg, engine->font_default_bold);
-	nvgFontSize(vg, 12.0f);
 	nvgTextAlign(vg, NVG_ALIGN_MIDDLE | NVG_ALIGN_RIGHT);
 	for (size_t i = 0; i < console->messages_count; ++i) {
 		struct console_msg_s *msg = &console->messages[i];
+		nvgFontSize(vg, 12.0f);
+
 		float text_w;
 		{
 			float bounds[4];
 			nvgTextBounds(vg, 0.0f, 0.0f, msg->message, NULL, bounds);
 			text_w = bounds[2] - bounds[0];
+
+			// Use smaller font
+			if (bounds[2] - bounds[0] > engine->window_width * 0.7f) {
+				nvgFontSize(vg, 8.0f);
+				nvgTextBounds(vg, 0.0f, 0.0f, msg->message, NULL, bounds);
+				text_w = bounds[2] - bounds[0];
+			}
 		}
 
 		const float y_offset = (i + 1.0f) * (msg_h + 9.0f);
