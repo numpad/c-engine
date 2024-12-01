@@ -94,6 +94,11 @@ void gbuffer_clear(struct gbuffer gbuffer) {
 }
 
 void gbuffer_display(struct gbuffer gbuffer, struct engine *engine) {
+	shader_set_uniform_vec2(&gbuffer.shader, "u_screen_resolution", (float[2]){engine->window_highdpi_width, engine->window_highdpi_height});
+	shader_set_uniform_float(&gbuffer.shader, "u_time", engine->time_elapsed);
+	
+
+	// Render
 	draw_fullscreen_triangle(gbuffer, engine);
 
 	// Copy gbuffer depth to default framebuffer so we can combine it
