@@ -85,8 +85,9 @@ struct engine *engine_new(int argc, char **argv) {
 	SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
 	SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
 	SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 8);
-	SDL_GL_SetAttribute(SDL_GL_MULTISAMPLEBUFFERS, 1);
-	SDL_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES, 4);
+	// TODO: Disabled MSAA since deferred shading, or do we still have a use for this?
+	SDL_GL_SetAttribute(SDL_GL_MULTISAMPLEBUFFERS, 0);
+	SDL_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES, 0);
 
 	struct engine *engine = calloc(1, sizeof(struct engine));
 	engine->window_width = 550;
@@ -234,6 +235,8 @@ static void on_window_resized(struct engine *engine, int w, int h) {
 	glViewport(0, 0, w * window_dpi_scale_x, h * window_dpi_scale_y);
 	glm_ortho(0.0f, w, h, 0.0f, -1.0f, 1.0f, engine->u_projection);
 	//glm_ortho(-1.0f, 1.0f, -1.0f * engine->window_aspect, 1.0f * engine->window_aspect, -1.0f, 1.0f, engine->u_projection);
+	
+	scene_on_callback(engine->scene, engine, (struct engine_event){ .type = ENGINE_EVENT_WINDOW_RESIZED});
 }
 
 

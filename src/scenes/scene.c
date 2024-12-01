@@ -7,6 +7,7 @@ void scene_init(struct scene_s *scene, struct engine *engine) {
 	scene->update = NULL;
 	scene->draw = NULL;
 	scene->on_message = NULL;
+	scene->on_callback = NULL;
 }
 
 void scene_destroy(struct scene_s *scene, struct engine *engine) {
@@ -36,5 +37,11 @@ void scene_draw(struct scene_s *scene, struct engine *engine) {
 void scene_on_message(struct scene_s *scene, struct engine *engine, struct message_header *msg) {
 	if (scene != NULL && scene->on_message != NULL) {
 		scene->on_message(scene, engine, msg);
+	}
+}
+
+void scene_on_callback(struct scene_s *scene, struct engine *engine, struct engine_event event) {
+	if (scene != NULL && scene->on_callback != NULL) {
+		scene->on_callback(scene, engine, event);
 	}
 }

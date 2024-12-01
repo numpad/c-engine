@@ -14,6 +14,6 @@ void main() {
 	vec4 position = texture(u_position, v_texcoord);
 	vec4 normal = texture(u_normal, v_texcoord);
 
-	Color = vec4(albedo.xyz, albedo.a);
+	Color = vec4(albedo.rgb, albedo.a);
 }
 

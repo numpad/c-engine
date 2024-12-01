@@ -52,8 +52,10 @@ void gbuffer_init(struct gbuffer *gbuffer, struct engine *engine) {
 
 void gbuffer_destroy(struct gbuffer *gbuffer) {
 	glDeleteTextures(GBUFFER_TEXTURE_MAX, &gbuffer->textures[0]);
+	glDeleteRenderbuffers(1, &gbuffer->renderbuffer);
 	glDeleteFramebuffers(1, &gbuffer->framebuffer);
 	shader_destroy(&gbuffer->shader);
+	glDeleteBuffers(1, &gbuffer->fullscreen_vbo);
 }
 
 void gbuffer_resize(struct gbuffer *gbuffer, int new_width, int new_height) {
@@ -67,6 +69,9 @@ void gbuffer_resize(struct gbuffer *gbuffer, int new_width, int new_height) {
 		glBindTexture(GL_TEXTURE_2D, texture);
 		glTexImage2D(GL_TEXTURE_2D, 0, internalformat, new_width, new_height, 0, GL_RGBA, type, NULL);
 	}
+
+	glBindRenderbuffer(GL_RENDERBUFFER, gbuffer->renderbuffer);
+	glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, new_width, new_height);
 }
 
 void gbuffer_bind(struct gbuffer gbuffer) {
@@ -77,8 +82,30 @@ void gbuffer_unbind(struct gbuffer gbuffer) {
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
+void gbuffer_clear(struct gbuffer gbuffer) {
+#ifdef DEBUG
+	GLint current_fbo;
+	glGetIntegerv(GL_FRAMEBUFFER_BINDING, &current_fbo);
+	assert(current_fbo == (GLint)gbuffer.framebuffer);
+#endif
+
+	glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+}
+
 void gbuffer_display(struct gbuffer gbuffer, struct engine *engine) {
 	draw_fullscreen_triangle(gbuffer, engine);
+
+	// Copy gbuffer depth to default framebuffer so we can combine it
+	// with forward rendering.
+	// TODO: Make this optional? Sometimes it is not needed (or even not desired)
+	glBindFramebuffer(GL_READ_FRAMEBUFFER, gbuffer.framebuffer);
+	glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
+	glBlitFramebuffer(
+			0, 0, engine->window_highdpi_width, engine->window_highdpi_height,
+			0, 0, engine->window_highdpi_width, engine->window_highdpi_height,
+			GL_DEPTH_BUFFER_BIT, GL_NEAREST);
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
 ////////////
@@ -103,7 +130,6 @@ static void init_gbuffer_texture(
 }
 
 
-static GLuint fullscreen_vbo;
 static void setup_fullscreen_triangle(struct gbuffer *gbuffer) {
 	static const float vertices[] = {
 		-1.0f, -1.0f,
@@ -111,8 +137,8 @@ static void setup_fullscreen_triangle(struct gbuffer *gbuffer) {
 		-1.0f,  3.0f
 	};
 
-	glGenBuffers(1, &fullscreen_vbo);
-	glBindBuffer(GL_ARRAY_BUFFER, fullscreen_vbo);
+	glGenBuffers(1, &gbuffer->fullscreen_vbo);
+	glBindBuffer(GL_ARRAY_BUFFER, gbuffer->fullscreen_vbo);
 	glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
 }
 
@@ -130,7 +156,7 @@ static void draw_fullscreen_triangle(struct gbuffer gbuffer, struct engine *engi
 	glActiveTexture(GL_TEXTURE2);
 	glBindTexture(GL_TEXTURE_2D, gbuffer.textures[GBUFFER_TEXTURE_NORMAL]);
 
-	glBindBuffer(GL_ARRAY_BUFFER, fullscreen_vbo);
+	glBindBuffer(GL_ARRAY_BUFFER, gbuffer.fullscreen_vbo);
 	glEnableVertexAttribArray(0);
 	glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(GLfloat), NULL);
 	glDrawArrays(GL_TRIANGLES, 0, 3);

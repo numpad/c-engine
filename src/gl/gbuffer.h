@@ -20,6 +20,7 @@ struct gbuffer {
 
 	GLuint textures_internalformats[GBUFFER_TEXTURE_MAX];
 	GLenum textures_type[GBUFFER_TEXTURE_MAX];
+	GLuint fullscreen_vbo;
 };
 
 void gbuffer_init(struct gbuffer *, struct engine *);
@@ -29,6 +30,7 @@ void gbuffer_resize(struct gbuffer *, int width, int height);
 void gbuffer_bind(struct gbuffer);
 void gbuffer_unbind(struct gbuffer);
 
+void gbuffer_clear(struct gbuffer);
 void gbuffer_display(struct gbuffer, struct engine *);
 
 #endif

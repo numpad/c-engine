@@ -416,14 +416,8 @@ static void draw(struct scene_battle_s *battle, struct engine *engine) {
 
 	// draw terrain
 	gbuffer_bind(g_gbuffer);
-	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+	gbuffer_clear(g_gbuffer);
 	hexmap_draw(&g_hexmap);
-	gbuffer_unbind(g_gbuffer);
-	gbuffer_display(g_gbuffer, engine);
-
-	// drawing systems
-	pipeline_reset(&g_cards_pipeline);
-	g_cards_pipeline.texture = &g_cards_texture;
 
 	// Player model
 	{
@@ -474,7 +468,13 @@ static void draw(struct scene_battle_s *battle, struct engine *engine) {
 		glDisable(GL_DEPTH_TEST);
 	}
 
-	// draw cards
+	gbuffer_unbind(g_gbuffer);
+	gbuffer_display(g_gbuffer, engine);
+
+	// drawing systems
+	pipeline_reset(&g_cards_pipeline);
+	g_cards_pipeline.texture = &g_cards_texture;
+
 	ecs_run(g_world, ecs_id(system_move_cards), engine->dt, NULL);
 	ecs_run(g_world, ecs_id(system_move_models), engine->dt, NULL);
 	ecs_run(g_world, ecs_id(system_draw_cards), engine->dt, NULL);
@@ -520,6 +520,16 @@ static void draw(struct scene_battle_s *battle, struct engine *engine) {
 	glDisable(GL_DEPTH_TEST);
 }
 
+void on_callback(struct scene_battle_s *battle, struct engine *engine, struct engine_event event) {
+	switch (event.type) {
+	case ENGINE_EVENT_WINDOW_RESIZED:
+		gbuffer_resize(&g_gbuffer, engine->window_highdpi_width, engine->window_highdpi_height);
+		break;
+	case ENGINE_EVENT_MAX:
+		assert("unhandled event!");
+		break;
+	};
+}
 
 void scene_battle_init(struct scene_battle_s *scene_battle, struct engine *engine) {
 	// init scene base
@@ -530,6 +540,7 @@ void scene_battle_init(struct scene_battle_s *scene_battle, struct engine *engin
 	scene_battle->base.destroy = (scene_destroy_fn)destroy;
 	scene_battle->base.update  = (scene_update_fn)update;
 	scene_battle->base.draw    = (scene_draw_fn)draw;
+	scene_battle->base.on_callback = (scene_on_callback_fn)on_callback;
 }
 
 
@@ -780,7 +791,7 @@ static void hexmap_draw(struct hexmap *map) {
 		glm_mat3_inv(normalMatrix, normalMatrix);
 		glm_mat3_transpose(normalMatrix);
 
-		shader_set_uniform_mat3(&g_hextiles[0].shader, "u_normalMatrix", (float*)normalMatrix);
+		shader_set_uniform_mat3(&g_hextiles[map->tiles[i].tile].shader, "u_normalMatrix", (float*)normalMatrix);
 		model_draw(&g_hextiles[map->tiles[i].tile], g_camera.projection, g_camera.view, model);
 	}
 	glDisable(GL_DEPTH_TEST);

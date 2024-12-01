@@ -6,6 +6,7 @@
 #include <SDL.h>
 #include <SDL_opengles2.h>
 #include "gl/texture.h"
+#include "util/str.h"
 #include "util/fs.h"
 
 //
@@ -34,14 +35,11 @@ void shader_init(shader_t *shader, const char *vert_path, const char *frag_path)
 }
 
 void shader_init_from_dir(shader_t *program, const char *dir_path) {
-	const size_t vert_len = snprintf(NULL, 0, "%s/vertex.glsl", dir_path);
-	const size_t frag_len = snprintf(NULL, 0, "%s/fragment.glsl", dir_path);
-
-	char vert_path[vert_len + 1];
-	char frag_path[frag_len + 1];
-
-	snprintf(vert_path, vert_len + 1, "%s/vertex.glsl", dir_path);
-	snprintf(frag_path, frag_len + 1, "%s/fragment.glsl", dir_path);
+	const int len = strlen(dir_path) + 13; // Enough room to store "fragment.glsl" and "vertex.glsl".
+	char vert_path[len + 1];
+	char frag_path[len + 1];
+	assert(0 == str_path_replace_filename(dir_path, "vertex.glsl", len + 1, vert_path));
+	assert(0 == str_path_replace_filename(dir_path, "fragment.glsl", len + 1, frag_path));
 
 	shader_init(program, vert_path, frag_path);
 }
