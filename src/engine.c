@@ -85,7 +85,8 @@ struct engine *engine_new(int argc, char **argv) {
 	SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
 	SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
 	SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 8);
-	// TODO: Disabled MSAA since deferred shading, or do we still have a use for this?
+	// TODO: Keep MSAA for forward rendering?
+	// TODO: Enabling MSAA breaks blitting gbuffer depth to default depth buffer...
 	SDL_GL_SetAttribute(SDL_GL_MULTISAMPLEBUFFERS, 0);
 	SDL_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES, 0);
 

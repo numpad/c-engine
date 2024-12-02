@@ -417,9 +417,10 @@ static void draw(struct scene_battle_s *battle, struct engine *engine) {
 	// draw terrain
 	gbuffer_bind(g_gbuffer);
 	gbuffer_clear(g_gbuffer);
-	hexmap_draw(&g_hexmap);
 
 	glEnable(GL_DEPTH_TEST);
+	hexmap_draw(&g_hexmap);
+
 	ecs_run(g_world, ecs_id(system_draw_models), engine->dt, NULL);
 
 	// Player model
@@ -446,7 +447,7 @@ static void draw(struct scene_battle_s *battle, struct engine *engine) {
 		glm_mat3_inv(normalMatrix, normalMatrix);
 		glm_mat3_transpose(normalMatrix);
 
-		// Draw character
+		// Draw player
 		shader_set_uniform_mat3(&g_player_model.shader, "u_normalMatrix", (float*)normalMatrix);
 		model_draw(&g_player_model, g_camera.projection, g_camera.view, model);
 
@@ -716,11 +717,11 @@ static void load_hextile_models(void) {
 	const char *models[] = {
 		"res/models/tiles/base/hex_grass.gltf",
 		"res/models/tiles/base/hex_water.gltf",
-		"res/models/tiles/coast/hex_coast_A.gltf",
-		"res/models/tiles/coast/hex_coast_B.gltf",
-		"res/models/tiles/coast/hex_coast_C.gltf",
-		"res/models/tiles/coast/hex_coast_D.gltf",
-		"res/models/tiles/coast/hex_coast_E.gltf",
+		"res/models/tiles/coast/waterless/hex_coast_A_waterless.gltf",
+		"res/models/tiles/coast/waterless/hex_coast_B_waterless.gltf",
+		"res/models/tiles/coast/waterless/hex_coast_C_waterless.gltf",
+		"res/models/tiles/coast/waterless/hex_coast_D_waterless.gltf",
+		"res/models/tiles/coast/waterless/hex_coast_E_waterless.gltf",
 		"res/models/tiles/roads/hex_road_A.gltf",
 		"res/models/tiles/roads/hex_road_B.gltf",
 		"res/models/tiles/roads/hex_road_E.gltf",
@@ -778,8 +779,6 @@ static void hexmap_destroy(struct hexmap *map) {
 }
 
 static void hexmap_draw(struct hexmap *map) {
-	glEnable(GL_DEPTH_TEST);
-
 	float horiz = map->tile_offsets.x;
 	float vert = map->tile_offsets.y;
 	int n_tiles = map->w * map->h;
@@ -807,10 +806,14 @@ static void hexmap_draw(struct hexmap *map) {
 		glm_mat3_inv(normalMatrix, normalMatrix);
 		glm_mat3_transpose(normalMatrix);
 
-		shader_set_uniform_mat3(&g_hextiles[map->tiles[i].tile].shader, "u_normalMatrix", (float*)normalMatrix);
-		model_draw(&g_hextiles[map->tiles[i].tile], g_camera.projection, g_camera.view, model);
+		usize model_index = map->tiles[i].tile;
+		shader_set_uniform_mat3(&g_hextiles[model_index].shader, "u_normalMatrix", (float*)normalMatrix);
+		model_draw(&g_hextiles[model_index], g_camera.projection, g_camera.view, model);
+		// Draw water for waterless coast tiles
+		if (model_index >= 2 && model_index <= 6) {
+			model_draw(&g_hextiles[1], g_camera.projection, g_camera.view, model);
+		}
 	}
-	glDisable(GL_DEPTH_TEST);
 }
 
 
@@ -823,13 +826,11 @@ static void system_move_cards(ecs_iter_t *it) {
 	c_handcard *handcards = ecs_field(it, c_handcard, 2);
 
 	for (int i = 0; i < it->count; ++i) {
-		if (it->entities[i] == g_selected_card) {
+		if (it->entities[i] == g_selected_card)
 			continue;
-		}
 
 		vec2s *p = &positions[i];
 		vec2s *target = &handcards[i].hand_target_pos;
-
 		glm_vec2_lerp(p->raw, target->raw, it->delta_time * 9.0f, p->raw);
 	}
 }
