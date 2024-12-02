@@ -63,6 +63,7 @@ struct hexmap {
 static void recalculate_handcards(void);
 static ecs_entity_t find_closest_handcard(float x, float y, float max_distance);
 static int order_handcards(ecs_entity_t e1, const void *data1, ecs_entity_t e2, const void *data2);
+static void draw_ui(pipeline_t *pipeline);
 static void on_game_event(enum event_type, event_info_t *);
 static void on_game_event_play_card(event_info_t *info);
 
@@ -78,10 +79,10 @@ static void hexmap_draw(struct hexmap *);
 // components
 
 // pos
-typedef vec2s c_position;
+typedef vec2s c_pos2d;
+typedef vec3s c_pos3d;
 
 typedef struct {
-	vec3s pos;
 	int model_index;
 	float scale;
 } c_model;
@@ -107,7 +108,8 @@ typedef struct {
 	float added_at_time;
 } c_handcard;
 
-ECS_COMPONENT_DECLARE(c_position);
+ECS_COMPONENT_DECLARE(c_pos2d);
+ECS_COMPONENT_DECLARE(c_pos3d);
 ECS_COMPONENT_DECLARE(c_card);
 ECS_COMPONENT_DECLARE(c_handcard);
 ECS_COMPONENT_DECLARE(c_model);
@@ -147,7 +149,8 @@ static pipeline_t    g_text_pipeline;
 static ecs_world_t  *g_world;
 static ecs_entity_t  g_selected_card;
 static fontatlas_t   g_card_font;
-static model_t       g_model;
+static model_t       g_player_model;
+static model_t       g_enemy_model;
 static model_t       g_fun_models[3];
 static model_t       g_hextiles[6];
 static float         g_pickup_next_card;
@@ -177,11 +180,14 @@ static void load(struct scene_battle_s *battle, struct engine *engine) {
 	glm_mat4_identity(g_camera.view);
 	glm_translate(g_camera.view, (vec3){ 0.0f, 0.0f, -1000.0f });
 	glm_rotate_x(g_camera.view, glm_rad(35.0f), g_camera.view);
-	glm_mat4_identity(g_camera.projection);
+	float size = engine->window_width;
+	glm_ortho(-size, size, -size * g_engine->window_aspect, size * g_engine->window_aspect, 1.0f, 2000.0f, g_camera.projection);
 
 	static int loads = 0;
 	const char *models[] = {"res/models/characters/Knight.glb", "res/models/characters/Mage.glb", "res/models/characters/Barbarian.glb", "res/models/characters/Rogue.glb"};
-	int load_error = model_init_from_file(&g_model, models[loads++ % 4]);
+	int load_error = model_init_from_file(&g_player_model, models[loads++ % 4]);
+	assert(load_error == 0);
+	load_error = model_init_from_file(&g_enemy_model, "res/models/characters/Skeleton_Minion.glb");
 	assert(load_error == 0);
 
 	// some random props
@@ -201,15 +207,16 @@ static void load(struct scene_battle_s *battle, struct engine *engine) {
 
 	// ecs
 	g_world = ecs_init();
-	ECS_COMPONENT_DEFINE(g_world, c_position);
+	ECS_COMPONENT_DEFINE(g_world, c_pos2d);
+	ECS_COMPONENT_DEFINE(g_world, c_pos3d);
 	ECS_COMPONENT_DEFINE(g_world, c_card);
 	ECS_COMPONENT_DEFINE(g_world, c_handcard);
 	ECS_COMPONENT_DEFINE(g_world, c_model);
 	ECS_COMPONENT_DEFINE(g_world, c_velocity);
-	ECS_SYSTEM_DEFINE(g_world, system_move_cards, 0, c_position, c_handcard);
-	ECS_SYSTEM_DEFINE(g_world, system_move_models, 0, c_model, c_velocity);
-	ECS_SYSTEM_DEFINE(g_world, system_draw_cards, 0, c_card, ?c_handcard, c_position); _syntax_fix_label:
-	ECS_SYSTEM_DEFINE(g_world, system_draw_models, 0, c_model);
+	ECS_SYSTEM_DEFINE(g_world, system_move_cards, 0, c_pos2d, c_handcard);
+	ECS_SYSTEM_DEFINE(g_world, system_move_models, 0, c_pos3d, c_model, c_velocity);
+	ECS_SYSTEM_DEFINE(g_world, system_draw_cards, 0, c_card, ?c_handcard, c_pos2d); _syntax_fix_label:
+	ECS_SYSTEM_DEFINE(g_world, system_draw_models, 0, c_pos3d, c_model);
 
 	g_ordered_handcards = ecs_query(g_world, {
 		.filter.terms = { {ecs_id(c_card)}, {ecs_id(c_handcard)} },
@@ -218,7 +225,7 @@ static void load(struct scene_battle_s *battle, struct engine *engine) {
 		});
 	
 	ecs_observer(g_world, {
-		.filter.terms = { {ecs_id(c_card)}, {ecs_id(c_handcard)}, {ecs_id(c_position)}, },
+		.filter.terms = { {ecs_id(c_card)}, {ecs_id(c_handcard)}, {ecs_id(c_pos2d)}, },
 		.events = { EcsOnAdd, EcsOnRemove, EcsOnSet },
 		.callback = observer_on_update_handcards,
 		});
@@ -308,7 +315,8 @@ static void destroy(struct scene_battle_s *battle, struct engine *engine) {
 	ecs_query_fini(g_ordered_handcards);
 	ecs_fini(g_world);
 
-	model_destroy(&g_model);
+	model_destroy(&g_player_model);
+	model_destroy(&g_enemy_model);
 	gbuffer_destroy(&g_gbuffer);
 }
 
@@ -349,7 +357,7 @@ static void update(struct scene_battle_s *battle, struct engine *engine, float d
 
 	// move card
 	if (drag->state == INPUT_DRAG_IN_PROGRESS && g_selected_card != 0 && ecs_is_valid(g_world, g_selected_card)) {
-		c_position *pos = ecs_get_mut(g_world, g_selected_card, c_position);
+		c_pos2d *pos = ecs_get_mut(g_world, g_selected_card, c_pos2d);
 		c_handcard *hc = ecs_get_mut(g_world, g_selected_card, c_handcard);
 		pos->x = drag->x;
 		pos->y = drag->y;
@@ -372,7 +380,7 @@ static void update(struct scene_battle_s *battle, struct engine *engine, float d
 		ecs_filter_t *filter = ecs_filter_init(g_world, &(ecs_filter_desc_t){
 			.terms = {
 				{ .id = ecs_id(c_card) },
-				{ .id = ecs_id(c_position), .oper = EcsNot },
+				{ .id = ecs_id(c_pos2d), .oper = EcsNot },
 				{ .id = ecs_id(c_handcard), .oper = EcsNot },
 			},
 		});
@@ -382,7 +390,7 @@ static void update(struct scene_battle_s *battle, struct engine *engine, float d
 			if (it.count > 0) {
 				ecs_entity_t e = it.entities[0];
 				ecs_set(g_world, e, c_handcard, { .hand_space = 1.0f, .hand_target_pos = {0}, .is_selected = CS_NOT_SELECTED, .added_at_time=engine->time_elapsed });
-				ecs_set(g_world, e, c_position, { .x = engine->window_width, .y = engine->window_height * 0.9f });
+				ecs_set(g_world, e, c_pos2d, { .x = engine->window_width, .y = engine->window_height * 0.9f });
 				Mix_PlayChannel(-1, g_place_card_sfx, 0);
 			}
 		}
@@ -399,25 +407,20 @@ static void update(struct scene_battle_s *battle, struct engine *engine, float d
 
 		recalculate_handcards();
 	}
+
+	ecs_run(g_world, ecs_id(system_move_cards), engine->dt, NULL);
+	ecs_run(g_world, ecs_id(system_move_models), engine->dt, NULL);
 }
 
 
 static void draw(struct scene_battle_s *battle, struct engine *engine) {
-	engine_set_clear_color(0.34f, 0.72f, 0.98f);
-	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-	// TODO: Update camera, do this on window resize instead.
-	float size = engine->window_width;
-	glm_ortho(-size, size, -size * g_engine->window_aspect, size * g_engine->window_aspect, 1.0f, 2000.0f, g_camera.projection);
-	//glm_perspective(glm_rad(100.0f), g_engine->window_width / (float)g_engine->window_height, 1.0f, 2000.0f, g_camera.projection);
-
-	// draw background
-	background_draw(engine);
-
 	// draw terrain
 	gbuffer_bind(g_gbuffer);
 	gbuffer_clear(g_gbuffer);
 	hexmap_draw(&g_hexmap);
+
+	glEnable(GL_DEPTH_TEST);
+	ecs_run(g_world, ecs_id(system_draw_models), engine->dt, NULL);
 
 	// Player model
 	{
@@ -433,7 +436,7 @@ static void draw(struct scene_battle_s *battle, struct engine *engine) {
 		glm_translate(model, g_character_position.raw);
 		glm_rotate_y(model, glm_rad(sinf(g_engine->time_elapsed * 2.0f) * 80.0f), model);
 		const float scale = 80.0f;
-		glm_scale(model, (vec3){ scale, scale, scale });
+		glm_scale_uni(model, scale);
 
 		// TODO: also do this for every node, as the model matrix changes...
 		mat4 modelView = GLM_MAT4_IDENTITY_INIT;
@@ -443,14 +446,17 @@ static void draw(struct scene_battle_s *battle, struct engine *engine) {
 		glm_mat3_inv(normalMatrix, normalMatrix);
 		glm_mat3_transpose(normalMatrix);
 
-		// draw
-		glEnable(GL_DEPTH_TEST);
-
 		// Draw character
-		shader_set_uniform_mat3(&g_model.shader, "u_normalMatrix", (float*)normalMatrix);
-		model_draw(&g_model, g_camera.projection, g_camera.view, model);
+		shader_set_uniform_mat3(&g_player_model.shader, "u_normalMatrix", (float*)normalMatrix);
+		model_draw(&g_player_model, g_camera.projection, g_camera.view, model);
 
-		ecs_run(g_world, ecs_id(system_draw_models), engine->dt, NULL);
+		// Draw enemy
+		glm_mat4_identity(model);
+		glm_translate(model, (vec3){ 100.0f, (fabsf(fminf(0.0f, sinf(g_engine->time_elapsed * 10.0f)))) * 50.0f, sqrtf(3.0f) * 200.0f });
+		glm_rotate_y(model, glm_rad(30.0f), model);
+		glm_scale_uni(model, scale);
+		shader_set_uniform_mat3(&g_enemy_model.shader, "u_normalMatrix", (float*)normalMatrix);
+		model_draw(&g_enemy_model, g_camera.projection, g_camera.view, model);
 
 		// Portrait model
 		mat4 portrait_view = GLM_MAT4_IDENTITY_INIT;
@@ -462,58 +468,29 @@ static void draw(struct scene_battle_s *battle, struct engine *engine) {
 		const float pr = engine->window_pixel_ratio;
 		glEnable(GL_SCISSOR_TEST);
 		glScissor(engine->window_width * pr - 85.0f * pr, engine->window_height * pr - 85.0f * pr, 66 * pr, 66 * pr);
-		model_draw(&g_model, g_camera.projection, portrait_view, model);
+		model_draw(&g_player_model, g_camera.projection, portrait_view, model);
 		glDisable(GL_SCISSOR_TEST);
 
-		glDisable(GL_DEPTH_TEST);
 	}
+	glDisable(GL_DEPTH_TEST);
 
 	gbuffer_unbind(g_gbuffer);
+
+	// Combine scene with gbuffer
+	engine_set_clear_color(0.34f, 0.72f, 0.98f);
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+	background_draw(engine);
 	gbuffer_display(g_gbuffer, engine);
 
 	// drawing systems
 	pipeline_reset(&g_cards_pipeline);
 	g_cards_pipeline.texture = &g_cards_texture;
 
-	ecs_run(g_world, ecs_id(system_move_cards), engine->dt, NULL);
-	ecs_run(g_world, ecs_id(system_move_models), engine->dt, NULL);
 	ecs_run(g_world, ecs_id(system_draw_cards), engine->dt, NULL);
 
 	// draw ui
 	pipeline_reset(&g_ui_pipeline);
-	{
-		drawcmd_t cmd;
-		
-		// Frame
-		cmd = DRAWCMD_INIT;
-		cmd.size.x = 96;
-		cmd.size.y = 96;
-		cmd.position.x = engine->window_width - 96 - 4;
-		cmd.position.y = 4;
-		cmd.position.z = -0.9f;
-		drawcmd_set_texture_subrect(&cmd, g_ui_pipeline.texture, 0, 0, 32, 32);
-		pipeline_emit(&g_ui_pipeline, &cmd);
-
-		// Healthbar frame
-		cmd = DRAWCMD_INIT;
-		cmd.size.x = 48;
-		cmd.size.y = 192;
-		cmd.position.x = 1;
-		cmd.position.y = 4;
-		drawcmd_set_texture_subrect(&cmd, g_ui_pipeline.texture, 32, 0, 16, 64);
-		pipeline_emit(&g_ui_pipeline, &cmd);
-
-		// Healthbar fill
-		int hp = 64.0f * fabsf(cosf(engine->time_elapsed));
-		cmd = DRAWCMD_INIT;
-		cmd.size.x = 48;
-		cmd.size.y = hp * 3.0f;
-		cmd.position.x = 1;
-		cmd.position.y = 4;
-		cmd.position.z = 0.1f;
-		drawcmd_set_texture_subrect(&cmd, g_ui_pipeline.texture, 48, 0, 16, hp);
-		pipeline_emit(&g_ui_pipeline, &cmd);
-	}
+	draw_ui(&g_ui_pipeline);
 
 	glEnable(GL_DEPTH_TEST);
 	pipeline_draw_ortho(&g_ui_pipeline, g_engine->window_width, g_engine->window_height);
@@ -524,6 +501,8 @@ void on_callback(struct scene_battle_s *battle, struct engine *engine, struct en
 	switch (event.type) {
 	case ENGINE_EVENT_WINDOW_RESIZED:
 		gbuffer_resize(&g_gbuffer, engine->window_highdpi_width, engine->window_highdpi_height);
+		float size = engine->window_width;
+		glm_ortho(-size, size, -size * g_engine->window_aspect, size * g_engine->window_aspect, 1.0f, 2000.0f, g_camera.projection);
 		break;
 	case ENGINE_EVENT_MAX:
 		assert("unhandled event!");
@@ -630,6 +609,40 @@ static int order_handcards(ecs_entity_t e1, const void *data1, ecs_entity_t e2, 
 	return (c1->added_at_time > c2->added_at_time) - (c1->added_at_time < c2->added_at_time);
 }
 
+static void draw_ui(pipeline_t *pipeline) {
+	drawcmd_t cmd;
+
+	// Frame
+	cmd = DRAWCMD_INIT;
+	cmd.size.x = 96;
+	cmd.size.y = 96;
+	cmd.position.x = g_engine->window_width - 96 - 4;
+	cmd.position.y = 4;
+	cmd.position.z = -0.9f;
+	drawcmd_set_texture_subrect(&cmd, g_ui_pipeline.texture, 0, 0, 32, 32);
+	pipeline_emit(&g_ui_pipeline, &cmd);
+
+	// Healthbar frame
+	cmd = DRAWCMD_INIT;
+	cmd.size.x = 48;
+	cmd.size.y = 192;
+	cmd.position.x = 1;
+	cmd.position.y = 4;
+	drawcmd_set_texture_subrect(&cmd, g_ui_pipeline.texture, 32, 0, 16, 64);
+	pipeline_emit(&g_ui_pipeline, &cmd);
+
+	// Healthbar fill
+	int hp = 64.0f * fabsf(cosf(g_engine->time_elapsed));
+	cmd = DRAWCMD_INIT;
+	cmd.size.x = 48;
+	cmd.size.y = hp * 3.0f;
+	cmd.position.x = 1;
+	cmd.position.y = 4;
+	cmd.position.z = 0.1f;
+	drawcmd_set_texture_subrect(&cmd, g_ui_pipeline.texture, 48, 0, 16, hp);
+	pipeline_emit(&g_ui_pipeline, &cmd);
+}
+
 
 static void on_game_event(enum event_type type, event_info_t *info) {
 	switch (type) {
@@ -660,16 +673,18 @@ static void on_game_event_play_card(event_info_t *info) {
 	if (card->image_id == 0) {
 		for (int i = 0; i < 20; ++i) {
 			ecs_entity_t e = ecs_new_id(g_world);
+			ecs_set(g_world, e, c_pos3d, { .x=world_position.x, .y=world_position.y, .z=world_position.z });
 			ecs_set(g_world, e, c_model, {
-				.pos=world_position, .model_index=2, .scale=200.0f + 100.0f * rng_f() });
+				.model_index=2, .scale=200.0f + 100.0f * rng_f() });
 			ecs_set(g_world, e, c_velocity, {
 				.vel={{rng_f() * 20.0f - 10.0f, 10.0f + rng_f() * 10.0f, rng_f() * 20.0f - 10.0f}}});
 		}
 	} else if (card->image_id == 1) {
 		for (int i = 0; i < 30; ++i) {
 			ecs_entity_t e = ecs_new_id(g_world);
+			ecs_set(g_world, e, c_pos3d, { .x=world_position.x, .y=world_position.y, .z=world_position.z });
 			ecs_set(g_world, e, c_model, {
-				.pos=world_position, .model_index=0, .scale=300.0f });
+				.model_index=0, .scale=300.0f });
 			ecs_set(g_world, e, c_velocity, {
 				.vel={
 					.x=cosf((i / 30.0f) * 3.1415926f) * 9.0f,
@@ -680,8 +695,9 @@ static void on_game_event_play_card(event_info_t *info) {
 	} else if (card->image_id == 2) {
 		for (int i = 0; i < 30; ++i) {
 			ecs_entity_t e = ecs_new_id(g_world);
+			ecs_set(g_world, e, c_pos3d, { .x=world_position.x, .y=world_position.y, .z=world_position.z });
 			ecs_set(g_world, e, c_model, {
-				.pos=world_position, .model_index=1, .scale=150.0f + 150.0f * rng_f() });
+				.model_index=1, .scale=150.0f + 150.0f * rng_f() });
 			ecs_set(g_world, e, c_velocity, {
 				.vel={
 					.x=cosf(((i*2.0f) / 30.0f) * M_PI) * 8.0f,
@@ -803,7 +819,7 @@ static void hexmap_draw(struct hexmap *map) {
 //
 
 static void system_move_cards(ecs_iter_t *it) {
-	c_position *positions = ecs_field(it, c_position, 1);
+	c_pos2d *positions = ecs_field(it, c_pos2d, 1);
 	c_handcard *handcards = ecs_field(it, c_handcard, 2);
 
 	for (int i = 0; i < it->count; ++i) {
@@ -819,21 +835,23 @@ static void system_move_cards(ecs_iter_t *it) {
 }
 
 static void system_move_models(ecs_iter_t *it) {
-	c_model *model_it = ecs_field(it, c_model, 1);
-	c_velocity *velocity_it = ecs_field(it, c_velocity, 2);
+	c_pos3d *pos_it = ecs_field(it, c_pos3d, 1);
+	c_model *model_it = ecs_field(it, c_model, 2);
+	c_velocity *velocity_it = ecs_field(it, c_velocity, 3);
 
 	for (int i = 0; i < it->count; ++i) {
+		c_pos3d *pos = &pos_it[i];
 		c_model *model = &model_it[i];
 		c_velocity *velocity = &velocity_it[i];
 
-		glm_vec3_add(model->pos.raw, velocity->vel.raw, model->pos.raw);
+		glm_vec3_add(pos->raw, velocity->vel.raw, pos->raw);
 
 		vec3 drag = {0.96f, 1.0f, 0.92f};
 		glm_vec3_mul(velocity->vel.raw, drag, velocity->vel.raw);
 		velocity->vel.y -= 0.8f;
 
-		if (model->pos.y < 0.0f && velocity->vel.y < 0.0f) {
-			model->pos.y = 0.0f;
+		if (pos->y < 0.0f && velocity->vel.y < 0.0f) {
+			pos->y = 0.0f;
 			velocity->vel.y = fabsf(velocity->vel.y) * 0.6f;
 			if (velocity->vel.y < 5.0f) {
 				velocity->vel.y = 0.0f;
@@ -845,7 +863,7 @@ static void system_move_models(ecs_iter_t *it) {
 static void system_draw_cards(ecs_iter_t *it) {
 	c_card *cards = ecs_field(it, c_card, 1);
 	c_handcard *handcards = NULL;
-	c_position *positions = ecs_field(it, c_position, 3);
+	c_pos2d *positions = ecs_field(it, c_pos2d, 3);
 
 	if (ecs_field_is_set(it, 2)) {
 		handcards = ecs_field(it, c_handcard, 2);
@@ -943,16 +961,17 @@ static void system_draw_cards(ecs_iter_t *it) {
 }
 
 static void system_draw_models(ecs_iter_t *it) {
-	c_model *models_it = ecs_field(it, c_model, 1);
+	c_pos3d *pos_it = ecs_field(it, c_pos3d, 1);
+	c_model *models_it = ecs_field(it, c_model, 2);
 
 	for (int i = 0; i < it->count; ++i) {
+		c_pos3d *pos = &pos_it[i];
 		c_model *model = &models_it[i];
 
 		mat4 model_matrix = GLM_MAT4_IDENTITY_INIT;
-
 		shader_set_uniform_mat3(&g_fun_models[model->model_index].shader, "u_normalMatrix", (float*)model_matrix);
 		glm_mat4_identity(model_matrix);
-		glm_translate(model_matrix, model->pos.raw);
+		glm_translate(model_matrix, pos->raw);
 		glm_scale(model_matrix, (vec3){ model->scale, model->scale, model->scale });
 		model_draw(&g_fun_models[model->model_index], g_camera.projection, g_camera.view, model_matrix);
 	}

@@ -94,6 +94,17 @@ void gbuffer_clear(struct gbuffer gbuffer) {
 }
 
 void gbuffer_display(struct gbuffer gbuffer, struct engine *engine) {
+	shader_use(&gbuffer.shader);
+	shader_set_uniform_int(&gbuffer.shader, "u_albedo", 0);
+	shader_set_uniform_int(&gbuffer.shader, "u_position", 1);
+	shader_set_uniform_int(&gbuffer.shader, "u_normal", 2);
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, gbuffer.textures[GBUFFER_TEXTURE_ALBEDO]);
+	glActiveTexture(GL_TEXTURE1);
+	glBindTexture(GL_TEXTURE_2D, gbuffer.textures[GBUFFER_TEXTURE_POSITION]);
+	glActiveTexture(GL_TEXTURE2);
+	glBindTexture(GL_TEXTURE_2D, gbuffer.textures[GBUFFER_TEXTURE_NORMAL]);
+
 	shader_set_uniform_vec2(&gbuffer.shader, "u_screen_resolution", (float[2]){engine->window_highdpi_width, engine->window_highdpi_height});
 	shader_set_uniform_float(&gbuffer.shader, "u_time", engine->time_elapsed);
 	
@@ -148,19 +159,6 @@ static void setup_fullscreen_triangle(struct gbuffer *gbuffer) {
 }
 
 static void draw_fullscreen_triangle(struct gbuffer gbuffer, struct engine *engine) {
-	shader_use(&gbuffer.shader);
-
-	shader_set_uniform_int(&gbuffer.shader, "u_albedo", 0);
-	shader_set_uniform_int(&gbuffer.shader, "u_position", 1);
-	shader_set_uniform_int(&gbuffer.shader, "u_normal", 2);
-
-	glActiveTexture(GL_TEXTURE0);
-	glBindTexture(GL_TEXTURE_2D, gbuffer.textures[GBUFFER_TEXTURE_ALBEDO]);
-	glActiveTexture(GL_TEXTURE1);
-	glBindTexture(GL_TEXTURE_2D, gbuffer.textures[GBUFFER_TEXTURE_POSITION]);
-	glActiveTexture(GL_TEXTURE2);
-	glBindTexture(GL_TEXTURE_2D, gbuffer.textures[GBUFFER_TEXTURE_NORMAL]);
-
 	glBindBuffer(GL_ARRAY_BUFFER, gbuffer.fullscreen_vbo);
 	glEnableVertexAttribArray(0);
 	glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(GLfloat), NULL);
