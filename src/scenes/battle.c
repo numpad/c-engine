@@ -151,7 +151,7 @@ static ecs_entity_t  g_selected_card;
 static fontatlas_t   g_card_font;
 static model_t       g_player_model;
 static model_t       g_enemy_model;
-static model_t       g_fun_models[3];
+static model_t       g_props_model[4];
 static model_t       g_hextiles[6];
 static float         g_pickup_next_card;
 static struct camera g_camera;
@@ -195,9 +195,10 @@ static void load(struct scene_battle_s *battle, struct engine *engine) {
 		"res/models/decoration/props/bucket_water.gltf",
 		"res/models/decoration/props/target.gltf",
 		"res/models/decoration/props/crate_A_big.gltf",
+		"res/models/survival/campfire-pit.glb",
 	};
 	for (uint i = 0; i < count_of(fun_models); ++i) {
-		int load_fun_error = model_init_from_file(&g_fun_models[i], fun_models[i]);
+		int load_fun_error = model_init_from_file(&g_props_model[i], fun_models[i]);
 		assert(load_fun_error == 0);
 	}
 
@@ -244,6 +245,13 @@ static void load(struct scene_battle_s *battle, struct engine *engine) {
 		ecs_set(g_world, e, c_card, { .name="Meal",       .image_id=1, .icon_ids_count=1, .icon_ids={5} });
 		e = ecs_new_id(g_world);
 		ecs_set(g_world, e, c_card, { .name="Corruption", .image_id=5, .icon_ids_count=3, .icon_ids={3, 3, 4} });
+	}
+
+	// Add some models
+	{
+		ecs_entity_t e = ecs_new_id(g_world);
+		ecs_set(g_world, e, c_pos3d, { .x=100.0f, .y=0.0f, .z=550.0f });
+		ecs_set(g_world, e, c_model, { .model_index=3, .scale=450.0f });
 	}
 
 	// card renderer
@@ -398,13 +406,8 @@ static void update(struct scene_battle_s *battle, struct engine *engine, float d
 		ecs_filter_fini(filter);
 	}
 
-	static int last_width = -1;
-	static int last_height = -1;
-	if (g_handcards_updated || last_width != engine->window_width || last_height != engine->window_height) {
+	if (g_handcards_updated) {
 		g_handcards_updated = 0;
-		last_width = engine->window_width;
-		last_height = engine->window_height;
-
 		recalculate_handcards();
 	}
 
@@ -504,6 +507,7 @@ void on_callback(struct scene_battle_s *battle, struct engine *engine, struct en
 		gbuffer_resize(&g_gbuffer, engine->window_highdpi_width, engine->window_highdpi_height);
 		float size = engine->window_width;
 		glm_ortho(-size, size, -size * g_engine->window_aspect, size * g_engine->window_aspect, 1.0f, 2000.0f, g_camera.projection);
+		g_handcards_updated = 1;
 		break;
 	case ENGINE_EVENT_MAX:
 		assert("unhandled event!");
@@ -970,11 +974,11 @@ static void system_draw_models(ecs_iter_t *it) {
 		c_model *model = &models_it[i];
 
 		mat4 model_matrix = GLM_MAT4_IDENTITY_INIT;
-		shader_set_uniform_mat3(&g_fun_models[model->model_index].shader, "u_normalMatrix", (float*)model_matrix);
+		shader_set_uniform_mat3(&g_props_model[model->model_index].shader, "u_normalMatrix", (float*)model_matrix);
 		glm_mat4_identity(model_matrix);
 		glm_translate(model_matrix, pos->raw);
-		glm_scale(model_matrix, (vec3){ model->scale, model->scale, model->scale });
-		model_draw(&g_fun_models[model->model_index], g_camera.projection, g_camera.view, model_matrix);
+		glm_scale_uni(model_matrix, model->scale);
+		model_draw(&g_props_model[model->model_index], g_camera.projection, g_camera.view, model_matrix);
 	}
 }
 

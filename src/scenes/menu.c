@@ -280,7 +280,7 @@ static void menu_draw(struct scene_menu_s *menu, struct engine *engine) {
 				.on_press_end = &on_end_search_friends,
 			},
 			{
-				W2 - 210.0f + engine->window_width, engine->window_height - 430.0f, 190.0f, 170.0f,
+				W2 - 180.0f + engine->window_width, engine->window_height - 430.0f, 190.0f, 170.0f,
 				.id = 5,
 				.text1 = "Create",
 				.text2 = "Lobby",
