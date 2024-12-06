@@ -150,7 +150,7 @@ static void menu_load(struct scene_menu_s *menu, struct engine *engine) {
 	pipeline_init(&g_pipeline_entities, &g_shader_entities, 128);
 	g_pipeline_entities.texture = &g_entity_tex;
 
-	background_set_parallax("res/image/bg-glaciers/%d.png", 4);
+	background_set_parallax("res/image/bg-glaciers/%d.png", 5);
 
 	Mix_VolumeMusic(MIX_MAX_VOLUME * 0.2f);
 	//Mix_PlayMusic(g_music, -1);

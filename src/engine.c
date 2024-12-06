@@ -246,10 +246,6 @@ static void on_window_resized(struct engine *engine, int w, int h) {
 //
 
 void engine_setscene(struct engine *engine, struct scene_s *new_scene) {
-#ifdef DEBUG
-	console_log_ex(engine, CONSOLE_MSG_INFO, 4.0f, "Switching to scene %p", (void*)new_scene);
-#endif
-
 	struct scene_s *old_scene = engine->scene;
 	engine->scene = NULL;
 

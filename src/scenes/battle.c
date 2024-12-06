@@ -292,7 +292,7 @@ static void load(struct scene_battle_s *battle, struct engine *engine) {
 	}
 
 	// background
-	background_set_parallax("res/image/bg-glaciers/%d.png", 4);
+	background_set_parallax("res/image/bg-clouds/%d.png", 4);
 	background_set_parallax_offset(-0.7f);
 
 	// audio

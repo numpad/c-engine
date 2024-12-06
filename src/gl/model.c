@@ -19,6 +19,7 @@
 
 static GLint accessor_to_component_size(cgltf_accessor *access);
 static const char* accessor_to_component_size_name(cgltf_accessor *access);
+static const char* attribute_type_to_name(cgltf_attribute_type type);
 static GLint accessor_to_component_type(cgltf_accessor *access);
 
 static void draw_node(model_t *model, cgltf_node *node, mat4 modelmatrix);
@@ -114,8 +115,8 @@ int model_init_from_file(model_t *model, const char *path) {
 				cgltf_attribute *attrib = &primitive->attributes[attrib_index];
 				const GLint location = glGetAttribLocation(model->shader.program, attrib->name);
 				if (location < 0) {
-					fprintf(stderr, "[warn] attribute \"%s\" (%s) doesn't exist (or is unused).\n",
-							attrib->name, accessor_to_component_size_name(attrib->data));
+					fprintf(stderr, "[warn] attribute \"%s\" of type %s (%s) doesn't exist (or is unused).\n",
+							attrib->name, attribute_type_to_name(attrib->type), accessor_to_component_size_name(attrib->data));
 				}
 			}
 		}
@@ -215,6 +216,22 @@ static const char* accessor_to_component_size_name(cgltf_accessor *access) {
 	return NULL;
 }
 
+static const char* attribute_type_to_name(cgltf_attribute_type type) {
+	switch (type) {
+		case cgltf_attribute_type_position: return "position";
+		case cgltf_attribute_type_normal  : return "normal";
+		case cgltf_attribute_type_color   : return "color";
+		case cgltf_attribute_type_texcoord: return "texcoord";
+		case cgltf_attribute_type_joints  : return "joints";
+		case cgltf_attribute_type_tangent : return "tangent";
+		case cgltf_attribute_type_weights : return "weights";
+		case cgltf_attribute_type_custom  : return "custom";
+		case cgltf_attribute_type_invalid : return "invalid";
+		case cgltf_attribute_type_max_enum: return "invalid (MAX_ENUM)";
+	}
+
+	return NULL;
+}
 
 static GLint accessor_to_component_type(cgltf_accessor *access) {
 	GLint comp_type = -1;
