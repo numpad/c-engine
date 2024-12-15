@@ -136,6 +136,7 @@ int gl_check_error(const char *file, int line) {
 		printf("OpenGL Error %s:%d : %s\n", file, line, error);
 	}
 
+	assert(has_error == 0);
 	return has_error;
 }
 

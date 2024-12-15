@@ -4,7 +4,9 @@
 //
 // base class for a scene.
 // TODO: put `engine_s *` into struct on init so `scene_*_fn` don't need it as param.
-//
+// TODO: Callback "pre-load" for reading large assets/generating world,
+//       if not null engine handles showing a loading screen? Maybe even
+//       threaded?
 
 #include "event.h"
 

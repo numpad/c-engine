@@ -66,6 +66,7 @@ static int order_handcards(ecs_entity_t e1, const void *data1, ecs_entity_t e2, 
 static void draw_ui(pipeline_t *pipeline);
 static void on_game_event(enum event_type, event_info_t *);
 static void on_game_event_play_card(event_info_t *info);
+static void interact_with_handcards(struct input_drag_s *drag);
 
 static void load_hextile_models(void);
 static void hexmap_init(struct hexmap *);
@@ -330,54 +331,17 @@ static void destroy(struct scene_battle_s *battle, struct engine *engine) {
 
 
 static void update(struct scene_battle_s *battle, struct engine *engine, float dt) {
-	const struct input_drag_s *drag = &(engine->input_drag);
 
-	// pick up card
-	if (drag->state == INPUT_DRAG_BEGIN) {
-		g_selected_card = find_closest_handcard(drag->begin_x, drag->begin_y, 110.0f);
+	// Move cards
+	interact_with_handcards(&engine->input_drag);
 
-		if (g_selected_card != 0 && ecs_is_valid(g_world, g_selected_card)) {
-			c_handcard *hc = ecs_get_mut(g_world, g_selected_card, c_handcard);
-			hc->hand_space = 0.4f;
-			hc->is_selected = CS_SELECTED_INITIAL;
-			ecs_modified(g_world, g_selected_card, c_handcard);
-
-			Mix_PlayChannel(-1, g_pick_card_sfx, 0);
-		}
+	// Move player
+	if (engine->input_drag.state == INPUT_DRAG_IN_PROGRESS) {
+		g_character_position = screen_to_world(
+			engine->window_width, engine->window_height, g_camera.projection, g_camera.view,
+			engine->input_drag.x, engine->input_drag.y);
 	}
 
-	if (drag->state == INPUT_DRAG_END) {
-		// if card is selected: place/drop card
-		if (g_selected_card != 0 && ecs_is_valid(g_world, g_selected_card)) {
-			c_handcard *hc = ecs_get_mut(g_world, g_selected_card, c_handcard);
-
-			if (hc->can_be_placed) {
-				on_game_event(EVENT_PLAY_CARD, &(event_info_t){ .entity = g_selected_card });
-			} else {
-				hc->hand_space = 1.0f;
-				hc->is_selected = CS_NOT_SELECTED;
-				ecs_modified(g_world, g_selected_card, c_handcard);
-				g_selected_card = 0;
-				Mix_PlayChannel(-1, g_slide_card_sfx, 0);
-			}
-		}
-	}
-
-	// move card
-	if (drag->state == INPUT_DRAG_IN_PROGRESS && g_selected_card != 0 && ecs_is_valid(g_world, g_selected_card)) {
-		c_pos2d *pos = ecs_get_mut(g_world, g_selected_card, c_pos2d);
-		c_handcard *hc = ecs_get_mut(g_world, g_selected_card, c_handcard);
-		pos->x = drag->x;
-		pos->y = drag->y;
-		const int new_can_be_placed = (pos->y < g_engine->window_height - 128.0f);
-		const int can_be_placed_changed = (new_can_be_placed != hc->can_be_placed);
-		if (can_be_placed_changed) {
-			hc->is_selected = CS_SELECTED;
-			hc->hand_space = new_can_be_placed ? 0.4f : 1.0f;
-			hc->can_be_placed = new_can_be_placed;
-			ecs_modified(g_world, g_selected_card, c_handcard);
-		}
-	}
 
 	// add cards
 	const float card_add_speed = 0.25f;
@@ -428,12 +392,6 @@ static void draw(struct scene_battle_s *battle, struct engine *engine) {
 
 	// Player model
 	{
-		if (engine->input_drag.state == INPUT_DRAG_IN_PROGRESS) {
-			g_character_position = screen_to_world(
-				engine->window_width, engine->window_height, g_camera.projection, g_camera.view,
-				engine->input_drag.x, engine->input_drag.y);
-		}
-
 		// calculate matrices
 		mat4 model = GLM_MAT4_IDENTITY_INIT;
 		//glm_translate(model, (vec3){ 100.0f, 0.0f, sqrtf(3.0f) * 200.0f });
@@ -520,10 +478,10 @@ void scene_battle_init(struct scene_battle_s *scene_battle, struct engine *engin
 	scene_init((struct scene_s *)scene_battle, engine);
 
 	// init function pointers
-	scene_battle->base.load    = (scene_load_fn)load;
-	scene_battle->base.destroy = (scene_destroy_fn)destroy;
-	scene_battle->base.update  = (scene_update_fn)update;
-	scene_battle->base.draw    = (scene_draw_fn)draw;
+	scene_battle->base.load        = (scene_load_fn)load;
+	scene_battle->base.destroy     = (scene_destroy_fn)destroy;
+	scene_battle->base.update      = (scene_update_fn)update;
+	scene_battle->base.draw        = (scene_draw_fn)draw;
 	scene_battle->base.on_callback = (scene_on_callback_fn)on_callback;
 }
 
@@ -715,6 +673,55 @@ static void on_game_event_play_card(event_info_t *info) {
 	// remove card
 	ecs_delete(g_world, g_selected_card);
 	g_selected_card = 0;
+}
+
+static void interact_with_handcards(struct input_drag_s *drag) {
+	// pick up card
+	if (drag->state == INPUT_DRAG_BEGIN) {
+		g_selected_card = find_closest_handcard(drag->begin_x, drag->begin_y, 110.0f);
+
+		if (g_selected_card != 0 && ecs_is_valid(g_world, g_selected_card)) {
+			c_handcard *hc = ecs_get_mut(g_world, g_selected_card, c_handcard);
+			hc->hand_space = 0.4f;
+			hc->is_selected = CS_SELECTED_INITIAL;
+			ecs_modified(g_world, g_selected_card, c_handcard);
+
+			Mix_PlayChannel(-1, g_pick_card_sfx, 0);
+		}
+	}
+
+	if (drag->state == INPUT_DRAG_END) {
+		// if card is selected: place/drop card
+		if (g_selected_card != 0 && ecs_is_valid(g_world, g_selected_card)) {
+			c_handcard *hc = ecs_get_mut(g_world, g_selected_card, c_handcard);
+
+			if (hc->can_be_placed) {
+				on_game_event(EVENT_PLAY_CARD, &(event_info_t){ .entity = g_selected_card });
+			} else {
+				hc->hand_space = 1.0f;
+				hc->is_selected = CS_NOT_SELECTED;
+				ecs_modified(g_world, g_selected_card, c_handcard);
+				g_selected_card = 0;
+				Mix_PlayChannel(-1, g_slide_card_sfx, 0);
+			}
+		}
+	}
+
+	// move card
+	if (drag->state == INPUT_DRAG_IN_PROGRESS && g_selected_card != 0 && ecs_is_valid(g_world, g_selected_card)) {
+		c_pos2d *pos = ecs_get_mut(g_world, g_selected_card, c_pos2d);
+		c_handcard *hc = ecs_get_mut(g_world, g_selected_card, c_handcard);
+		pos->x = drag->x;
+		pos->y = drag->y;
+		const int new_can_be_placed = (pos->y < g_engine->window_height - 128.0f);
+		const int can_be_placed_changed = (new_can_be_placed != hc->can_be_placed);
+		if (can_be_placed_changed) {
+			hc->is_selected = CS_SELECTED;
+			hc->hand_space = new_can_be_placed ? 0.4f : 1.0f;
+			hc->can_be_placed = new_can_be_placed;
+			ecs_modified(g_world, g_selected_card, c_handcard);
+		}
+	}
 }
 
 static void load_hextile_models(void) {

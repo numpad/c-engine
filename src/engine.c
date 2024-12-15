@@ -237,7 +237,7 @@ static void on_window_resized(struct engine *engine, int w, int h) {
 	glm_ortho(0.0f, w, h, 0.0f, -1.0f, 1.0f, engine->u_projection);
 	//glm_ortho(-1.0f, 1.0f, -1.0f * engine->window_aspect, 1.0f * engine->window_aspect, -1.0f, 1.0f, engine->u_projection);
 	
-	scene_on_callback(engine->scene, engine, (struct engine_event){ .type = ENGINE_EVENT_WINDOW_RESIZED});
+	scene_on_callback(engine->scene, engine, (struct engine_event){ .type = ENGINE_EVENT_WINDOW_RESIZED });
 }
 
 
