@@ -31,25 +31,30 @@ static unsigned int write_drawcmd_vertices(drawcmd_t *cmd, float *vertices) {
 	float colm[4] = { cmd->color_mult[0], cmd->color_mult[1], cmd->color_mult[2], cmd->color_mult[3] };
 	float cola[4] = { cmd->color_add[0], cmd->color_add[1], cmd->color_add[2], cmd->color_add[3] };
 
+	// 0--1
+	// | /|
+	// |/ |
+	// 2--3
+
 	/*
 	float primitive_vertices[] = {
-		px + 0.0f * w, py + 0.0f * h, pz,  srx + srw * 0.0f, sry + srh * 0.0f, 1.0f, 1.0f,
-		px + 1.0f * w, py + 0.0f * h, pz,  srx + srw * 1.0f, sry + srh * 0.0f, 1.0f, 1.0f,
-		px + 0.0f * w, py + 1.0f * h, pz,  srx + srw * 0.0f, sry + srh * 1.0f, 1.0f, 1.0f,
-		px + 0.0f * w, py + 1.0f * h, pz,  srx + srw * 0.0f, sry + srh * 1.0f, 1.0f, 1.0f,
-		px + 1.0f * w, py + 0.0f * h, pz,  srx + srw * 1.0f, sry + srh * 0.0f, 1.0f, 1.0f,
-		px + 1.0f * w, py + 1.0f * h, pz,  srx + srw * 1.0f, sry + srh * 1.0f, 1.0f, 1.0f,
+		2: px + 0.0f * w, py + 1.0f * h, pz,  srx + srw * 0.0f, sry + srh * 1.0f, 1.0f, 1.0f,
+		1: px + 1.0f * w, py + 0.0f * h, pz,  srx + srw * 1.0f, sry + srh * 0.0f, 1.0f, 1.0f,
+		0: px + 0.0f * w, py + 0.0f * h, pz,  srx + srw * 0.0f, sry + srh * 0.0f, 1.0f, 1.0f,
+		2: px + 0.0f * w, py + 1.0f * h, pz,  srx + srw * 0.0f, sry + srh * 1.0f, 1.0f, 1.0f,
+		3: px + 1.0f * w, py + 1.0f * h, pz,  srx + srw * 1.0f, sry + srh * 1.0f, 1.0f, 1.0f,
+		1: px + 1.0f * w, py + 0.0f * h, pz,  srx + srw * 1.0f, sry + srh * 0.0f, 1.0f, 1.0f,
 	};
 	*/
 
 	float primitive_vertices[] = {
 		// position | texcoord | color_mult | color_add
-		angle_cos * (px + 0.0f * w - cx) - angle_sin * (py + 0.0f * h - cy) + cx, angle_sin * (px + 0.0f * w - cx) + angle_cos * (py + 0.0f * h - cy) + cy, pz,  srx + srw * 0.0f, sry + srh * 0.0f,  colm[0], colm[1], colm[2], colm[3],  cola[0], cola[1], cola[2], cola[3],
-		angle_cos * (px + 1.0f * w - cx) - angle_sin * (py + 0.0f * h - cy) + cx, angle_sin * (px + 1.0f * w - cx) + angle_cos * (py + 0.0f * h - cy) + cy, pz,  srx + srw * 1.0f, sry + srh * 0.0f,  colm[0], colm[1], colm[2], colm[3],  cola[0], cola[1], cola[2], cola[3],
-		angle_cos * (px + 0.0f * w - cx) - angle_sin * (py + 1.0f * h - cy) + cx, angle_sin * (px + 0.0f * w - cx) + angle_cos * (py + 1.0f * h - cy) + cy, pz,  srx + srw * 0.0f, sry + srh * 1.0f,  colm[0], colm[1], colm[2], colm[3],  cola[0], cola[1], cola[2], cola[3],
-		angle_cos * (px + 0.0f * w - cx) - angle_sin * (py + 1.0f * h - cy) + cx, angle_sin * (px + 0.0f * w - cx) + angle_cos * (py + 1.0f * h - cy) + cy, pz,  srx + srw * 0.0f, sry + srh * 1.0f,  colm[0], colm[1], colm[2], colm[3],  cola[0], cola[1], cola[2], cola[3],
-		angle_cos * (px + 1.0f * w - cx) - angle_sin * (py + 0.0f * h - cy) + cx, angle_sin * (px + 1.0f * w - cx) + angle_cos * (py + 0.0f * h - cy) + cy, pz,  srx + srw * 1.0f, sry + srh * 0.0f,  colm[0], colm[1], colm[2], colm[3],  cola[0], cola[1], cola[2], cola[3],
-		angle_cos * (px + 1.0f * w - cx) - angle_sin * (py + 1.0f * h - cy) + cx, angle_sin * (px + 1.0f * w - cx) + angle_cos * (py + 1.0f * h - cy) + cy, pz,  srx + srw * 1.0f, sry + srh * 1.0f,  colm[0], colm[1], colm[2], colm[3],  cola[0], cola[1], cola[2], cola[3],
+		/*2*/ angle_cos * (px + 0.0f * w - cx) - angle_sin * (py + 1.0f * h - cy) + cx, angle_sin * (px + 0.0f * w - cx) + angle_cos * (py + 1.0f * h - cy) + cy, pz,  srx + srw * 0.0f, sry + srh * 1.0f,  colm[0], colm[1], colm[2], colm[3],  cola[0], cola[1], cola[2], cola[3],
+		/*1*/ angle_cos * (px + 1.0f * w - cx) - angle_sin * (py + 0.0f * h - cy) + cx, angle_sin * (px + 1.0f * w - cx) + angle_cos * (py + 0.0f * h - cy) + cy, pz,  srx + srw * 1.0f, sry + srh * 0.0f,  colm[0], colm[1], colm[2], colm[3],  cola[0], cola[1], cola[2], cola[3],
+		/*0*/ angle_cos * (px + 0.0f * w - cx) - angle_sin * (py + 0.0f * h - cy) + cx, angle_sin * (px + 0.0f * w - cx) + angle_cos * (py + 0.0f * h - cy) + cy, pz,  srx + srw * 0.0f, sry + srh * 0.0f,  colm[0], colm[1], colm[2], colm[3],  cola[0], cola[1], cola[2], cola[3],
+		/*2*/ angle_cos * (px + 0.0f * w - cx) - angle_sin * (py + 1.0f * h - cy) + cx, angle_sin * (px + 0.0f * w - cx) + angle_cos * (py + 1.0f * h - cy) + cy, pz,  srx + srw * 0.0f, sry + srh * 1.0f,  colm[0], colm[1], colm[2], colm[3],  cola[0], cola[1], cola[2], cola[3],
+		/*3*/ angle_cos * (px + 1.0f * w - cx) - angle_sin * (py + 1.0f * h - cy) + cx, angle_sin * (px + 1.0f * w - cx) + angle_cos * (py + 1.0f * h - cy) + cy, pz,  srx + srw * 1.0f, sry + srh * 1.0f,  colm[0], colm[1], colm[2], colm[3],  cola[0], cola[1], cola[2], cola[3],
+		/*1*/ angle_cos * (px + 1.0f * w - cx) - angle_sin * (py + 0.0f * h - cy) + cx, angle_sin * (px + 1.0f * w - cx) + angle_cos * (py + 0.0f * h - cy) + cy, pz,  srx + srw * 1.0f, sry + srh * 0.0f,  colm[0], colm[1], colm[2], colm[3],  cola[0], cola[1], cola[2], cola[3],
 	};
 
 	memcpy(vertices, primitive_vertices, sizeof(primitive_vertices));

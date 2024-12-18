@@ -93,8 +93,6 @@ int model_init_from_file(model_t *model, const char *path) {
 			const char *relative_image_path = texture_view->texture->image->uri;
 			char image_path[256];
 			str_path_replace_filename(path, relative_image_path, 256, image_path);
-			fprintf(stderr, "[warn] loading image by uri is still experimental: \"%s\"...\n", image_path);
-
 			// TODO: Let's cache this, needs an asset manager.
 			texture_init_from_image(&model->texture0, image_path, &settings);
 		} else if (i < data->images_count) {
