@@ -5,6 +5,7 @@
 #include <cgltf.h>
 #include "gl/shader.h"
 #include "gl/texture.h"
+#include "gl/camera.h"
 
 typedef struct model_s {
 	cgltf_data *gltf_data;
@@ -18,7 +19,7 @@ typedef struct model_s {
 int  model_init_from_file(model_t *, const char *path);
 void model_destroy(model_t *);
 
-void model_draw(model_t *, mat4 projection, mat4 view, mat4 modelmatrix);
+void model_draw(model_t *, struct camera *, mat4 modelmatrix);
 
 void model_set_node_hidden(model_t *, const char *name, int hidden);
 

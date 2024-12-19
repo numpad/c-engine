@@ -7,6 +7,7 @@
 #include <cglm/cglm.h>
 #include "util/util.h"
 #include "util/str.h"
+#include "gl/camera.h"
 
 
 ///////////////
@@ -125,15 +126,15 @@ int model_init_from_file(model_t *model, const char *path) {
 	return 0;
 }
 
-void model_draw(model_t *model, mat4 projection, mat4 view, mat4 modelmatrix) {
+void model_draw(model_t *model, struct camera *camera, mat4 modelmatrix) {
 	assert(model != NULL);
 
 	glUseProgram(model->shader.program);
 	glBindBuffer(GL_ARRAY_BUFFER, model->vertex_buffers[0]);
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, model->index_buffers[0]);
 	shader_set_uniform_texture(&model->shader, "u_diffuse", GL_TEXTURE0, &model->texture0);
-	shader_set_uniform_mat4(&model->shader, "u_projection", (float*)projection);
-	shader_set_uniform_mat4(&model->shader, "u_view", (float*)view);
+	shader_set_uniform_mat4(&model->shader, "u_projection", (float*)&camera->projection);
+	shader_set_uniform_mat4(&model->shader, "u_view", (float*)&camera->view);
 
 	// TODO: maybe use a stack based approach instead of doing recursion?
 	for (cgltf_size node_index = 0; node_index < model->gltf_data->nodes_count; ++node_index) {

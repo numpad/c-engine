@@ -20,6 +20,7 @@
 #include "gl/text.h"
 #include "gl/model.h"
 #include "gl/gbuffer.h"
+#include "gl/camera.h"
 #include "game/background.h"
 #include "gui/console.h"
 #include "scenes/menu.h"
@@ -40,14 +41,19 @@ enum card_selection {
 	CS_SELECTED_INITIAL,
 };
 
+enum gamestate_battle {
+	GS_BATTLE_BEGIN    ,
+	GS_ROUND_BEGIN     ,
+	GS_TURN_BEGIN      , GS_TURN_PLAYER_BEGIN,
+	GS_TURN_IN_PROGRESS, GS_TURN_PLAYER_IN_PROGRESS,
+	GS_TURN_END        , GS_TURN_PLAYER_END,
+	GS_ROUND_END       ,
+	GS_BATTLE_END      ,
+};
+
 typedef struct event_info {
 	ecs_entity_t entity;
 } event_info_t;
-
-struct camera {
-	mat4 projection;
-	mat4 view;
-};
 
 struct hexmap {
 	int w, h;
@@ -66,7 +72,10 @@ static int order_handcards(ecs_entity_t e1, const void *data1, ecs_entity_t e2, 
 static void draw_ui(pipeline_t *pipeline);
 static void on_game_event(enum event_type, event_info_t *);
 static void on_game_event_play_card(event_info_t *info);
+static int count_handcards(void);
 static void interact_with_handcards(struct input_drag_s *drag);
+static int add_cards_to_hand(float dt);
+static void update_gamestate(enum gamestate_battle state, float dt);
 
 static void load_hextile_models(void);
 static void hexmap_init(struct hexmap *);
@@ -140,24 +149,28 @@ static struct engine *g_engine;
 static struct gbuffer g_gbuffer;
 
 // game state
-static texture_t     g_cards_texture;
-static texture_t     g_ui_texture;
-static shader_t      g_sprite_shader;
-static shader_t      g_text_shader;
-static pipeline_t    g_cards_pipeline;
-static pipeline_t    g_ui_pipeline;
-static pipeline_t    g_text_pipeline;
-static ecs_world_t  *g_world;
-static ecs_entity_t  g_selected_card;
-static fontatlas_t   g_card_font;
-static model_t       g_player_model;
-static model_t       g_enemy_model;
-static model_t       g_props_model[4];
-static model_t       g_hextiles[6];
-static float         g_pickup_next_card;
-static struct camera g_camera;
-static struct hexmap g_hexmap;
-static vec3s         g_character_position;
+static texture_t             g_cards_texture;
+static texture_t             g_ui_texture;
+static shader_t              g_sprite_shader;
+static shader_t              g_text_shader;
+static pipeline_t            g_cards_pipeline;
+static pipeline_t            g_ui_pipeline;
+static pipeline_t            g_text_pipeline;
+static ecs_world_t          *g_world;
+static ecs_entity_t          g_selected_card;
+static fontatlas_t           g_card_font;
+static model_t               g_player_model;
+static model_t               g_enemy_model;
+static model_t               g_props_model[4];
+static model_t               g_hextiles[6];
+static float                 g_pickup_next_card;
+static struct camera         g_camera;
+static struct camera         g_portrait_camera;
+static struct hexmap         g_hexmap;
+static vec3s                 g_character_position;
+static enum gamestate_battle g_gamestate;
+static enum gamestate_battle g_next_gamestate;
+static struct { float x, y, w, h; } g_button_end_turn;
 
 // testing
 static Mix_Chunk    *g_place_card_sfx;
@@ -174,15 +187,24 @@ static void load(struct scene_battle_s *battle, struct engine *engine) {
 	g_handcards_updated = 0;
 	g_selected_card = 0;
 	g_pickup_next_card = -0.75f; // wait 0.75s before spawning.
+	g_gamestate = g_next_gamestate = GS_BATTLE_BEGIN;
+
+	g_button_end_turn.x = g_engine->window_width - 150.0f;
+	g_button_end_turn.y = g_engine->window_height - 200.0f;
+	g_button_end_turn.w = 130.0f;
+	g_button_end_turn.h = 50.0f;
+
+
 	console_log(engine, "Starting battle scene!");
 	gbuffer_init(&g_gbuffer, engine);
 
 	// initialize camera
-	glm_mat4_identity(g_camera.view);
-	glm_translate(g_camera.view, (vec3){ 0.0f, 0.0f, -1000.0f });
-	glm_rotate_x(g_camera.view, glm_rad(35.0f), g_camera.view);
-	float size = engine->window_width;
-	glm_ortho(-size, size, -size * g_engine->window_aspect, size * g_engine->window_aspect, 1.0f, 2000.0f, g_camera.projection);
+	camera_init_default(&g_camera, engine->window_width, engine->window_height);
+	camera_init_default(&g_portrait_camera, engine->window_width, engine->window_height);
+	glm_look((vec3){ 0.0f, 0.0f, 100.0f }, (vec3){ 0.0f, 0.0f, -1.0f }, (vec3){ 0.0f, 1.0f, 0.0f }, (float*)&g_portrait_camera.view);
+
+	glEnable(GL_CULL_FACE);
+	glCullFace(GL_BACK);
 
 	static int loads = 0;
 	const char *models[] = {"res/models/characters/Knight.glb", "res/models/characters/Mage.glb", "res/models/characters/Barbarian.glb", "res/models/characters/Rogue.glb"};
@@ -205,7 +227,7 @@ static void load(struct scene_battle_s *battle, struct engine *engine) {
 
 	load_hextile_models();
 	hexmap_init(&g_hexmap);
-	g_character_position = (vec3s){ .x=200.0f, .y=0.0f, .z=300.0f };
+	g_character_position = (vec3s){ .x=200.0f, .y=0.0f, .z=sqrtf(3.0f) * 300.0f };
 
 	// ecs
 	g_world = ecs_init();
@@ -235,10 +257,6 @@ static void load(struct scene_battle_s *battle, struct engine *engine) {
 	// add some debug cards
 	{
 		ecs_entity_t e = ecs_new_id(g_world);
-		ecs_set(g_world, e, c_card, { .name="Attack",     .image_id=0, .icon_ids_count=1, .icon_ids={1} });
-		e = ecs_new_id(g_world);
-		ecs_set(g_world, e, c_card, { .name="Attack",     .image_id=0, .icon_ids_count=1, .icon_ids={1} });
-		e = ecs_new_id(g_world);
 		ecs_set(g_world, e, c_card, { .name="Fire Spell", .image_id=4, .icon_ids_count=1, .icon_ids={3} });
 		e = ecs_new_id(g_world);
 		ecs_set(g_world, e, c_card, { .name="Defend",     .image_id=2, .icon_ids_count=1, .icon_ids={2} });
@@ -329,54 +347,24 @@ static void destroy(struct scene_battle_s *battle, struct engine *engine) {
 	gbuffer_destroy(&g_gbuffer);
 }
 
-
 static void update(struct scene_battle_s *battle, struct engine *engine, float dt) {
-
-	// Move cards
 	interact_with_handcards(&engine->input_drag);
-
-	// Move player
-	if (engine->input_drag.state == INPUT_DRAG_IN_PROGRESS) {
-		g_character_position = screen_to_world(
-			engine->window_width, engine->window_height, g_camera.projection, g_camera.view,
-			engine->input_drag.x, engine->input_drag.y);
-	}
-
-
-	// add cards
-	const float card_add_speed = 0.25f;
-	g_pickup_next_card += dt;
-	if (g_pickup_next_card >= card_add_speed) {
-		g_pickup_next_card -= card_add_speed;
-		
-		ecs_filter_t *filter = ecs_filter_init(g_world, &(ecs_filter_desc_t){
-			.terms = {
-				{ .id = ecs_id(c_card) },
-				{ .id = ecs_id(c_pos2d), .oper = EcsNot },
-				{ .id = ecs_id(c_handcard), .oper = EcsNot },
-			},
-		});
-
-		ecs_iter_t it = ecs_filter_iter(g_world, filter);
-		while (ecs_filter_next(&it)) {
-			if (it.count > 0) {
-				ecs_entity_t e = it.entities[0];
-				ecs_set(g_world, e, c_handcard, { .hand_space = 1.0f, .hand_target_pos = {0}, .is_selected = CS_NOT_SELECTED, .added_at_time=engine->time_elapsed });
-				ecs_set(g_world, e, c_pos2d, { .x = engine->window_width, .y = engine->window_height * 0.9f });
-				Mix_PlayChannel(-1, g_place_card_sfx, 0);
-			}
-		}
-		while (ecs_filter_next(&it)); // exhaust iterator. TODO: better way?
-		ecs_filter_fini(filter);
-	}
-
 	if (g_handcards_updated) {
 		g_handcards_updated = 0;
 		recalculate_handcards();
 	}
 
+	update_gamestate(g_gamestate, dt);
+
 	ecs_run(g_world, ecs_id(system_move_cards), engine->dt, NULL);
 	ecs_run(g_world, ecs_id(system_move_models), engine->dt, NULL);
+
+	if (g_next_gamestate != g_gamestate) {
+		g_gamestate = g_next_gamestate;
+		if (g_gamestate == GS_TURN_PLAYER_BEGIN) {
+			console_log(g_engine, "Your turn!");
+		}
+	}
 }
 
 
@@ -394,9 +382,8 @@ static void draw(struct scene_battle_s *battle, struct engine *engine) {
 	{
 		// calculate matrices
 		mat4 model = GLM_MAT4_IDENTITY_INIT;
-		//glm_translate(model, (vec3){ 100.0f, 0.0f, sqrtf(3.0f) * 200.0f });
 		glm_translate(model, g_character_position.raw);
-		glm_rotate_y(model, glm_rad(sinf(g_engine->time_elapsed * 2.0f) * 80.0f), model);
+		//glm_rotate_y(model, glm_rad(sinf(g_engine->time_elapsed * 2.0f) * 80.0f), model);
 		const float scale = 80.0f;
 		glm_scale_uni(model, scale);
 
@@ -410,7 +397,7 @@ static void draw(struct scene_battle_s *battle, struct engine *engine) {
 
 		// Draw player
 		shader_set_uniform_mat3(&g_player_model.shader, "u_normalMatrix", (float*)normalMatrix);
-		model_draw(&g_player_model, g_camera.projection, g_camera.view, model);
+		model_draw(&g_player_model, &g_camera, model);
 
 		// Draw enemy
 		glm_mat4_identity(model);
@@ -418,10 +405,9 @@ static void draw(struct scene_battle_s *battle, struct engine *engine) {
 		glm_rotate_y(model, glm_rad(30.0f), model);
 		glm_scale_uni(model, scale);
 		shader_set_uniform_mat3(&g_enemy_model.shader, "u_normalMatrix", (float*)normalMatrix);
-		model_draw(&g_enemy_model, g_camera.projection, g_camera.view, model);
+		model_draw(&g_enemy_model, &g_camera, model);
 
 		// Portrait model
-		mat4 portrait_view = GLM_MAT4_IDENTITY_INIT;
 		glm_mat4_identity(model);
 		glm_translate(model, (vec3){ engine->window_width - 100.0f, engine->window_height - 240.0f, -300.0f });
 		glm_rotate_x(model, glm_rad(10.0f + cosf(g_engine->time_elapsed) * 10.0f), model);
@@ -430,7 +416,7 @@ static void draw(struct scene_battle_s *battle, struct engine *engine) {
 		const float pr = engine->window_pixel_ratio;
 		glEnable(GL_SCISSOR_TEST);
 		glScissor(engine->window_width * pr - 85.0f * pr, engine->window_height * pr - 85.0f * pr, 66 * pr, 66 * pr);
-		model_draw(&g_player_model, g_camera.projection, portrait_view, model);
+		model_draw(&g_player_model, &g_portrait_camera, model);
 		glDisable(GL_SCISSOR_TEST);
 
 	}
@@ -463,8 +449,8 @@ void on_callback(struct scene_battle_s *battle, struct engine *engine, struct en
 	switch (event.type) {
 	case ENGINE_EVENT_WINDOW_RESIZED:
 		gbuffer_resize(&g_gbuffer, engine->window_highdpi_width, engine->window_highdpi_height);
-		float size = engine->window_width;
-		glm_ortho(-size, size, -size * g_engine->window_aspect, size * g_engine->window_aspect, 1.0f, 2000.0f, g_camera.projection);
+		camera_resize_projection(&g_camera, engine->window_width, engine->window_height);
+		camera_resize_projection(&g_portrait_camera, engine->window_width, engine->window_height);
 		g_handcards_updated = 1;
 		break;
 	case ENGINE_EVENT_MAX:
@@ -489,6 +475,55 @@ void scene_battle_init(struct scene_battle_s *scene_battle, struct engine *engin
 //
 // private implementations
 //
+
+static void update_gamestate(enum gamestate_battle state, float dt) {
+	switch (state) {
+	case GS_BATTLE_BEGIN:
+		g_next_gamestate = GS_ROUND_BEGIN;
+		break;
+	case GS_ROUND_BEGIN: {
+		g_next_gamestate = GS_TURN_PLAYER_BEGIN;
+		ecs_entity_t e = ecs_new_id(g_world);
+		ecs_set(g_world, e, c_card, { .name="Attack",     .image_id=0, .icon_ids_count=1, .icon_ids={1} });
+		break;
+	}
+	case GS_TURN_PLAYER_BEGIN: {
+		int done = add_cards_to_hand(dt);
+		if (done) {
+			g_next_gamestate = GS_TURN_PLAYER_IN_PROGRESS;
+		}
+		break;
+	}
+	case GS_TURN_PLAYER_IN_PROGRESS: {
+		struct input_drag_s *drag = &g_engine->input_drag;
+		int is_on_button_end_turn = drag_in_rect(drag, g_button_end_turn.x, g_button_end_turn.y, g_button_end_turn.w, g_button_end_turn.h);
+		int is_dragging_card = (g_selected_card != 0 && ecs_is_valid(g_world, g_selected_card));
+
+		if (!is_on_button_end_turn && !is_dragging_card && (drag->state == INPUT_DRAG_BEGIN || drag->state == INPUT_DRAG_IN_PROGRESS)) {
+			vec3s pos = screen_to_world(g_engine->window_width, g_engine->window_height, g_camera.projection, g_camera.view, drag->x, drag->y);
+			glm_vec3_copy(pos.raw, g_character_position.raw);
+		}
+		if (drag->state == INPUT_DRAG_END && is_on_button_end_turn) {
+			g_next_gamestate = GS_TURN_PLAYER_END;
+		}
+		break;
+	}
+	case GS_TURN_PLAYER_END:
+		g_next_gamestate = GS_ROUND_END;
+		break;
+	case GS_TURN_BEGIN:
+		break;
+	case GS_TURN_IN_PROGRESS:
+		break;
+	case GS_TURN_END:
+		break;
+	case GS_ROUND_END:
+		g_next_gamestate = GS_ROUND_BEGIN;
+		break;
+	case GS_BATTLE_END:
+		break;
+	};
+}
 
 static void recalculate_handcards(void) {
 	// count number of cards
@@ -604,6 +639,26 @@ static void draw_ui(pipeline_t *pipeline) {
 	cmd.position.z = 0.1f;
 	drawcmd_set_texture_subrect(&cmd, g_ui_pipeline.texture, 48, 0, 16, hp);
 	pipeline_emit(&g_ui_pipeline, &cmd);
+
+	// Draw "End turn" button
+	if (g_gamestate == GS_TURN_PLAYER_IN_PROGRESS) {
+		int is_on_button_end_turn = drag_in_rect(&g_engine->input_drag, g_button_end_turn.x, g_button_end_turn.y, g_button_end_turn.w, g_button_end_turn.h);
+
+		NVGcontext *vg = g_engine->vg;
+		nvgBeginPath(vg);
+		nvgRoundedRect(vg, g_button_end_turn.x, g_button_end_turn.y, g_button_end_turn.w, g_button_end_turn.h, 8.0f);
+		if (is_on_button_end_turn) {
+			nvgFillColor(vg, nvgRGB(85, 25, 25));
+		} else {
+			nvgFillColor(vg, nvgRGB(55, 10, 10));
+		}
+		nvgFill(vg);
+
+		nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+		nvgFontSize(vg, 16.0f);
+		nvgFillColor(vg, nvgRGBf(1.0f, 1.0f, 1.0f));
+		nvgText(vg, g_button_end_turn.x + g_button_end_turn.w * 0.5f, g_button_end_turn.y + g_button_end_turn.h * 0.5f, "End turn", NULL);
+	}
 }
 
 
@@ -675,6 +730,25 @@ static void on_game_event_play_card(event_info_t *info) {
 	g_selected_card = 0;
 }
 
+static int count_handcards(void) {
+	int count = 0;
+
+	ecs_filter_t *filter = ecs_filter_init(g_world, &(ecs_filter_desc_t){
+		.terms = {
+			{ .id = ecs_id(c_card) },
+			{ .id = ecs_id(c_handcard) },
+		},
+	});
+
+	ecs_iter_t it = ecs_filter_iter(g_world, filter);
+	while (ecs_filter_next(&it)) {
+		count += it.count;
+	}
+	ecs_filter_fini(filter);
+
+	return count;
+}
+
 static void interact_with_handcards(struct input_drag_s *drag) {
 	// pick up card
 	if (drag->state == INPUT_DRAG_BEGIN) {
@@ -722,6 +796,43 @@ static void interact_with_handcards(struct input_drag_s *drag) {
 			ecs_modified(g_world, g_selected_card, c_handcard);
 		}
 	}
+}
+
+int add_cards_to_hand(float dt) {
+	int done = 0;
+
+	const float card_add_speed = 0.25f;
+	g_pickup_next_card += dt;
+	if (g_pickup_next_card >= card_add_speed) {
+		g_pickup_next_card -= card_add_speed;
+		
+		ecs_filter_t *filter = ecs_filter_init(g_world, &(ecs_filter_desc_t){
+			.terms = {
+				{ .id = ecs_id(c_card) },
+				{ .id = ecs_id(c_pos2d), .oper = EcsNot },
+				{ .id = ecs_id(c_handcard), .oper = EcsNot },
+			},
+		});
+
+		ecs_iter_t it = ecs_filter_iter(g_world, filter);
+		int has_entity = 0;
+		while (ecs_filter_next(&it)) {
+			if (it.count > 0) {
+				has_entity = 1;
+				ecs_entity_t e = it.entities[0];
+				ecs_set(g_world, e, c_handcard, { .hand_space = 1.0f, .hand_target_pos = {0}, .is_selected = CS_NOT_SELECTED, .added_at_time=g_engine->time_elapsed });
+				ecs_set(g_world, e, c_pos2d, { .x = g_engine->window_width, .y = g_engine->window_height * 0.9f });
+				Mix_PlayChannel(-1, g_place_card_sfx, 0);
+			}
+		}
+		if (!has_entity) {
+			done = 1;
+		}
+		while (ecs_filter_next(&it)); // exhaust iterator. TODO: better way?
+		ecs_filter_fini(filter);
+	}
+
+	return done;
 }
 
 static void load_hextile_models(void) {
@@ -789,20 +900,28 @@ static void hexmap_destroy(struct hexmap *map) {
 	free(map->tiles);
 }
 
-static void hexmap_draw(struct hexmap *map) {
+static vec2s hexmap_index_to_world_position(struct hexmap *map, usize index) {
 	float horiz = map->tile_offsets.x;
 	float vert = map->tile_offsets.y;
-	int n_tiles = map->w * map->h;
 
-	for (int i = 0; i < n_tiles; ++i) {
-		int q = i % map->w;
-		int r = floorf(i / (float)map->w);
-		float horiz_offset = (r % 2 == 0) ? horiz * 0.5f : 0.0f;
+	int q = index % map->w;
+	int r = floorf(index / (float)map->w);
+	float horiz_offset = (r % 2 == 0) ? horiz * 0.5f : 0.0f;
 
-		vec2s pos = {
-			.x = q * horiz + horiz_offset,
-			.y = r * vert,
-		};
+	return (vec2s){
+		.x = q * horiz + horiz_offset,
+		.y = r * vert,
+	};
+}
+
+static void hexmap_draw(struct hexmap *map) {
+	usize n_tiles = map->w * map->h;
+
+	for (usize i = 0; i < n_tiles; ++i) {
+		vec2s pos = hexmap_index_to_world_position(map, i);
+
+		float horiz = map->tile_offsets.x;
+		float vert = map->tile_offsets.y;
 
 		mat4 model = GLM_MAT4_IDENTITY_INIT;
 		glm_translate(model, (vec3){ -horiz * 3.f, 0.0f, vert * -2.0f });
@@ -819,10 +938,10 @@ static void hexmap_draw(struct hexmap *map) {
 
 		usize model_index = map->tiles[i].tile;
 		shader_set_uniform_mat3(&g_hextiles[model_index].shader, "u_normalMatrix", (float*)normalMatrix);
-		model_draw(&g_hextiles[model_index], g_camera.projection, g_camera.view, model);
+		model_draw(&g_hextiles[model_index], &g_camera, model);
 		// Draw water for waterless coast tiles
 		if (model_index >= 2 && model_index <= 6) {
-			model_draw(&g_hextiles[1], g_camera.projection, g_camera.view, model);
+			model_draw(&g_hextiles[1], &g_camera, model);
 		}
 	}
 }
@@ -985,7 +1104,7 @@ static void system_draw_models(ecs_iter_t *it) {
 		glm_mat4_identity(model_matrix);
 		glm_translate(model_matrix, pos->raw);
 		glm_scale_uni(model_matrix, model->scale);
-		model_draw(&g_props_model[model->model_index], g_camera.projection, g_camera.view, model_matrix);
+		model_draw(&g_props_model[model->model_index], &g_camera, model_matrix);
 	}
 }
 

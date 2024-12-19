@@ -8,9 +8,15 @@
 #include <SDL.h>
 #include <SDL_opengles2.h>
 #include <cglm/cglm.h>
+#include "input.h"
 
 int point_in_rect(float px, float py, float x, float y, float w, float h) {
 	return (px >= x && py >= y && px <= x + w && py <= y + h);
+}
+
+int drag_in_rect(struct input_drag_s *drag, float x, float y, float w, float h) {
+	return (drag->state == INPUT_DRAG_BEGIN || drag->state == INPUT_DRAG_IN_PROGRESS || drag->state == INPUT_DRAG_END)
+	        && (drag->x >= x && drag->y >= y && drag->x <= x + w && drag->y <= y + h);
 }
 
 int nearest_pow2(int value) {
