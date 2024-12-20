@@ -76,6 +76,7 @@ static int count_handcards(void);
 static void interact_with_handcards(struct input_drag_s *drag);
 static int add_cards_to_hand(float dt);
 static void update_gamestate(enum gamestate_battle state, float dt);
+static int gamestate_changed(enum gamestate_battle old_state, enum gamestate_battle new_state);
 
 static void load_hextile_models(void);
 static void hexmap_init(struct hexmap *);
@@ -171,6 +172,7 @@ static vec3s                 g_character_position;
 static enum gamestate_battle g_gamestate;
 static enum gamestate_battle g_next_gamestate;
 static struct { float x, y, w, h; } g_button_end_turn;
+
 
 // testing
 static Mix_Chunk    *g_place_card_sfx;
@@ -360,9 +362,8 @@ static void update(struct scene_battle_s *battle, struct engine *engine, float d
 	ecs_run(g_world, ecs_id(system_move_models), engine->dt, NULL);
 
 	if (g_next_gamestate != g_gamestate) {
-		g_gamestate = g_next_gamestate;
-		if (g_gamestate == GS_TURN_PLAYER_BEGIN) {
-			console_log(g_engine, "Your turn!");
+		if (gamestate_changed(g_gamestate, g_next_gamestate)) {
+			g_gamestate = g_next_gamestate;
 		}
 	}
 }
@@ -476,15 +477,27 @@ void scene_battle_init(struct scene_battle_s *scene_battle, struct engine *engin
 // private implementations
 //
 
+static int gamestate_changed(enum gamestate_battle old_state, enum gamestate_battle new_state) {
+	if (new_state == GS_TURN_PLAYER_IN_PROGRESS) {
+		console_log(g_engine, "Your turn!");
+	}
+
+	return 1;
+}
+
 static void update_gamestate(enum gamestate_battle state, float dt) {
 	switch (state) {
 	case GS_BATTLE_BEGIN:
 		g_next_gamestate = GS_ROUND_BEGIN;
 		break;
 	case GS_ROUND_BEGIN: {
+		const int number_of_cards = count_handcards();
+		for (int i = number_of_cards; i < 5; ++i) {
+			ecs_entity_t e = ecs_new_id(g_world);
+			ecs_set(g_world, e, c_card, { .name="Attack", .image_id=0, .icon_ids_count=1, .icon_ids={1} });
+		}
+
 		g_next_gamestate = GS_TURN_PLAYER_BEGIN;
-		ecs_entity_t e = ecs_new_id(g_world);
-		ecs_set(g_world, e, c_card, { .name="Attack",     .image_id=0, .icon_ids_count=1, .icon_ids={1} });
 		break;
 	}
 	case GS_TURN_PLAYER_BEGIN: {
@@ -736,7 +749,6 @@ static int count_handcards(void) {
 	ecs_filter_t *filter = ecs_filter_init(g_world, &(ecs_filter_desc_t){
 		.terms = {
 			{ .id = ecs_id(c_card) },
-			{ .id = ecs_id(c_handcard) },
 		},
 	});
 
