@@ -9,6 +9,8 @@
 #include <SDL_opengles2.h>
 #include <cglm/cglm.h>
 #include "input.h"
+#include "engine.h"
+#include "gl/camera.h"
 
 int point_in_rect(float px, float py, float x, float y, float w, float h) {
 	return (px >= x && py >= y && px <= x + w && py <= y + h);
@@ -81,6 +83,10 @@ vec2s world_to_screen(float vw, float vh, mat4 projection, mat4 view, mat4 model
 		.x = ((point_ndc.x + 1.f) * 0.5f) * vw,
 		.y = ((1.f - point_ndc.y) * 0.5f) * vh
 	};
+}
+
+vec2s world_to_screen_camera(struct engine *engine, struct camera *camera, mat4 model, vec3s point) {
+	return world_to_screen(engine->window_width, engine->window_height, camera->projection, camera->view, model, point);
 }
 
 vec3s screen_to_world(float vw, float vh, mat4 projection, mat4 view, float screen_x, float screen_y) {
@@ -206,6 +212,10 @@ static uint64_t xorshift128plus(void) {
  */
 float rng_f(void) {
 	return (float)((xorshift128plus() >> 11) * (1.0 / 9007199254740992.0));
+}
+
+int rng_i(void) {
+	return (int)(xorshift128plus() & 0x7FFFFFFF);
 }
 
 /**

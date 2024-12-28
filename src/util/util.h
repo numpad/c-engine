@@ -22,6 +22,9 @@ typedef unsigned int uint;
 typedef size_t usize;
 typedef i64 isize;
 
+struct engine;
+struct camera;
+
 // defines
 #define UTIL_FOR(_i, max) for (size_t _i = 0; _i < max; ++_i)
 #define count_of(arr) (sizeof(arr) / sizeof(arr[0]))
@@ -63,6 +66,7 @@ float calculate_angle_segment(float angle, int segments);
 
 // coordinate systems
 vec2s world_to_screen(float vw, float vh, mat4 projection, mat4 view, mat4 model, vec3s point);
+vec2s world_to_screen_camera(struct engine *, struct camera *, mat4 model, vec3s point);
 vec3s screen_to_world(float vw, float vh, mat4 projection, mat4 view, float screen_x, float screen_y);
 
 // string utils
@@ -91,6 +95,7 @@ struct rng_state {
 	uint64_t s1;
 };
 
+int   rng_i(void);
 float rng_f(void);
 float rng_fnd(void);
 void  rng_seed(uint64_t seed);

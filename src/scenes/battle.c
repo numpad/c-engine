@@ -22,9 +22,11 @@
 #include "gl/gbuffer.h"
 #include "gl/camera.h"
 #include "game/background.h"
+#include "game/hexmap.h"
 #include "gui/console.h"
 #include "scenes/menu.h"
 #include "util/util.h"
+#include "game/pathfinder.h"
 
 //
 // structs & enums
@@ -55,13 +57,6 @@ typedef struct event_info {
 	ecs_entity_t entity;
 } event_info_t;
 
-struct hexmap {
-	int w, h;
-	float tilesize;
-	struct {short tile; short rotation;} *tiles;
-	vec2s tile_offsets;
-};
-
 //
 // private functions
 //
@@ -75,13 +70,9 @@ static void on_game_event_play_card(event_info_t *info);
 static int count_handcards(void);
 static void interact_with_handcards(struct input_drag_s *drag);
 static int add_cards_to_hand(float dt);
+static void spawn_random_card(void);
 static void update_gamestate(enum gamestate_battle state, float dt);
 static int gamestate_changed(enum gamestate_battle old_state, enum gamestate_battle new_state);
-
-static void load_hextile_models(void);
-static void hexmap_init(struct hexmap *);
-static void hexmap_destroy(struct hexmap *);
-static void hexmap_draw(struct hexmap *);
 
 //
 // ecs
@@ -172,6 +163,7 @@ static vec3s                 g_character_position;
 static enum gamestate_battle g_gamestate;
 static enum gamestate_battle g_next_gamestate;
 static struct { float x, y, w, h; } g_button_end_turn;
+static struct hexcoord       g_move_goal;
 
 
 // testing
@@ -194,19 +186,10 @@ static void load(struct scene_battle_s *battle, struct engine *engine) {
 	g_button_end_turn.x = g_engine->window_width - 150.0f;
 	g_button_end_turn.y = g_engine->window_height - 200.0f;
 	g_button_end_turn.w = 130.0f;
-	g_button_end_turn.h = 50.0f;
-
+	g_button_end_turn.h = 60.0f;
 
 	console_log(engine, "Starting battle scene!");
 	gbuffer_init(&g_gbuffer, engine);
-
-	// initialize camera
-	camera_init_default(&g_camera, engine->window_width, engine->window_height);
-	camera_init_default(&g_portrait_camera, engine->window_width, engine->window_height);
-	glm_look((vec3){ 0.0f, 0.0f, 100.0f }, (vec3){ 0.0f, 0.0f, -1.0f }, (vec3){ 0.0f, 1.0f, 0.0f }, (float*)&g_portrait_camera.view);
-
-	glEnable(GL_CULL_FACE);
-	glCullFace(GL_BACK);
 
 	static int loads = 0;
 	const char *models[] = {"res/models/characters/Knight.glb", "res/models/characters/Mage.glb", "res/models/characters/Barbarian.glb", "res/models/characters/Rogue.glb"};
@@ -227,9 +210,18 @@ static void load(struct scene_battle_s *battle, struct engine *engine) {
 		assert(load_fun_error == 0);
 	}
 
-	load_hextile_models();
 	hexmap_init(&g_hexmap);
-	g_character_position = (vec3s){ .x=200.0f, .y=0.0f, .z=sqrtf(3.0f) * 300.0f };
+	vec2s p = hexmap_coord_to_world_position(&g_hexmap, 2, 5);
+	g_character_position = (vec3s){ .x=p.x, .y=0.0f, .z=p.y };
+
+	// initialize camera
+	camera_init_default(&g_camera, engine->window_width, engine->window_height);
+	glm_translate(g_camera.view, (vec3){ -g_hexmap.tile_offsets.x * 3.25f, 0.0f, g_hexmap.tile_offsets.y * -3.0f });
+	camera_init_default(&g_portrait_camera, engine->window_width, engine->window_height);
+	glm_look((vec3){ 0.0f, 0.0f, 100.0f }, (vec3){ 0.0f, 0.0f, -1.0f }, (vec3){ 0.0f, 1.0f, 0.0f }, (float*)&g_portrait_camera.view);
+
+	glEnable(GL_CULL_FACE);
+	glCullFace(GL_BACK);
 
 	// ecs
 	g_world = ecs_init();
@@ -256,22 +248,11 @@ static void load(struct scene_battle_s *battle, struct engine *engine) {
 		.callback = observer_on_update_handcards,
 		});
 
-	// add some debug cards
-	{
-		ecs_entity_t e = ecs_new_id(g_world);
-		ecs_set(g_world, e, c_card, { .name="Fire Spell", .image_id=4, .icon_ids_count=1, .icon_ids={3} });
-		e = ecs_new_id(g_world);
-		ecs_set(g_world, e, c_card, { .name="Defend",     .image_id=2, .icon_ids_count=1, .icon_ids={2} });
-		e = ecs_new_id(g_world);
-		ecs_set(g_world, e, c_card, { .name="Meal",       .image_id=1, .icon_ids_count=1, .icon_ids={5} });
-		e = ecs_new_id(g_world);
-		ecs_set(g_world, e, c_card, { .name="Corruption", .image_id=5, .icon_ids_count=3, .icon_ids={3, 3, 4} });
-	}
-
 	// Add some models
 	{
+		vec2s p = hexmap_index_to_world_position(&g_hexmap, 3 + 4 * g_hexmap.w);
 		ecs_entity_t e = ecs_new_id(g_world);
-		ecs_set(g_world, e, c_pos3d, { .x=100.0f, .y=0.0f, .z=550.0f });
+		ecs_set(g_world, e, c_pos3d, { .x=p.x, .y=0.0f, .z=p.y });
 		ecs_set(g_world, e, c_model, { .model_index=3, .scale=450.0f });
 	}
 
@@ -375,7 +356,77 @@ static void draw(struct scene_battle_s *battle, struct engine *engine) {
 	gbuffer_clear(g_gbuffer);
 
 	glEnable(GL_DEPTH_TEST);
-	hexmap_draw(&g_hexmap);
+	hexmap_draw(&g_hexmap, &g_camera);
+
+	// draw neighbors & edges
+	NVGcontext *vg = engine->vg;
+	usize n_tiles = (usize)g_hexmap.w * g_hexmap.h;
+	for (usize i = 0; i < n_tiles; ++i) {
+		int edges_count = 0;
+		while (g_hexmap.edges[i + n_tiles * edges_count] < n_tiles && edges_count < 6) {
+			++edges_count;
+		}
+		float pct = edges_count / 6.0f;
+		char text[32];
+		sprintf(text, "%d", edges_count);
+
+		vec2s wp = hexmap_index_to_world_position(&g_hexmap, i);
+		vec3s p = (vec3s){ wp.x, 0.0f, wp.y };
+		vec2s screen_pos = world_to_screen_camera(engine, &g_camera, GLM_MAT4_IDENTITY, p);
+
+		nvgBeginPath(vg);
+		nvgFillColor(vg, nvgRGBf(1.0f - pct, pct, 0.0f));
+		nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+		nvgFontSize(vg, 19.0f);
+		nvgText(vg, screen_pos.x, screen_pos.y, text, NULL);
+
+		nvgBeginPath(vg);
+		nvgFontSize(vg, 12.0f);
+		nvgFillColor(vg, nvgRGBf(1, 1, 1));
+		char index_text[32];
+		sprintf(index_text, "#%u", i);
+		nvgText(vg, screen_pos.x + 10.0f, screen_pos.y + 10.0f, index_text, NULL);
+
+		nvgStrokeWidth(vg, 3.0f);
+		nvgStrokeColor(vg, nvgRGB(128, 0, 128));
+		if (i == g_hexmap.highlight_tile_index) {
+			for (int j = 0; j < edges_count; ++j) {
+				usize neighbor = g_hexmap.edges[i + n_tiles * j];
+				vec2s nwp = hexmap_index_to_world_position(&g_hexmap, neighbor);
+				vec3s np = (vec3s){ nwp.x, 0.0f, nwp.y };
+				vec2s n_screen_pos = world_to_screen_camera(engine, &g_camera, GLM_MAT4_IDENTITY, np);
+
+				nvgBeginPath(vg);
+				nvgMoveTo(vg, screen_pos.x, screen_pos.y);
+				nvgLineTo(vg, n_screen_pos.x, n_screen_pos.y);
+				nvgStroke(vg);
+			}
+		}
+	}
+
+	if (g_hexmap.highlight_tile_index < n_tiles) {
+		nvgBeginPath(vg);
+
+		usize index = hexmap_coord_to_index(&g_hexmap, g_move_goal);
+		{
+			vec2s wp = hexmap_index_to_world_position(&g_hexmap, index);
+			vec3s p = (vec3s){{ wp.x, 0.0f, wp.y }};
+			vec2s screen_pos = world_to_screen_camera(engine, &g_camera, GLM_MAT4_IDENTITY, p);
+			nvgMoveTo(vg, screen_pos.x, screen_pos.y);
+		}
+
+		while (index < n_tiles) {
+			vec2s wp = hexmap_index_to_world_position(&g_hexmap, index);
+			vec3s p = (vec3s){{ wp.x, 0.0f, wp.y }};
+			vec2s screen_pos = world_to_screen_camera(engine, &g_camera, GLM_MAT4_IDENTITY, p);
+			nvgLineTo(vg, screen_pos.x, screen_pos.y);
+			index = g_hexmap.tiles_flowmap[index];
+		}
+
+		nvgStrokeWidth(vg, 6.0);
+		nvgStrokeColor(vg, nvgRGB(255, 70, 80));
+		nvgStroke(vg);
+	}
 
 	ecs_run(g_world, ecs_id(system_draw_models), engine->dt, NULL);
 
@@ -402,7 +453,8 @@ static void draw(struct scene_battle_s *battle, struct engine *engine) {
 
 		// Draw enemy
 		glm_mat4_identity(model);
-		glm_translate(model, (vec3){ 100.0f, (fabsf(fminf(0.0f, sinf(g_engine->time_elapsed * 10.0f)))) * 50.0f, sqrtf(3.0f) * 200.0f });
+		vec2s p = hexmap_index_to_world_position(&g_hexmap, 3 + 3 * g_hexmap.w);
+		glm_translate(model, (vec3){ p.x, (fabsf(fminf(0.0f, sinf(g_engine->time_elapsed * 10.0f)))) * 50.0f, p.y });
 		glm_rotate_y(model, glm_rad(30.0f), model);
 		glm_scale_uni(model, scale);
 		shader_set_uniform_mat3(&g_enemy_model.shader, "u_normalMatrix", (float*)normalMatrix);
@@ -493,8 +545,7 @@ static void update_gamestate(enum gamestate_battle state, float dt) {
 	case GS_ROUND_BEGIN: {
 		const int number_of_cards = count_handcards();
 		for (int i = number_of_cards; i < 5; ++i) {
-			ecs_entity_t e = ecs_new_id(g_world);
-			ecs_set(g_world, e, c_card, { .name="Attack", .image_id=0, .icon_ids_count=1, .icon_ids={1} });
+			spawn_random_card();
 		}
 
 		g_next_gamestate = GS_TURN_PLAYER_BEGIN;
@@ -513,8 +564,14 @@ static void update_gamestate(enum gamestate_battle state, float dt) {
 		int is_dragging_card = (g_selected_card != 0 && ecs_is_valid(g_world, g_selected_card));
 
 		if (!is_on_button_end_turn && !is_dragging_card && (drag->state == INPUT_DRAG_BEGIN || drag->state == INPUT_DRAG_IN_PROGRESS)) {
-			vec3s pos = screen_to_world(g_engine->window_width, g_engine->window_height, g_camera.projection, g_camera.view, drag->x, drag->y);
-			glm_vec3_copy(pos.raw, g_character_position.raw);
+			// Highlight
+			vec3s p = screen_to_world(g_engine->window_width, g_engine->window_height, g_camera.projection, g_camera.view, g_engine->input_drag.x, g_engine->input_drag.y);
+			usize index = hexmap_world_position_to_index(&g_hexmap, (vec2s){ .x=p.x, .y=p.z });
+			hexmap_set_tile_effect(&g_hexmap, index, HEXMAP_TILE_EFFECT_HIGHLIGHT);
+
+			// Pathfind
+			g_move_goal = hexmap_world_position_to_coord(&g_hexmap, (vec2s){ .x=p.x, .y=p.z });
+			hexmap_find_path(&g_hexmap, (struct hexcoord){3, 4}, g_move_goal);
 		}
 		if (drag->state == INPUT_DRAG_END && is_on_button_end_turn) {
 			g_next_gamestate = GS_TURN_PLAYER_END;
@@ -668,9 +725,14 @@ static void draw_ui(pipeline_t *pipeline) {
 		nvgFill(vg);
 
 		nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
-		nvgFontSize(vg, 16.0f);
-		nvgFillColor(vg, nvgRGBf(1.0f, 1.0f, 1.0f));
-		nvgText(vg, g_button_end_turn.x + g_button_end_turn.w * 0.5f, g_button_end_turn.y + g_button_end_turn.h * 0.5f, "End turn", NULL);
+		nvgFontSize(vg, 19.0f);
+		nvgFillColor(vg, nvgRGBf(0.97f, 0.92f, 0.92f));
+		nvgText(vg, g_button_end_turn.x + g_button_end_turn.w * 0.5f, g_button_end_turn.y + g_button_end_turn.h * 0.5f - 3.0f, "End turn", NULL);
+
+		nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+		nvgFontSize(vg, 11.0f);
+		nvgFillColor(vg, nvgRGB(92, 35, 35));
+		nvgText(vg, g_button_end_turn.x + g_button_end_turn.w * 0.5f, g_button_end_turn.y + g_button_end_turn.h * 0.5f + 16.0f, "(X cards left)", NULL);
 	}
 }
 
@@ -700,7 +762,7 @@ static void on_game_event_play_card(event_info_t *info) {
 	vec3s world_position = screen_to_world(
 			g_engine->window_width, g_engine->window_height, g_camera.projection, g_camera.view,
 			g_engine->input_drag.x, g_engine->input_drag.y);
-	// Attack Card
+
 	if (card->image_id == 0) {
 		for (int i = 0; i < 20; ++i) {
 			ecs_entity_t e = ecs_new_id(g_world);
@@ -847,117 +909,29 @@ int add_cards_to_hand(float dt) {
 	return done;
 }
 
-static void load_hextile_models(void) {
-	const char *models[] = {
-		"res/models/tiles/base/hex_grass.gltf",
-		"res/models/tiles/base/hex_water.gltf",
-		"res/models/tiles/coast/waterless/hex_coast_A_waterless.gltf",
-		"res/models/tiles/coast/waterless/hex_coast_B_waterless.gltf",
-		"res/models/tiles/coast/waterless/hex_coast_C_waterless.gltf",
-		"res/models/tiles/coast/waterless/hex_coast_D_waterless.gltf",
-		"res/models/tiles/coast/waterless/hex_coast_E_waterless.gltf",
-		"res/models/tiles/roads/hex_road_A.gltf",
-		"res/models/tiles/roads/hex_road_B.gltf",
-		"res/models/tiles/roads/hex_road_E.gltf",
-	};
+static void spawn_random_card(void) {
+	int n = rng_i() % 5;
+	
+	ecs_entity_t e = ecs_new_id(g_world);
 
-	for (uint i = 0; i < count_of(models); ++i) {
-		int err = model_init_from_file(&g_hextiles[i], models[i]);
-		assert(err == 0);
-	}
-}
-static void hexmap_init(struct hexmap *map) {
-	map->w = 7;
-	map->h = 9;
-	map->tilesize = 115.0f;
-	map->tiles = calloc(map->w * map->h, sizeof(*map->tiles));
-
-	// Make some map
-#define M(x, y, T, R) map->tiles[x + map->w * y].tile = T; map->tiles[x + map->w * y].rotation = R;
-	M(0, 0, 1,  0);
-	M(1, 0, 4, -1);
-	M(2, 0, 6, -1);
-	M(0, 1, 1,  0);
-	M(1, 1, 1,  0);
-	M(2, 1, 4, -2);
-	M(0, 2, 1,  0);
-	M(1, 2, 5, -3);
-	M(2, 2, 6, -2);
-	M(0, 3, 3, -4);
-	M(1, 3, 4, -3);
-	M(2, 3, 6, -2);
-	M(0, 4, 6, -3);
-
-	M(4, 0, 8,  1);
-	M(4, 1, 8, -2);
-	M(4, 2, 9, -1);
-	M(5, 2, 7,  0);
-	M(6, 2, 7,  0);
-	M(5, 3, 8,  1);
-	M(4, 4, 7, -2);
-	M(4, 5, 8, -2);
-	M(4, 6, 8,  1);
-	M(4, 7, 8, -2);
-	M(4, 8, 7, -1);
-#undef M
-
-	// precomputed
-	map->tile_offsets = (vec2s){
-		.x = sqrtf(3.f) * map->tilesize,
-		.y = (3.f / 2.f) * map->tilesize,
+	switch (n) {
+	case 0:
+		ecs_set(g_world, e, c_card, { .name="Fire Spell", .image_id=4, .icon_ids_count=1, .icon_ids={3} });
+		break;
+	case 1:
+		ecs_set(g_world, e, c_card, { .name="Defend",     .image_id=2, .icon_ids_count=1, .icon_ids={2} });
+		break;
+	case 2:
+		ecs_set(g_world, e, c_card, { .name="Meal",       .image_id=1, .icon_ids_count=1, .icon_ids={5} });
+		break;
+	case 3:
+		ecs_set(g_world, e, c_card, { .name="Corruption", .image_id=5, .icon_ids_count=3, .icon_ids={3, 3, 4} });
+		break;
+	case 4:
+		ecs_set(g_world, e, c_card, { .name="Attack", .image_id=0, .icon_ids_count=1, .icon_ids={1} });
+		break;
 	};
 }
-
-static void hexmap_destroy(struct hexmap *map) {
-	free(map->tiles);
-}
-
-static vec2s hexmap_index_to_world_position(struct hexmap *map, usize index) {
-	float horiz = map->tile_offsets.x;
-	float vert = map->tile_offsets.y;
-
-	int q = index % map->w;
-	int r = floorf(index / (float)map->w);
-	float horiz_offset = (r % 2 == 0) ? horiz * 0.5f : 0.0f;
-
-	return (vec2s){
-		.x = q * horiz + horiz_offset,
-		.y = r * vert,
-	};
-}
-
-static void hexmap_draw(struct hexmap *map) {
-	usize n_tiles = map->w * map->h;
-
-	for (usize i = 0; i < n_tiles; ++i) {
-		vec2s pos = hexmap_index_to_world_position(map, i);
-
-		float horiz = map->tile_offsets.x;
-		float vert = map->tile_offsets.y;
-
-		mat4 model = GLM_MAT4_IDENTITY_INIT;
-		glm_translate(model, (vec3){ -horiz * 3.f, 0.0f, vert * -2.0f });
-		glm_translate(model, (vec3){ pos.x, 0.0f, pos.y });
-		glm_rotate_y(model, map->tiles[i].rotation * glm_rad(60.0f), model);
-		glm_scale(model, (vec3){ 100.0f, 100.0f, 100.0f});
-
-		mat4 modelView = GLM_MAT4_IDENTITY_INIT;
-		glm_mat4_mul(g_camera.view, model, modelView);
-		mat3 normalMatrix = GLM_MAT3_IDENTITY_INIT;
-		glm_mat4_pick3(modelView, normalMatrix);
-		glm_mat3_inv(normalMatrix, normalMatrix);
-		glm_mat3_transpose(normalMatrix);
-
-		usize model_index = map->tiles[i].tile;
-		shader_set_uniform_mat3(&g_hextiles[model_index].shader, "u_normalMatrix", (float*)normalMatrix);
-		model_draw(&g_hextiles[model_index], &g_camera, model);
-		// Draw water for waterless coast tiles
-		if (model_index >= 2 && model_index <= 6) {
-			model_draw(&g_hextiles[1], &g_camera, model);
-		}
-	}
-}
-
 
 //
 // systems implementation

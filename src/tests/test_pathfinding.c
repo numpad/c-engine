@@ -1,6 +1,5 @@
 #include "framework/testing.h"
 
-#include <stdlib.h>
 #include "util/util.h"
 
 //#include "game/pathfinder.h"
