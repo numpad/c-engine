@@ -20,6 +20,15 @@ int drag_in_rect(struct input_drag_s *drag, float x, float y, float w, float h) 
 	return (drag->state == INPUT_DRAG_BEGIN || drag->state == INPUT_DRAG_IN_PROGRESS || drag->state == INPUT_DRAG_END)
 	        && (drag->x >= x && drag->y >= y && drag->x <= x + w && drag->y <= y + h);
 }
+int drag_clicked_in_rect(struct input_drag_s *drag, float x, float y, float w, float h) {
+	int click_done = (drag->state == INPUT_DRAG_END);
+	int started_in_rect = (drag->begin_x >= x && drag->begin_x <= x + w
+	                      && drag->begin_y >= y && drag->begin_y <= y + h);
+	int ended_in_rect = (drag->end_x >= x && drag->end_x <= x + w
+	                    && drag->end_y >= y && drag->end_y <= y + h);
+	
+	return click_done && started_in_rect && ended_in_rect;
+}
 
 int nearest_pow2(int value) {
 	assert(value >= 1);

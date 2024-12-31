@@ -159,7 +159,7 @@ static float                 g_pickup_next_card;
 static struct camera         g_camera;
 static struct camera         g_portrait_camera;
 static struct hexmap         g_hexmap;
-static vec3s                 g_character_position;
+static struct hexcoord       g_character_position;
 static enum gamestate_battle g_gamestate;
 static enum gamestate_battle g_next_gamestate;
 static struct { float x, y, w, h; } g_button_end_turn;
@@ -211,8 +211,7 @@ static void load(struct scene_battle_s *battle, struct engine *engine) {
 	}
 
 	hexmap_init(&g_hexmap);
-	vec2s p = hexmap_coord_to_world_position(&g_hexmap, 2, 5);
-	g_character_position = (vec3s){ .x=p.x, .y=0.0f, .z=p.y };
+	g_character_position = (struct hexcoord){ .x=2, .y=5 };
 
 	// initialize camera
 	camera_init_default(&g_camera, engine->window_width, engine->window_height);
@@ -377,11 +376,11 @@ static void draw(struct scene_battle_s *battle, struct engine *engine) {
 		nvgBeginPath(vg);
 		nvgFillColor(vg, nvgRGBf(1.0f - pct, pct, 0.0f));
 		nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
-		nvgFontSize(vg, 19.0f);
+		nvgFontSize(vg, 12.0f);
 		nvgText(vg, screen_pos.x, screen_pos.y, text, NULL);
 
 		nvgBeginPath(vg);
-		nvgFontSize(vg, 12.0f);
+		nvgFontSize(vg, 9.0f);
 		nvgFillColor(vg, nvgRGBf(1, 1, 1));
 		char index_text[32];
 		sprintf(index_text, "#%u", i);
@@ -433,8 +432,10 @@ static void draw(struct scene_battle_s *battle, struct engine *engine) {
 	// Player model
 	{
 		// calculate matrices
+		vec2s pos = hexmap_coord_to_world_position(&g_hexmap, g_character_position.x, g_character_position.y);
+		vec3 world_pos = {pos.x, 0.0f, pos.y};
 		mat4 model = GLM_MAT4_IDENTITY_INIT;
-		glm_translate(model, g_character_position.raw);
+		glm_translate(model, world_pos);
 		//glm_rotate_y(model, glm_rad(sinf(g_engine->time_elapsed * 2.0f) * 80.0f), model);
 		const float scale = 80.0f;
 		glm_scale_uni(model, scale);
@@ -563,7 +564,7 @@ static void update_gamestate(enum gamestate_battle state, float dt) {
 		int is_on_button_end_turn = drag_in_rect(drag, g_button_end_turn.x, g_button_end_turn.y, g_button_end_turn.w, g_button_end_turn.h);
 		int is_dragging_card = (g_selected_card != 0 && ecs_is_valid(g_world, g_selected_card));
 
-		if (!is_on_button_end_turn && !is_dragging_card && (drag->state == INPUT_DRAG_BEGIN || drag->state == INPUT_DRAG_IN_PROGRESS)) {
+		if (!is_on_button_end_turn && !is_dragging_card && (drag->state != INPUT_DRAG_NONE)) {
 			// Highlight
 			vec3s p = screen_to_world(g_engine->window_width, g_engine->window_height, g_camera.projection, g_camera.view, g_engine->input_drag.x, g_engine->input_drag.y);
 			usize index = hexmap_world_position_to_index(&g_hexmap, (vec2s){ .x=p.x, .y=p.z });
@@ -571,9 +572,11 @@ static void update_gamestate(enum gamestate_battle state, float dt) {
 
 			// Pathfind
 			g_move_goal = hexmap_world_position_to_coord(&g_hexmap, (vec2s){ .x=p.x, .y=p.z });
-			hexmap_find_path(&g_hexmap, (struct hexcoord){3, 4}, g_move_goal);
+			hexmap_find_path(&g_hexmap, g_character_position, g_move_goal);
 		}
-		if (drag->state == INPUT_DRAG_END && is_on_button_end_turn) {
+
+		int clicked_on_button_end_turn = drag_clicked_in_rect(drag, g_button_end_turn.x, g_button_end_turn.y, g_button_end_turn.w, g_button_end_turn.h);
+		if (clicked_on_button_end_turn) {
 			g_next_gamestate = GS_TURN_PLAYER_END;
 		}
 		break;
@@ -757,7 +760,7 @@ static void on_game_event_play_card(event_info_t *info) {
 	ecs_entity_t card_entity = info->entity;
 
 	const c_card *card = ecs_get(g_world, card_entity, c_card);
-	console_log(g_engine, "Played card: \"%s\"...", card->name);
+	//console_log(g_engine, "Played card: \"%s\"...", card->name);
 
 	vec3s world_position = screen_to_world(
 			g_engine->window_width, g_engine->window_height, g_camera.projection, g_camera.view,

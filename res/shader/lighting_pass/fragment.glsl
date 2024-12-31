@@ -51,7 +51,7 @@ void main() {
 
 	// Some experiment:
 	float t = campfire_flicker_soft(u_time * 5.0) * 0.7 + campfire_flicker(u_time) * 0.3;
-	float l = length(position - vec3(100.0, 0.0, 550.0));
+	float l = length(position - vec3(690.0, 0.0, 690.0));
 	float lf = smoothstep(0.0, 1.0, 1.0 - (l / (600.0 + t * 80.0f)));
 	out_color.rgb *= vec3(0.5, 0.475, 0.725) * clamp(lf, 0.5, 1.0);
 	out_color.r += lf*lf * 0.175;

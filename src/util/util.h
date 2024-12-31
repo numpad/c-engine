@@ -60,6 +60,7 @@ struct camera;
 // math
 int point_in_rect(float px, float py, float x, float y, float w, float h);
 int drag_in_rect(struct input_drag_s *, float x, float y, float w, float h);
+int drag_clicked_in_rect(struct input_drag_s *, float x, float y, float w, float h);
 int nearest_pow2(int value);
 // angle in radians, segments are clockwise.
 float calculate_angle_segment(float angle, int segments);

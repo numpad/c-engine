@@ -15,6 +15,10 @@ static void load_hextile_models(struct hexmap *);
 // PUBLIC //
 ////////////
 
+int hexmap_is_valid_coord(struct hexmap *map, struct hexcoord coord) {
+	return (coord.x >= 0 && coord.y >= 0 && coord.x < map->w && coord.y < map->h);
+}
+
 void hexmap_init(struct hexmap *map) {
 	map->w = 7;
 	map->h = 9;
@@ -76,6 +80,14 @@ M(4, 8, 7, -1);
 			int x_ne = x_nw + 1;
 			int x_sw = (y % 2 == 0) ? x : x - 1;
 			int x_se = x_sw + 1;
+
+			// TODO: remove. test unwalkable tiles.
+			//       not completely enough, can still move to this tile.
+			int i = x + y * map->w;
+			if (i == 0 || i == 1 || i == 7 || i == 8 || i == 9 || i == 14
+				|| i == 15 || i == 21 || i == 22 || i == 24 || i == 31) {
+				continue;
+			}
 
 			// top: left, right
 			if (y-1 >= 0 && x_nw >= 0)     map->edges[x + y * map->w + edges_generated++ * n_tiles] = x_nw + (y-1) * map->w;
@@ -200,16 +212,21 @@ void hexmap_set_tile_effect(struct hexmap *map, usize index, enum hexmap_tile_ef
 	}
 }
 
-void hexmap_find_path(struct hexmap *map, struct hexcoord start_coord, struct hexcoord goal_coord) {
+enum hexmap_path_result hexmap_find_path(struct hexmap *map, struct hexcoord start_coord, struct hexcoord goal_coord) {
 	assert(map != NULL);
-	assert(start_coord.x >= 0 && start_coord.x < map->w && start_coord.y >= 0 && start_coord.y < map->h);
-	assert(goal_coord.x >= 0 && goal_coord.x < map->w && goal_coord.y >= 0 && goal_coord.y < map->h);
-
-	if (start_coord.x == goal_coord.x && start_coord.y == goal_coord.y) {
-		return;
-	}
 
 	usize map_size = (usize)map->w * map->h;
+	if (!hexmap_is_valid_coord(map, start_coord) || !hexmap_is_valid_coord(map, goal_coord)) {
+		for (usize i = 0; i < map_size; ++i) {
+			map->tiles_flowmap[i] = (usize)-2;
+		}
+		return HEXMAP_PATH_INVALID_COORDINATES;
+	}
+
+	if (start_coord.x == goal_coord.x && start_coord.y == goal_coord.y) {
+		return HEXMAP_PATH_OK;
+	}
+
 	const usize NONE = (usize)-2;
 	const usize NOT_VISITED = (usize)-1;
 	usize start = hexmap_coord_to_index(map, start_coord);
@@ -252,6 +269,8 @@ void hexmap_find_path(struct hexmap *map, struct hexcoord start_coord, struct he
 	for (usize i = 0; i < map_size; ++i) {
 		map->tiles_flowmap[i] = came_from[i];
 	}
+
+	return HEXMAP_PATH_OK;
 }
 
 ////////////
