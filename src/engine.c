@@ -3,9 +3,10 @@
 #include <SDL.h>
 #include <SDL_mixer.h>
 #include <SDL_net.h>
-#define NANOVG_GLES2_IMPLEMENTATION
+#include "gl/opengles3.h"
+#define NANOVG_GLES3_IMPLEMENTATION
 #include <nanovg_gl.h>
-#undef NANOVG_GLES2_IMPLEMENTATION
+#undef NANOVG_GLES3_IMPLEMENTATION
 #include <stb_ds.h>
 #include <cJSON.h>
 #include "scenes/intro.h"
@@ -99,6 +100,7 @@ struct engine *engine_new(int argc, char **argv) {
 			SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
 			engine->window_width, engine->window_height,
 			SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_SHOWN | SDL_WINDOW_ALLOW_HIGHDPI);
+	assert(engine->window != NULL && "Failed creating SDL window");
 	engine->window_id = SDL_GetWindowID(engine->window);
 	engine->on_notify_callbacks = NULL;
 	engine->scene = NULL;
@@ -109,14 +111,6 @@ struct engine *engine_new(int argc, char **argv) {
 	engine->console_visible = 1;
 	engine->freetype = NULL;
 	console_init(engine->console);
-#ifdef DEBUG
-	console_log_ex(engine, CONSOLE_MSG_INFO, 4.0f, "DEBUG BUILD");
-#endif
-
-	if (engine->window == NULL) {
-		SDL_LogError(SDL_LOG_CATEGORY_ERROR, "failed initializing SDL window.\n");
-		return NULL;
-	}
 
 	if (SDLNet_Init() < 0) {
 		SDL_LogError(SDL_LOG_CATEGORY_ERROR, "failed initializing SDL_net.\n");
@@ -133,8 +127,6 @@ struct engine *engine_new(int argc, char **argv) {
 	}
 
 	// Do some OpenGL checks
-	const char* gl_version = (const char*)glGetString(GL_VERSION);
-	console_log(engine, "%s", gl_version);
 	GLint max_draw_buffers;
 	glGetIntegerv(GL_MAX_DRAW_BUFFERS_EXT, &max_draw_buffers);
 	if (max_draw_buffers < 4) {
@@ -142,8 +134,7 @@ struct engine *engine_new(int argc, char **argv) {
 	}
 
 	// libs
-	// TODO: _STENCIL_STROKES is a bit slower, check if needed
-	engine->vg = nvgCreateGLES2(NVG_ANTIALIAS | NVG_STENCIL_STROKES);
+	engine->vg = nvgCreateGLES3(NVG_ANTIALIAS | NVG_STENCIL_STROKES);
 	engine->font_default_bold = nvgCreateFont(engine->vg, "Inter Regular", "res/font/Inter-Bold.ttf");
 	engine->font_monospace = nvgCreateFont(engine->vg, "NotoSansMono", "res/font/NotoSansMono-Regular.ttf");
 
@@ -167,12 +158,12 @@ struct engine *engine_new(int argc, char **argv) {
 	on_window_resized(engine, engine->window_width, engine->window_height);
 
 	// scene
-	if (is_argv_set(argc, argv, "--nosplash")) {
+	if (is_argv_set(argc, argv, "--scene=menu")) {
 		console_log(engine, "Skipping Splash-Screen");
 		struct scene_menu_s *menu = malloc(sizeof(struct scene_menu_s));
 		scene_menu_init(menu, engine);
 		engine_setscene(engine, (struct scene_s *)menu);
-	} else if (is_argv_set(argc, argv, "--start-battle")) {
+	} else if (is_argv_set(argc, argv, "--scene=battle")) {
 		struct scene_battle_s *battle = malloc(sizeof(struct scene_battle_s));
 		scene_battle_init(battle, engine);
 		engine_setscene(engine, (struct scene_s *)battle);
@@ -190,7 +181,7 @@ int engine_destroy(struct engine *engine) {
 	engine_setscene(engine, NULL);
 
 	// other
-	nvgDeleteGLES2(engine->vg);
+	nvgDeleteGLES3(engine->vg);
 	stbds_arrfree(engine->on_notify_callbacks);
 	console_destroy(engine->console);
 	free(engine->console);

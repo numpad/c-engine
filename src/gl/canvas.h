@@ -7,8 +7,11 @@
 typedef struct canvas_s {
 	GLuint fbo;
 	texture_t texture;
+	// Attachments
+	// TODO: only one of these
 	GLuint rbo_depth;
 	GLuint rbo_stencil;
+	GLuint rbo_depth_stencil;
 
 	int pre_bind_viewport_width;
 	int pre_bind_viewport_height;

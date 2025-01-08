@@ -20,9 +20,13 @@ static void draw_fullscreen_triangle(struct gbuffer, struct engine *);
 ////////////////
 
 void gbuffer_init(struct gbuffer *gbuffer, struct engine *engine) {
+	assert(gbuffer != NULL);
+	assert(engine != NULL);
+
 	setup_fullscreen_triangle(gbuffer);
 	int width = engine->window_highdpi_width;
 	int height = engine->window_highdpi_height;
+	assert(width > 0 && height > 0);
 
 	// Setup textures
 	glGenTextures(GBUFFER_TEXTURE_MAX, &gbuffer->textures[0]);

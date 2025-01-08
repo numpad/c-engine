@@ -5,6 +5,7 @@
 #include <stb_perlin.h>
 #include "scene.h"
 #include "engine.h"
+#include "gl/opengles3.h"
 #include "menu.h"
 #include "gui/console.h"
 
@@ -20,6 +21,14 @@ static void intro_load(struct scene_intro_s *scene, struct engine *engine) {
 	scene->time_passed_max = 1.75f;
 
 	scene->logo_image_nvg = nvgCreateImage(engine->vg, "res/image/numpad.png", NVG_IMAGE_NEAREST);
+
+	// Analytics
+#ifdef DEBUG
+	console_log_ex(engine, CONSOLE_MSG_INFO, 4.0f, "Debug Build");
+#endif
+	const char* gl_version = (const char*)glGetString(GL_VERSION);
+	console_log(engine, "%s", gl_version);
+
 }
 
 static void intro_destroy(struct scene_intro_s *scene, struct engine *engine) {

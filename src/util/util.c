@@ -162,6 +162,25 @@ int gl_check_error(const char *file, int line) {
 	return has_error;
 }
 
+int gl_check_framebuffer(const char *file, int line) {
+	// TODO: only in DEBUG
+	GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
+	if (status == GL_FRAMEBUFFER_COMPLETE) {
+		return 0;
+	}
+
+	const char *error = "UNKNOWN FRAMEBUFFER ERROR";
+	switch (status) {
+		case GL_FRAMEBUFFER_INCOMPLETE_ATTACHMENT:          error = "FRAMEBUFFER_INCOMPLETE_ATTACHMENT"; break;
+		case GL_FRAMEBUFFER_INCOMPLETE_MISSING_ATTACHMENT:  error = "FRAMEBUFFER_INCOMPLETE_MISSING_ATTACHMENT"; break;
+		case GL_FRAMEBUFFER_UNSUPPORTED:                    error = "FRAMEBUFFER_UNSUPPORTED"; break;
+	}
+
+	printf("Framebuffer Error %s:%d : %s\n", file, line, error);
+	assert(0 && "Framebuffer error occurred");
+	return 1;
+}
+
 // arg parsing
 
 int is_argv_set(int argc, char **argv, char *arg_to_check) {

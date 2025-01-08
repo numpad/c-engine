@@ -29,6 +29,7 @@ struct camera;
 #define UTIL_FOR(_i, max) for (size_t _i = 0; _i < max; ++_i)
 #define count_of(arr) (sizeof(arr) / sizeof(arr[0]))
 #define GL_CHECK_ERROR() gl_check_error(__FILE__, __LINE__)
+#define GL_CHECK_FRAMEBUFFER() gl_check_framebuffer(__FILE__, __LINE__)
 
 #define UTIL_IS_GL_FILTER_MIPMAP(filter)      \
 	(   (filter) == GL_NEAREST_MIPMAP_NEAREST \
@@ -80,6 +81,7 @@ const char *str_match_bracket(const char *str, size_t len, char open, char close
 
 // gl utils
 int gl_check_error(const char *file, int line);
+int gl_check_framebuffer(const char *file, int line);
 
 // arg parsing
 int is_argv_set(int argc, char **argv, char *arg_to_check);
