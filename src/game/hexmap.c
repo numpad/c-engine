@@ -83,22 +83,31 @@ void hexmap_init(struct hexmap *map) {
 
 			// TODO: remove. test unwalkable tiles.
 			//       not completely enough, can still move to this tile.
-			int i = x + y * map->w;
-			if (i == 0 || i == 1 || i == 7 || i == 8 || i == 9 || i == 14
-				|| i == 15 || i == 21 || i == 22 || i == 24 || i == 31) {
+			struct hexcoord coord = { .x=x, .y=y };
+			if (hexmap_is_tile_obstacle(map, coord)) {
 				continue;
 			}
 
-			// top: left, right
-			if (y-1 >= 0 && x_nw >= 0)     map->edges[x + y * map->w + edges_generated++ * n_tiles] = x_nw + (y-1) * map->w;
-			if (y-1 >= 0 && x_ne < map->w) map->edges[x + y * map->w + edges_generated++ * n_tiles] = x_ne + (y-1) * map->w;
-			// left, right
-			if (x-1 >= 0)     map->edges[x + y * map->w + edges_generated++ * n_tiles] = (x-1) + y * map->w;
-			if (x+1 < map->w) map->edges[x + y * map->w + edges_generated++ * n_tiles] = (x+1) + y * map->w;
-			// bottom: left, right
-			if (y+1 < map->h && x_sw >= 0)     map->edges[x + y * map->w + edges_generated++ * n_tiles] = x_sw + (y+1) * map->w;
-			if (y+1 < map->h && x_se < map->w) map->edges[x + y * map->w + edges_generated++ * n_tiles] = x_se + (y+1) * map->w;
+			// Neighbors
+			struct hexcoord tile_nw = (struct hexcoord){ .x=x_nw, .y=y-1 };
+			struct hexcoord tile_ne = (struct hexcoord){ .x=x_ne, .y=y-1 };
+			struct hexcoord tile_w  = (struct hexcoord){ .x=x-1,  .y=y  };
+			struct hexcoord tile_e  = (struct hexcoord){ .x=x+1,  .y=y  };
+			struct hexcoord tile_sw = (struct hexcoord){ .x=x_sw, .y=y+1 };
+			struct hexcoord tile_se = (struct hexcoord){ .x=x_se, .y=y+1 };
+			int tile_nw_reachable = hexmap_is_valid_coord(map, tile_nw) && !hexmap_is_tile_obstacle(map, tile_nw);
+			int tile_ne_reachable = hexmap_is_valid_coord(map, tile_ne) && !hexmap_is_tile_obstacle(map, tile_ne);
+			int tile_w_reachable  = hexmap_is_valid_coord(map, tile_w)  && !hexmap_is_tile_obstacle(map, tile_w);
+			int tile_e_reachable  = hexmap_is_valid_coord(map, tile_e)  && !hexmap_is_tile_obstacle(map, tile_e);
+			int tile_sw_reachable = hexmap_is_valid_coord(map, tile_sw) && !hexmap_is_tile_obstacle(map, tile_sw);
+			int tile_se_reachable = hexmap_is_valid_coord(map, tile_se) && !hexmap_is_tile_obstacle(map, tile_se);
 
+			if (tile_nw_reachable) map->edges[x + y * map->w + edges_generated++ * n_tiles] = hexmap_coord_to_index(map, tile_nw);
+			if (tile_ne_reachable) map->edges[x + y * map->w + edges_generated++ * n_tiles] = hexmap_coord_to_index(map, tile_ne);
+			if (tile_w_reachable)  map->edges[x + y * map->w + edges_generated++ * n_tiles] = hexmap_coord_to_index(map, tile_w);
+			if (tile_e_reachable)  map->edges[x + y * map->w + edges_generated++ * n_tiles] = hexmap_coord_to_index(map, tile_e);
+			if (tile_sw_reachable) map->edges[x + y * map->w + edges_generated++ * n_tiles] = hexmap_coord_to_index(map, tile_sw);
+			if (tile_se_reachable) map->edges[x + y * map->w + edges_generated++ * n_tiles] = hexmap_coord_to_index(map, tile_se);
 		}
 	}
 }
@@ -239,7 +248,7 @@ enum hexmap_path_result hexmap_find_path(struct hexmap *map, struct hexcoord sta
 		came_from[i] = NOT_VISITED;
 	came_from[start] = NONE;
 
-	int NUMBER_OF_ITERATIONS = 0;
+	usize NUMBER_OF_ITERATIONS = 0;
 	while (frontier.len > 0) {
 		usize current_node_i = RINGBUFFER_CONSUME(frontier);
 
@@ -270,6 +279,14 @@ enum hexmap_path_result hexmap_find_path(struct hexmap *map, struct hexcoord sta
 	}
 
 	return HEXMAP_PATH_OK;
+}
+
+int hexmap_is_tile_obstacle(struct hexmap *map, struct hexcoord coord) {
+	assert(map != NULL);
+	assert(hexmap_is_valid_coord(map, coord));
+	usize i = hexmap_coord_to_index(map, coord);
+	return (i == 0 || i == 1 || i == 7 || i == 8 || i == 9 || i == 14
+			|| i == 15 || i == 21 || i == 22 || i == 24 || i == 31);
 }
 
 ////////////

@@ -186,9 +186,7 @@ static void load(struct scene_battle_s *battle, struct engine *engine) {
 	g_selected_card = 0;
 	g_pickup_next_card = -0.75f; // wait 0.75s before spawning.
 	g_gamestate = g_next_gamestate = GS_BATTLE_BEGIN;
-#ifdef DEBUG
 	g_debug_draw_pathfinder = 1;
-#endif
 
 	g_button_end_turn.x = g_engine->window_width - 150.0f;
 	g_button_end_turn.y = g_engine->window_height - 200.0f;

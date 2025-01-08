@@ -643,6 +643,7 @@ static void on_begin_search_friends(struct engine *engine) {
 
 	// TODO: remove
 	if (engine->gameserver_tcp == NULL) {
+		// TODO: When deployed connect to "gameserver.xn--schl-noa.com". Maybe different URL depending on native/WASM/...?
 		if (engine_gameserver_connect(engine, "localhost") == 0) {
 			console_log_ex(engine, CONSOLE_MSG_SUCCESS, 4.0f, "Connected to server");
 		} else {

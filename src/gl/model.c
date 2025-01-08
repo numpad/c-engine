@@ -52,7 +52,7 @@ int model_init_from_file(model_t *model, const char *path) {
 	}
 
 #ifdef DEBUG
-	print_debug_info(data);
+	//print_debug_info(data);
 #endif
 
 	// setup shader
@@ -102,6 +102,29 @@ int model_init_from_file(model_t *model, const char *path) {
 			texture_init_from_memory(&model->texture0, image_data_len, image_data, &settings);
 		}
 	}
+
+	assert(data->skins_count <= 1);
+	shader_set_uniform_float(&model->shader, "u_is_rigged", 0.0f);
+	if (false)
+		for (cgltf_size skin_index = 0; skin_index < data->skins_count; ++skin_index) {
+			cgltf_skin *skin = &data->skins[skin_index];
+
+			for (uint i = 0; i < skin->joints_count; ++i) {
+				printf("Joint %d: %s\n", i, skin->joints[i]->name);
+				if (skin->joints[i]->has_matrix) printf("  Matrix\n");
+				if (skin->joints[i]->has_scale) printf("  Scale\n");
+				if (skin->joints[i]->has_rotation) printf("  Rotation\n");
+				if (skin->joints[i]->has_translation) printf("  Translation\n");
+			}
+
+			shader_use(&model->shader);
+			cgltf_accessor *accessor = skin->inverse_bind_matrices;
+			GLint u_bone_transforms = glGetUniformLocation(model->shader.program, "u_bone_transforms");
+			glUniformMatrix4fv(u_bone_transforms, accessor->count, GL_FALSE, accessor->buffer_view->buffer->data + accessor->buffer_view->offset);
+			GL_CHECK_ERROR();
+			shader_set_uniform_float(&model->shader, "u_is_rigged", 1.0f);
+			GL_CHECK_ERROR();
+		}
 
 #ifdef DEBUG
 	// Perform some validation: unused attributes, ...
@@ -304,6 +327,7 @@ static void draw_node(model_t *model, cgltf_node *node, mat4 modelmatrix) {
 }
 
 static void print_debug_info(cgltf_data *data) {
+	printf("-------------------\n");
 	// find images
 	for (cgltf_size i = 0; i < data->materials_count; ++i) {
 		printf("Material #%ld:\n", i);
@@ -336,10 +360,10 @@ static void print_debug_info(cgltf_data *data) {
 		cgltf_skin *skin = &data->skins[skin_index];
 		printf("Skin: %s\n", skin->name);
 	}
-	printf("Anim: <... %d animations>\n", data->animations_count);
+	printf("Animations: %ld\n", data->animations_count);
 	for (cgltf_size anim_index = 0; anim_index < data->animations_count; ++anim_index) {
 		cgltf_animation *anim = &data->animations[anim_index];
-		// printf("Anim: %s\n", anim->name);
+		printf(" - %s: %d channels, %d samplers\n", anim->name, anim->channels_count, anim->samplers_count);
 	}
 }
 
