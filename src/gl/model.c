@@ -8,6 +8,7 @@
 #include "util/util.h"
 #include "util/str.h"
 #include "gl/camera.h"
+#include "gl/shader.h"
 
 
 ///////////////
@@ -23,7 +24,7 @@ static const char* accessor_to_component_size_name(cgltf_accessor *access);
 static const char* attribute_type_to_name(cgltf_attribute_type type);
 static GLint accessor_to_component_type(cgltf_accessor *access);
 
-static void draw_node(model_t *model, cgltf_node *node, mat4 modelmatrix);
+static void draw_node(model_t *model, shader_t *shader, cgltf_node *node, mat4 modelmatrix);
 static void print_debug_info(cgltf_data *data);
 
 //////////////
@@ -51,12 +52,11 @@ int model_init_from_file(model_t *model, const char *path) {
 		return 1;
 	}
 
+	model->u_is_rigged = 0;
+
 #ifdef DEBUG
 	//print_debug_info(data);
 #endif
-
-	// setup shader
-	shader_init_from_dir(&model->shader, "res/shader/model/gbuffer_pass/");
 
 	// load buffer data
 	assert(data->buffers_count < count_of(model->vertex_buffers));
@@ -103,66 +103,46 @@ int model_init_from_file(model_t *model, const char *path) {
 		}
 	}
 
-	assert(data->skins_count <= 1);
-	shader_set_uniform_float(&model->shader, "u_is_rigged", 0.0f);
-	if (false)
-		for (cgltf_size skin_index = 0; skin_index < data->skins_count; ++skin_index) {
-			cgltf_skin *skin = &data->skins[skin_index];
-
-			for (uint i = 0; i < skin->joints_count; ++i) {
-				printf("Joint %d: %s\n", i, skin->joints[i]->name);
-				if (skin->joints[i]->has_matrix) printf("  Matrix\n");
-				if (skin->joints[i]->has_scale) printf("  Scale\n");
-				if (skin->joints[i]->has_rotation) printf("  Rotation\n");
-				if (skin->joints[i]->has_translation) printf("  Translation\n");
-			}
-
-			shader_use(&model->shader);
-			cgltf_accessor *accessor = skin->inverse_bind_matrices;
-			GLint u_bone_transforms = glGetUniformLocation(model->shader.program, "u_bone_transforms");
-			glUniformMatrix4fv(u_bone_transforms, accessor->count, GL_FALSE, accessor->buffer_view->buffer->data + accessor->buffer_view->offset);
-			GL_CHECK_ERROR();
-			shader_set_uniform_float(&model->shader, "u_is_rigged", 1.0f);
-			GL_CHECK_ERROR();
-		}
+	assert(data->skins_count <= 1 && "Cannot handle multiple skins...");
 
 #ifdef DEBUG
 	// Perform some validation: unused attributes, ...
-	glUseProgram(model->shader.program);
-	for (cgltf_size mesh_index = 0; mesh_index < model->gltf_data->meshes_count; ++mesh_index) {
-		cgltf_mesh *mesh = &model->gltf_data->meshes[mesh_index];
-		for (cgltf_size prim_index = 0; prim_index < mesh->primitives_count; ++prim_index) {
-			cgltf_primitive *primitive = &mesh->primitives[prim_index];
-			for (cgltf_size attrib_index = 0; attrib_index < primitive->attributes_count; ++attrib_index) {
-				cgltf_attribute *attrib = &primitive->attributes[attrib_index];
-				const GLint location = glGetAttribLocation(model->shader.program, attrib->name);
-				if (location < 0) {
-					fprintf(stderr, "[warn] attribute \"%s\" of type %s (%s) doesn't exist (or is unused).\n",
-							attrib->name, attribute_type_to_name(attrib->type), accessor_to_component_size_name(attrib->data));
-				}
-			}
-		}
-	}
-	glUseProgram(0);
+	//glUseProgram(model->shader.program);
+	//for (cgltf_size mesh_index = 0; mesh_index < model->gltf_data->meshes_count; ++mesh_index) {
+	//	cgltf_mesh *mesh = &model->gltf_data->meshes[mesh_index];
+	//	for (cgltf_size prim_index = 0; prim_index < mesh->primitives_count; ++prim_index) {
+	//		cgltf_primitive *primitive = &mesh->primitives[prim_index];
+	//		for (cgltf_size attrib_index = 0; attrib_index < primitive->attributes_count; ++attrib_index) {
+	//			cgltf_attribute *attrib = &primitive->attributes[attrib_index];
+	//			const GLint location = glGetAttribLocation(model->shader.program, attrib->name);
+	//			if (location < 0) {
+	//				fprintf(stderr, "[warn] attribute \"%s\" of type %s (%s) doesn't exist (or is unused).\n",
+	//						attrib->name, attribute_type_to_name(attrib->type), accessor_to_component_size_name(attrib->data));
+	//			}
+	//		}
+	//	}
+	//}
+	//glUseProgram(0);
 #endif
 
 	return 0;
 }
 
-void model_draw(model_t *model, struct camera *camera, mat4 modelmatrix) {
+void model_draw(model_t *model, shader_t *shader, struct camera *camera, mat4 modelmatrix) {
 	assert(model != NULL);
 
-	glUseProgram(model->shader.program);
+	shader_use(shader);
 	glBindBuffer(GL_ARRAY_BUFFER, model->vertex_buffers[0]);
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, model->index_buffers[0]);
-	shader_set_uniform_texture(&model->shader, "u_diffuse", GL_TEXTURE0, &model->texture0);
-	shader_set_uniform_mat4(&model->shader, "u_projection", (float*)&camera->projection);
-	shader_set_uniform_mat4(&model->shader, "u_view", (float*)&camera->view);
+	shader_set_uniform_texture(shader, "u_diffuse",    GL_TEXTURE0, &model->texture0);
+	shader_set_uniform_mat4(shader,    "u_projection", (float*)&camera->projection);
+	shader_set_uniform_mat4(shader,    "u_view",       (float*)&camera->view);
+	shader_set_uniform_float(shader,   "u_is_rigged",  model->u_is_rigged);
 
 	// TODO: maybe use a stack based approach instead of doing recursion?
 	for (cgltf_size node_index = 0; node_index < model->gltf_data->nodes_count; ++node_index) {
 		cgltf_node *node = &model->gltf_data->nodes[node_index];
-		draw_node(model, node, modelmatrix);
+		draw_node(model, shader, node, modelmatrix);
 	}
 
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
@@ -176,7 +156,6 @@ void model_destroy(model_t *model) {
 	glDeleteBuffers(model->gltf_data->buffers_count, model->vertex_buffers);
 	// TODO: delete index buffers
 	cgltf_free(model->gltf_data);
-	shader_destroy(&model->shader);
 
 	texture_destroy(&model->texture0);
 }
@@ -273,7 +252,7 @@ static GLint accessor_to_component_type(cgltf_accessor *access) {
 	return comp_type;
 }
 
-static void draw_node(model_t *model, cgltf_node *node, mat4 modelmatrix) {
+static void draw_node(model_t *model, shader_t *shader, cgltf_node *node, mat4 modelmatrix) {
 	if (node->mesh != NULL) {
 		cgltf_mesh *mesh = node->mesh;
 
@@ -284,7 +263,7 @@ static void draw_node(model_t *model, cgltf_node *node, mat4 modelmatrix) {
 				cgltf_attribute *attrib = &primitive->attributes[attrib_index];
 				cgltf_accessor *access = attrib->data;
 
-				const int location = glGetAttribLocation(model->shader.program, attrib->name);
+				const int location = glGetAttribLocation(shader->program, attrib->name);
 				if (location < 0) {
 					continue;
 				}
@@ -298,7 +277,7 @@ static void draw_node(model_t *model, cgltf_node *node, mat4 modelmatrix) {
 			mat4 node_transform;
 			cgltf_node_transform_world(node, (float*)node_transform);
 			glm_mat4_mul(modelmatrix, node_transform, node_transform);
-			shader_set_uniform_mat4(&model->shader, "u_model", (float*)node_transform);
+			shader_set_uniform_mat4(shader, "u_model", (float*)node_transform);
 
 			if (primitive->indices != NULL) {
 				glDrawElements(GL_TRIANGLES, primitive->indices->count, accessor_to_component_type(primitive->indices), (void*)primitive->indices->buffer_view->offset);
@@ -309,7 +288,7 @@ static void draw_node(model_t *model, cgltf_node *node, mat4 modelmatrix) {
 			// cleanup
 			for (cgltf_size attrib_index = 0; attrib_index < primitive->attributes_count; ++attrib_index) {
 				char *attrib_name = primitive->attributes[attrib_index].name;
-				const int location = glGetAttribLocation(model->shader.program, attrib_name);
+				const int location = glGetAttribLocation(shader->program, attrib_name);
 				if (location >= 0) {
 					glDisableVertexAttribArray(location);
 				}

@@ -5,6 +5,7 @@
 #include "util/util.h"
 #include "gl/camera.h"
 #include "gl/model.h"
+#include "gl/shader.h"
 
 #define HEXMAP_MAX_EDGES 6
 
@@ -18,8 +19,9 @@ enum hexmap_path_result {
 };
 
 struct hextile {
-	short tile;
-	short rotation;
+	u16 tile;
+	i16 rotation;
+	u8 highlight;
 };
 
 struct hexmap {
@@ -33,6 +35,7 @@ struct hexmap {
 	usize *edges;
 
 	// Rendering
+	shader_t tile_shader;
 	vec2s tile_offsets;
 	model_t models[10];
 
@@ -45,6 +48,7 @@ struct hexcoord {
 	int y;
 };
 
+int hexcoord_equal(struct hexcoord a, struct hexcoord b);
 int hexmap_is_valid_coord(struct hexmap *, struct hexcoord);
 
 void  hexmap_init(struct hexmap *);
@@ -60,7 +64,7 @@ struct hexcoord hexmap_world_position_to_coord(struct hexmap *, vec2s position);
 void  hexmap_set_tile_effect(struct hexmap *, usize index, enum hexmap_tile_effect);
 enum hexmap_path_result hexmap_find_path(struct hexmap *, struct hexcoord start, struct hexcoord goal);
 
-int  hexmap_is_tile_obstacle(struct hexmap *, struct hexcoord);
+int hexmap_is_tile_obstacle(struct hexmap *, struct hexcoord);
 
 #endif
 

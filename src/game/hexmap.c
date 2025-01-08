@@ -3,6 +3,7 @@
 #include <assert.h>
 #include <cglm/cglm.h>
 #include "gl/camera.h"
+#include "gl/shader.h"
 
 
 /////////////
@@ -14,6 +15,10 @@ static void load_hextile_models(struct hexmap *);
 ////////////
 // PUBLIC //
 ////////////
+
+int hexcoord_equal(struct hexcoord a, struct hexcoord b) {
+	return a.x == b.x && a.y == b.y;
+}
 
 int hexmap_is_valid_coord(struct hexmap *map, struct hexcoord coord) {
 	return (coord.x >= 0 && coord.y >= 0 && coord.x < map->w && coord.y < map->h);
@@ -27,6 +32,7 @@ void hexmap_init(struct hexmap *map) {
 	map->tiles_flowmap = malloc(map->w * map->h * sizeof(*map->tiles_flowmap));
 	map->edges = malloc(map->w * map->h * sizeof(*map->edges) * HEXMAP_MAX_EDGES);
 	map->highlight_tile_index = (usize)-1;
+	shader_init_from_dir(&map->tile_shader, "res/shader/model/hexmap_tile/");
 
 	// Make some map
 #define M(x, y, T, R) map->tiles[x + map->w * y].tile = T; map->tiles[x + map->w * y].rotation = R;
@@ -68,7 +74,7 @@ void hexmap_init(struct hexmap *map) {
 	// Generate pathfinding data
 	for (usize i = 0; i < (usize)map->w * map->h; ++i) {
 		for (usize edge_i = 0; edge_i < HEXMAP_MAX_EDGES; ++edge_i) {
-			map->edges[i * edge_i] = (usize)-1;
+			map->edges[i + (i * edge_i)] = (usize)-1;
 		}
 	}
 	usize n_tiles = (usize)map->w * map->h;
@@ -177,10 +183,11 @@ void hexmap_draw(struct hexmap *map, struct camera *camera) {
 	//		mat4 model = GLM_MAT4_IDENTITY_INIT;
 	//		glm_translate(model, (vec3){ wp.x, 40.0f, wp.y });
 	//		glm_scale(model, (vec3){ 100.0f, 100.0f, 100.0f});
-	//		model_draw(&map->models[1], camera, model);
+	//		model_draw(&map->models[1], &map->tile_shader, camera, model);
 	//	}
 	//}
 	
+	shader_use(&map->tile_shader);
 	for (usize i = 0; i < n_tiles; ++i) {
 		vec2s pos = hexmap_index_to_world_position(map, i);
 		
@@ -203,19 +210,23 @@ void hexmap_draw(struct hexmap *map, struct camera *camera) {
 		glm_mat3_transpose(normalMatrix);
 
 		usize model_index = map->tiles[i].tile;
-		shader_set_uniform_mat3(&map->models[model_index].shader, "u_normalMatrix", (float*)normalMatrix);
-		model_draw(&map->models[model_index], camera, model);
+		shader_set_uniform_mat3(&map->tile_shader, "u_normalMatrix", (float*)normalMatrix);
+		shader_set_uniform_float(&map->tile_shader, "u_highlight", map->tiles[i].highlight);
+		model_draw(&map->models[model_index], &map->tile_shader, camera, model);
 		// Draw water for waterless coast tiles
 		if (model_index >= 2 && model_index <= 6) {
-			model_draw(&map->models[1], camera, model);
+			model_draw(&map->models[1], &map->tile_shader, camera, model);
 		}
 	}
 }
 
 void hexmap_set_tile_effect(struct hexmap *map, usize index, enum hexmap_tile_effect effect) {
+	assert(map != NULL);
+	assert(index < (usize)map->w * map->h);
 	switch (effect) {
 	case HEXMAP_TILE_EFFECT_HIGHLIGHT:
 		map->highlight_tile_index = index;
+		map->tiles[index].highlight = 1;
 		break;
 	}
 }

@@ -59,7 +59,7 @@ void shader_destroy(shader_t *shader) {
 
 // use
 void shader_use(shader_t *shader) {
-	glUseProgram(shader->program);
+	glUseProgram(shader == NULL ? 0 : shader->program);
 }
 
 // uniform setters

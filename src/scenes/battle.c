@@ -126,14 +126,14 @@ static int g_handcards_updated;
 static void system_move_cards           (ecs_iter_t *);
 static void system_move_models          (ecs_iter_t *);
 static void system_draw_cards           (ecs_iter_t *);
-static void system_draw_models          (ecs_iter_t *);
+static void system_draw_props          (ecs_iter_t *);
 static void system_draw_board_entities  (ecs_iter_t *);
 static void observer_on_update_handcards(ecs_iter_t *);
 
 ECS_SYSTEM_DECLARE(system_move_cards);
 ECS_SYSTEM_DECLARE(system_move_models);
 ECS_SYSTEM_DECLARE(system_draw_cards);
-ECS_SYSTEM_DECLARE(system_draw_models);
+ECS_SYSTEM_DECLARE(system_draw_props);
 ECS_SYSTEM_DECLARE(system_draw_board_entities);
 
 
@@ -148,6 +148,7 @@ static texture_t             g_cards_texture;
 static texture_t             g_ui_texture;
 static shader_t              g_sprite_shader;
 static shader_t              g_text_shader;
+static shader_t              g_character_model_shader;
 static pipeline_t            g_cards_pipeline;
 static pipeline_t            g_ui_pipeline;
 static pipeline_t            g_text_pipeline;
@@ -239,7 +240,7 @@ static void load(struct scene_battle_s *battle, struct engine *engine) {
 	ECS_SYSTEM_DEFINE(g_world, system_move_cards, 0, c_pos2d, c_handcard);
 	ECS_SYSTEM_DEFINE(g_world, system_move_models, 0, c_pos3d, c_model, c_velocity);
 	ECS_SYSTEM_DEFINE(g_world, system_draw_cards, 0, c_card, ?c_handcard, c_pos2d); _syntax_fix_label:
-	ECS_SYSTEM_DEFINE(g_world, system_draw_models, 0, c_pos3d, c_model);
+	ECS_SYSTEM_DEFINE(g_world, system_draw_props, 0, c_pos3d, c_model);
 	ECS_SYSTEM_DEFINE(g_world, system_draw_board_entities, 0, c_position, c_model);
 
 	g_ordered_handcards = ecs_query(g_world, {
@@ -261,6 +262,9 @@ static void load(struct scene_battle_s *battle, struct engine *engine) {
 		ecs_set(g_world, e, c_position, { .x=3, .y=4 });
 		ecs_set(g_world, e, c_model, { .model_index=3, .scale=450.0f });
 	}
+
+	// Character Shader
+	shader_init_from_dir(&g_character_model_shader, "res/shader/model/gbuffer_pass/");
 
 	// card renderer
 	{
@@ -378,7 +382,7 @@ static void draw(struct scene_battle_s *battle, struct engine *engine) {
 			sprintf(text, "%d", edges_count);
 
 			vec2s wp = hexmap_index_to_world_position(&g_hexmap, i);
-			vec3s p = (vec3s){ wp.x, 0.0f, wp.y };
+			vec3s p = (vec3s){{ wp.x, 0.0f, wp.y }};
 			vec2s screen_pos = world_to_screen_camera(engine, &g_camera, GLM_MAT4_IDENTITY, p);
 
 			nvgBeginPath(vg);
@@ -436,7 +440,7 @@ static void draw(struct scene_battle_s *battle, struct engine *engine) {
 		}
 	} // :g_debug_draw_pathfinder
 
-	ecs_run(g_world, ecs_id(system_draw_models), engine->dt, NULL);
+	ecs_run(g_world, ecs_id(system_draw_props), engine->dt, NULL);
 	ecs_run(g_world, ecs_id(system_draw_board_entities), engine->dt, NULL);
 
 	// Player model
@@ -459,8 +463,8 @@ static void draw(struct scene_battle_s *battle, struct engine *engine) {
 		glm_mat3_transpose(normalMatrix);
 
 		// Draw player
-		shader_set_uniform_mat3(&g_player_model.shader, "u_normalMatrix", (float*)normalMatrix);
-		model_draw(&g_player_model, &g_camera, model);
+		shader_set_uniform_mat3(&g_character_model_shader, "u_normalMatrix", (float*)normalMatrix);
+		model_draw(&g_player_model, &g_character_model_shader, &g_camera, model);
 
 		// Draw enemy
 		glm_mat4_identity(model);
@@ -468,8 +472,8 @@ static void draw(struct scene_battle_s *battle, struct engine *engine) {
 		glm_translate(model, (vec3){ p.x, (fabsf(fminf(0.0f, sinf(g_engine->time_elapsed * 10.0f)))) * 50.0f, p.y });
 		glm_rotate_y(model, glm_rad(30.0f), model);
 		glm_scale_uni(model, scale);
-		shader_set_uniform_mat3(&g_enemy_model.shader, "u_normalMatrix", (float*)normalMatrix);
-		model_draw(&g_enemy_model, &g_camera, model);
+		shader_set_uniform_mat3(&g_character_model_shader, "u_normalMatrix", (float*)normalMatrix);
+		model_draw(&g_enemy_model, &g_character_model_shader, &g_camera, model);
 
 		// Portrait model
 		glm_mat4_identity(model);
@@ -480,7 +484,7 @@ static void draw(struct scene_battle_s *battle, struct engine *engine) {
 		const float pr = engine->window_pixel_ratio;
 		glEnable(GL_SCISSOR_TEST);
 		glScissor(engine->window_width * pr - 85.0f * pr, engine->window_height * pr - 85.0f * pr, 66 * pr, 66 * pr);
-		model_draw(&g_player_model, &g_portrait_camera, model);
+		model_draw(&g_player_model, &g_character_model_shader, &g_portrait_camera, model);
 		glDisable(GL_SCISSOR_TEST);
 
 	}
@@ -581,8 +585,11 @@ static void update_gamestate(enum gamestate_battle state, float dt) {
 			hexmap_set_tile_effect(&g_hexmap, index, HEXMAP_TILE_EFFECT_HIGHLIGHT);
 
 			// Pathfind
-			g_move_goal = hexmap_world_position_to_coord(&g_hexmap, (vec2s){ .x=p.x, .y=p.z });
-			hexmap_find_path(&g_hexmap, g_character_position, g_move_goal);
+			struct hexcoord new_move_goal = hexmap_world_position_to_coord(&g_hexmap, (vec2s){ .x=p.x, .y=p.z });
+			if (hexmap_is_valid_coord(&g_hexmap, new_move_goal) && !hexcoord_equal(g_move_goal, new_move_goal)) {
+				g_move_goal = new_move_goal;
+				hexmap_find_path(&g_hexmap, g_character_position, g_move_goal);
+			}
 		}
 
 		int clicked_on_button_end_turn = drag_clicked_in_rect(drag, g_button_end_turn.x, g_button_end_turn.y, g_button_end_turn.w, g_button_end_turn.h);
@@ -1091,20 +1098,20 @@ static void system_draw_cards(ecs_iter_t *it) {
 	}
 }
 
-static void system_draw_models(ecs_iter_t *it) {
+static void system_draw_props(ecs_iter_t *it) {
 	c_pos3d *pos_it = ecs_field(it, c_pos3d, 1);
 	c_model *models_it = ecs_field(it, c_model, 2);
 
 	for (int i = 0; i < it->count; ++i) {
-		c_pos3d *pos = &pos_it[i];
-		c_model *model = &models_it[i];
+		//c_pos3d *pos = &pos_it[i];
+		//c_model *model = &models_it[i];
 
-		mat4 model_matrix = GLM_MAT4_IDENTITY_INIT;
-		shader_set_uniform_mat3(&g_props_model[model->model_index].shader, "u_normalMatrix", (float*)model_matrix);
-		glm_mat4_identity(model_matrix);
-		glm_translate(model_matrix, pos->raw);
-		glm_scale_uni(model_matrix, model->scale);
-		model_draw(&g_props_model[model->model_index], &g_camera, model_matrix);
+		//mat4 model_matrix = GLM_MAT4_IDENTITY_INIT;
+		//shader_set_uniform_mat3(&g_props_model[model->model_index].shader, "u_normalMatrix", (float*)model_matrix);
+		//glm_mat4_identity(model_matrix);
+		//glm_translate(model_matrix, pos->raw);
+		//glm_scale_uni(model_matrix, model->scale);
+		//model_draw(&g_props_model[model->model_index], & &g_camera, model_matrix);
 	}
 }
 
@@ -1119,11 +1126,11 @@ static void system_draw_board_entities(ecs_iter_t *it) {
 		vec3 world_pos = { offset.x, 0.0f, offset.y };
 
 		mat4 model_matrix = GLM_MAT4_IDENTITY_INIT;
-		shader_set_uniform_mat3(&g_props_model[model->model_index].shader, "u_normalMatrix", (float*)model_matrix);
+		shader_set_uniform_mat3(&g_character_model_shader, "u_normalMatrix", (float*)model_matrix);
 		glm_mat4_identity(model_matrix);
 		glm_translate(model_matrix, world_pos);
 		glm_scale_uni(model_matrix, model->scale);
-		model_draw(&g_props_model[model->model_index], &g_camera, model_matrix);
+		model_draw(&g_props_model[model->model_index], &g_character_model_shader, &g_camera, model_matrix);
 	}
 }
 
