@@ -5,12 +5,19 @@
 #include "gl/texture.h"
 
 void canvas_init(canvas_t *cv, int width, int height, canvas_config_t *config) {
+	assert(cv != NULL);
+	assert(width > 0 && height > 0);
 	cv->pre_bind_viewport_width = 0;
 	cv->pre_bind_viewport_height = 0;
 
 	// generate texture
 	struct texture_settings_s settings = TEXTURE_SETTINGS_INIT;
 	texture_init(&cv->texture, width, height, &settings);
+
+	// generate framebuffer
+	glGenFramebuffers(1, &cv->fbo);
+	glBindFramebuffer(GL_FRAMEBUFFER, cv->fbo);
+	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, cv->texture.texture, 0);
 
 	// generate stencil
 	if (config && config->has_stencil) {
@@ -27,11 +34,6 @@ void canvas_init(canvas_t *cv, int width, int height, canvas_config_t *config) {
 		glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT16, width, height);
 		glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, cv->rbo_depth);
 	}
-
-	// generate framebuffer
-	glGenFramebuffers(1, &cv->fbo);
-	glBindFramebuffer(GL_FRAMEBUFFER, cv->fbo);
-	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, cv->texture.texture, 0);
 
 	int status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
 	assert(status == GL_FRAMEBUFFER_COMPLETE);

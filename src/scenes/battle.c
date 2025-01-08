@@ -60,18 +60,18 @@ typedef struct event_info {
 // private functions
 //
 
-static void recalculate_handcards(void);
+static void         recalculate_handcards(void);
 static ecs_entity_t find_closest_handcard(float x, float y, float max_distance);
-static int order_handcards(ecs_entity_t e1, const void *data1, ecs_entity_t e2, const void *data2);
-static void draw_ui(pipeline_t *pipeline);
-static void on_game_event(enum event_type, event_info_t *);
-static void on_game_event_play_card(event_info_t *info);
-static int count_handcards(void);
-static void interact_with_handcards(struct input_drag_s *drag);
-static int add_cards_to_hand(float dt);
-static void spawn_random_card(void);
-static void update_gamestate(enum gamestate_battle state, float dt);
-static int gamestate_changed(enum gamestate_battle old_state, enum gamestate_battle new_state);
+static int          order_handcards(ecs_entity_t e1, const void *data1, ecs_entity_t e2, const void *data2);
+static void         draw_ui(pipeline_t *pipeline);
+static void         on_game_event(enum event_type, event_info_t *);
+static void         on_game_event_play_card(event_info_t *info);
+static int          count_handcards(void);
+static void         interact_with_handcards(struct input_drag_s *drag);
+static int          add_cards_to_hand(float dt);
+static void         spawn_random_card(void);
+static void         update_gamestate(enum gamestate_battle state, float dt);
+static int          gamestate_changed(enum gamestate_battle old_state, enum gamestate_battle new_state);
 
 //
 // ecs
@@ -157,7 +157,6 @@ static fontatlas_t           g_card_font;
 static model_t               g_player_model;
 static model_t               g_enemy_model;
 static model_t               g_props_model[4];
-static model_t               g_hextiles[6];
 static float                 g_pickup_next_card;
 static struct camera         g_camera;
 static struct camera         g_portrait_camera;

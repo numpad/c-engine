@@ -109,12 +109,6 @@ struct engine *engine_new(int argc, char **argv) {
 	engine->console_visible = 1;
 	engine->freetype = NULL;
 	console_init(engine->console);
-	if (argc > 1 && strcmp(argv[1], "source=homescreen") == 0) {
-		console_log(engine, "From Homscreen!");
-	} else {
-		console_log(engine, "%s, %s", argv[0], argv[1]);
-	}
-
 #ifdef DEBUG
 	console_log_ex(engine, CONSOLE_MSG_INFO, 4.0f, "DEBUG BUILD");
 #endif
@@ -168,22 +162,25 @@ struct engine *engine_new(int argc, char **argv) {
 		console_log_ex(engine, CONSOLE_MSG_ERROR, 4.0f, "Failed initializing FreeType");
 	}
 
+	// camera
+	glm_mat4_identity(engine->u_view);
+	on_window_resized(engine, engine->window_width, engine->window_height);
+
 	// scene
 	if (is_argv_set(argc, argv, "--nosplash")) {
 		console_log(engine, "Skipping Splash-Screen");
 		struct scene_menu_s *menu = malloc(sizeof(struct scene_menu_s));
 		scene_menu_init(menu, engine);
 		engine_setscene(engine, (struct scene_s *)menu);
+	} else if (is_argv_set(argc, argv, "--start-battle")) {
+		struct scene_battle_s *battle = malloc(sizeof(struct scene_battle_s));
+		scene_battle_init(battle, engine);
+		engine_setscene(engine, (struct scene_s *)battle);
 	} else {
 		struct scene_intro_s *intro = malloc(sizeof(struct scene_intro_s));
 		scene_intro_init(intro, engine);
 		engine_setscene(engine, (struct scene_s *)intro);
 	}
-
-
-	// camera
-	glm_mat4_identity(engine->u_view);
-	on_window_resized(engine, engine->window_width, engine->window_height);
 
 	return engine;
 }
