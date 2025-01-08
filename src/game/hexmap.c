@@ -54,7 +54,7 @@ void hexmap_init(struct hexmap *map) {
 	M(4, 5, 8, -2);
 	M(4, 6, 8,  1);
 	M(4, 7, 8, -2);
-M(4, 8, 7, -1);
+	M(4, 8, 7, -1);
 #undef M
 
 	// precomputed
@@ -104,20 +104,19 @@ M(4, 8, 7, -1);
 }
 
 void hexmap_destroy(struct hexmap *map) {
+	assert(map != NULL);
 	free(map->tiles);
 }
 
-vec2s hexmap_coord_to_world_position(struct hexmap *map, int x, int y) {
-	assert(x >= 0 && x < map->w);
-	assert(y >= 0 && y < map->h);
-
-	return hexmap_index_to_world_position(map, x + y * map->w);
+vec2s hexmap_coord_to_world_position(struct hexmap *map, struct hexcoord coord) {
+	assert(map != NULL);
+	assert(hexmap_is_valid_coord(map, coord));
+	return hexmap_index_to_world_position(map, coord.x + coord.y * map->w);
 }
 
 usize hexmap_coord_to_index(struct hexmap *map, struct hexcoord coord) {
 	assert(map != NULL);
-	assert(coord.x >= 0 && coord.x < map->w);
-	assert(coord.y >= 0 && coord.y < map->h);
+	assert(hexmap_is_valid_coord(map, coord));
 	return coord.x + coord.y * map->w;
 }
 

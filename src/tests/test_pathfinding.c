@@ -2,8 +2,6 @@
 
 #include "util/util.h"
 
-//#include "game/pathfinder.h"
-
 struct edge {
 	float weight;
 	struct node *to;

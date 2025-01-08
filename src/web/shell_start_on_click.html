@@ -134,6 +134,12 @@
 
 				});
 			}
+
+			// When launching from homescreen, start immediately.
+			const url_params = new URLSearchParams(window.location.search);
+			if (url_params.get('source') == 'homescreen') {
+				onRunApp();
+			}
 		</script>
 		<!-- {{{ SCRIPT }}} -->
 

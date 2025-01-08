@@ -47,6 +47,10 @@ TARGET = cengine
 ifeq ($(CC), emcc)
 	TARGET = cengine.html
 	BIN = bin/emcc/
+	SHELL_FILE = src/web/shell_start_on_click.html
+
+	# Start immediately:
+	#SHELL_FILE = src/web/source_homescreen.html
 
 	# TODO: Let's not add everything to CFLAGS, some should only be used when linking.
 	# TODO: Does `-simd128 -msse2` reduce the devices we can target?
@@ -64,7 +68,7 @@ ifeq ($(CC), emcc)
 			  -sEXPORTED_FUNCTIONS=_main,_on_siggoback                        \
 			  -sMODULARIZE=1 -sEXPORT_NAME="MyApp"                            \
 			  --preload-file res                                              \
-			  --shell-file src/web/shell_start_on_click.html                  \
+			  --shell-file $(SHELL_FILE)                                      \
 			  -msimd128 -msse2
 endif
 

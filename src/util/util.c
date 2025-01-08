@@ -20,6 +20,7 @@ int drag_in_rect(struct input_drag_s *drag, float x, float y, float w, float h) 
 	return (drag->state == INPUT_DRAG_BEGIN || drag->state == INPUT_DRAG_IN_PROGRESS || drag->state == INPUT_DRAG_END)
 	        && (drag->x >= x && drag->y >= y && drag->x <= x + w && drag->y <= y + h);
 }
+
 int drag_clicked_in_rect(struct input_drag_s *drag, float x, float y, float w, float h) {
 	int click_done = (drag->state == INPUT_DRAG_END);
 	int started_in_rect = (drag->begin_x >= x && drag->begin_x <= x + w

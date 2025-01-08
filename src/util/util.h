@@ -43,6 +43,11 @@ struct camera;
 	struct { usize head, len, capacity; TYPE *items; } NAME = {  \
 		.head=0, .len=0, .capacity=CAPACITY, .items = (TYPE *)__buffer_##NAME };
 
+#define STATIC_RINGBUFFER(TYPE, NAME, CAPACITY) \
+	static TYPE __buffer_##NAME[CAPACITY];                              \
+	static struct { usize head, len, capacity; TYPE *items; } NAME = {  \
+		.head=0, .len=0, .capacity=CAPACITY, .items = (TYPE *)__buffer_##NAME };
+
 #define RINGBUFFER_APPEND(NAME, VALUE) \
 	do {                                                              \
 		NAME.items[(NAME.head + NAME.len) % NAME.capacity] = (VALUE); \

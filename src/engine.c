@@ -91,11 +91,14 @@ struct engine *engine_new(int argc, char **argv) {
 	SDL_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES, 0);
 
 	struct engine *engine = calloc(1, sizeof(struct engine));
-	engine->window_width = 550;
-	engine->window_height = 800;
+	engine->window_width = 420;
+	engine->window_height = 834;
 	engine->time_elapsed = 0.0f;
 	engine->dt = 0.0f;
-	engine->window = SDL_CreateWindow("Demo - c-engine", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, engine->window_width, engine->window_height, SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_SHOWN | SDL_WINDOW_ALLOW_HIGHDPI);
+	engine->window = SDL_CreateWindow("Demo - c-engine",
+			SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
+			engine->window_width, engine->window_height,
+			SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_SHOWN | SDL_WINDOW_ALLOW_HIGHDPI);
 	engine->window_id = SDL_GetWindowID(engine->window);
 	engine->on_notify_callbacks = NULL;
 	engine->scene = NULL;
@@ -106,6 +109,11 @@ struct engine *engine_new(int argc, char **argv) {
 	engine->console_visible = 1;
 	engine->freetype = NULL;
 	console_init(engine->console);
+	if (argc > 1 && strcmp(argv[1], "source=homescreen") == 0) {
+		console_log(engine, "From Homscreen!");
+	} else {
+		console_log(engine, "%s, %s", argv[0], argv[1]);
+	}
 
 #ifdef DEBUG
 	console_log_ex(engine, CONSOLE_MSG_INFO, 4.0f, "DEBUG BUILD");
@@ -397,30 +405,46 @@ void engine_draw(struct engine *engine) {
 	}
 
 #ifdef DEBUG
-	// display debug_info
-	char debug_info[128];
-	snprintf(debug_info, 128, "dt=%.1fms / FPS=%.0f [%.1fs total]", engine->dt * 1000.0f, 1.0 / engine->dt, engine->time_elapsed);
-	//printf("dt = %.5fms / %.0f (Total: %.2f)\n", dt, 1.0 / dt, engine->time_elapsed);
+	STATIC_RINGBUFFER(float, delta_times, 10);
+	RINGBUFFER_APPEND(delta_times, engine->dt);
+	static float avg = -1.0f;
 
-	vec4 bounds;
-	nvgTextAlign(engine->vg, NVG_ALIGN_TOP | NVG_ALIGN_LEFT);
-	nvgFontFaceId(engine->vg, engine->font_monospace);
-	nvgFontBlur(engine->vg, 0.0f);
-	nvgFontSize(engine->vg, 12.0f);
-	nvgTextLetterSpacing(engine->vg, 1.0f);
-	nvgTextLineHeight(engine->vg, 1.0f);
-	nvgTextBounds(engine->vg, 0.0f, 0.0f, debug_info, NULL, bounds);
-	
-	// bg
-	nvgBeginPath(engine->vg);
-	nvgRect(engine->vg, engine->window_width - bounds[2], engine->window_height - bounds[3], bounds[2], bounds[3]);
-	nvgFillColor(engine->vg, nvgRGBAf(0, 0, 0, 0.65f));
-	nvgFill(engine->vg);
+	if (delta_times.len == delta_times.capacity) {
+		float sum = 0.0f;
+		while (delta_times.len > 0) {
+			sum += RINGBUFFER_CONSUME(delta_times);
+		}
+		avg = sum / delta_times.capacity;
+	}
 
-	// text
-	nvgBeginPath(engine->vg);
-	nvgFillColor(engine->vg, nvgRGBf(1.0f, 1.0f, 0.0f));
-	nvgText(engine->vg, engine->window_width - bounds[2], engine->window_height - bounds[3], debug_info, NULL);
+	if (avg >= 0.0f) {
+
+		// display debug_info
+		char debug_info[128];
+		//snprintf(debug_info, 128, "dt=%.1fms / FPS=%.0f [%.1fs total]", engine->dt * 1000.0f, 1.0 / engine->dt, engine->time_elapsed);
+		snprintf(debug_info, 128, "dt=%.1fms / FPS=%.0f [%.1fs total]", avg * 1000.0f, 1.0 / avg, engine->time_elapsed);
+		//printf("dt = %.5fms / %.0f (Total: %.2f)\n", dt, 1.0 / dt, engine->time_elapsed);
+
+		vec4 bounds;
+		nvgTextAlign(engine->vg, NVG_ALIGN_TOP | NVG_ALIGN_LEFT);
+		nvgFontFaceId(engine->vg, engine->font_monospace);
+		nvgFontBlur(engine->vg, 0.0f);
+		nvgFontSize(engine->vg, 12.0f);
+		nvgTextLetterSpacing(engine->vg, 1.0f);
+		nvgTextLineHeight(engine->vg, 1.0f);
+		nvgTextBounds(engine->vg, 0.0f, 0.0f, debug_info, NULL, bounds);
+
+		// bg
+		nvgBeginPath(engine->vg);
+		nvgRect(engine->vg, engine->window_width - bounds[2], engine->window_height - bounds[3], bounds[2], bounds[3]);
+		nvgFillColor(engine->vg, nvgRGBAf(0, 0, 0, 0.65f));
+		nvgFill(engine->vg);
+
+		// text
+		nvgBeginPath(engine->vg);
+		nvgFillColor(engine->vg, nvgRGBf(1.0f, 1.0f, 0.0f));
+		nvgText(engine->vg, engine->window_width - bounds[2], engine->window_height - bounds[3], debug_info, NULL);
+	}
 #endif
 
 	nvgEndFrame(engine->vg);

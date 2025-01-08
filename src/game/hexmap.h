@@ -52,7 +52,7 @@ void  hexmap_destroy(struct hexmap *);
 void  hexmap_draw(struct hexmap *, struct camera *);
 
 vec2s hexmap_index_to_world_position(struct hexmap *, usize index);
-vec2s hexmap_coord_to_world_position(struct hexmap *, int x, int y);
+vec2s hexmap_coord_to_world_position(struct hexmap *, struct hexcoord);
 usize hexmap_coord_to_index(struct hexmap *, struct hexcoord);
 usize hexmap_world_position_to_index(struct hexmap *, vec2s position);
 struct hexcoord hexmap_world_position_to_coord(struct hexmap *, vec2s position);

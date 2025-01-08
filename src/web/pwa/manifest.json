@@ -1,11 +1,11 @@
 {
-	"name": "Soil Soldiers - A deckbuilding rogue-like.",
-	"short_name": "Soil Soldiers",
+	"name": "cengine Demo - A deckbuilding rogue-like.",
+	"short_name": "cengine Demo",
 	"description": "A deckbuilding rogue-like game to play alone or with friends.",
-	"start_url": "/cengine.html",
+	"start_url": "/cengine.html?source=homescreen",
 	"display": "standalone",
 	"background_color": "#aabbff",
-	"theme_color": "#ffff00",
+	"theme_color": "#03172E",
 	"orientation": "portrait",
 	"categories": [ "games", "entertainment" ],
 	"screenshots": [

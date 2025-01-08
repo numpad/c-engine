@@ -1,0 +1,82 @@
+ <!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1.0">
+		<meta http-equiv="X-UA-Compatible" content="chrome=1, IE=edge">
+		<title>cengine Demo</title>
+		<style>
+			.fullwindow {
+				position: absolute;
+				top: 0px;
+				left: 0px;
+				margin: 0px;
+				border: 0;
+				width: 100%;
+				height: 100%;
+				overflow: hidden;
+				display: block;
+			}
+		</style>
+	</head>
+	<body>
+		<canvas class="fullwindow" id="canvas" oncontextmenu="event.preventDefault()"/>
+		<script type="text/javascript" src="cengine.js"></script>
+		<script>
+			/** Called when starting the game */
+			function onRunApp() {
+				const canvas = document.querySelector('#canvas');
+				let reload_sig = null;
+
+				// Hijack back button
+				history.pushState(null, document.title, location.href);
+				window.addEventListener('popstate', (event) => {
+					// TODO: notify engine that back was pressed. Let engine
+					//	   decide if we should prevent the event.
+					reload_sig();
+					history.pushState(null, document.title, location.href);
+				});
+
+				// Start the game
+				MyApp({
+					canvas,
+					arguments: window.location.search.substr(1).split('&'),
+					setStatus: (text) => {
+						// Show download progress.
+						const matchProgress = text.match(/Downloading data... \((\d+)\/(\d+)\)/);
+						if (matchProgress) {
+							const loaded = parseInt(matchProgress[1]);
+							const loaded_max = parseInt(matchProgress[2]);
+							const percentage_loaded = (loaded / loaded_max);
+							// TODO: Do we really want to do nothing here?
+							//       I hope we don't need progress bar here...
+						}
+					},
+				}).then((Module) => {
+					reload_sig = Module.cwrap('on_siggoback', 'number', []);
+
+					window.dispatchEvent(new Event('resize'));
+					// Handle this natively in config:
+					// canvas.requestFullscreen({ navigationUI: 'hide' })
+				});
+			}
+
+			// Start immediately
+			onRunApp();
+		</script>
+		<!-- {{{ SCRIPT }}} -->
+
+		<!-- PWA -->
+		<script>
+			if ('serviceWorker' in navigator) {
+				navigator.serviceWorker.register('service-worker.js')
+					.then(registration => {
+						console.log("Service Worker registration successfull: ", registration.scope);
+					})
+					.catch(error => {
+						console.warn("Service Worker registration failed: ", error);
+					});
+			}
+		</script>
+	</body>
+</html>

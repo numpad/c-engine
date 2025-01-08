@@ -26,7 +26,6 @@
 #include "gui/console.h"
 #include "scenes/menu.h"
 #include "util/util.h"
-#include "game/pathfinder.h"
 
 //
 // structs & enums
@@ -81,11 +80,12 @@ static int gamestate_changed(enum gamestate_battle old_state, enum gamestate_bat
 // components
 
 // pos
-typedef vec2s c_pos2d;
-typedef vec3s c_pos3d;
+typedef vec2s  c_pos2d;
+typedef vec3s  c_pos3d;
+typedef struct hexcoord c_position;
 
 typedef struct {
-	int model_index;
+	int   model_index;
 	float scale;
 } c_model;
 
@@ -112,6 +112,7 @@ typedef struct {
 
 ECS_COMPONENT_DECLARE(c_pos2d);
 ECS_COMPONENT_DECLARE(c_pos3d);
+ECS_COMPONENT_DECLARE(c_position);
 ECS_COMPONENT_DECLARE(c_card);
 ECS_COMPONENT_DECLARE(c_handcard);
 ECS_COMPONENT_DECLARE(c_model);
@@ -126,12 +127,14 @@ static void system_move_cards           (ecs_iter_t *);
 static void system_move_models          (ecs_iter_t *);
 static void system_draw_cards           (ecs_iter_t *);
 static void system_draw_models          (ecs_iter_t *);
+static void system_draw_board_entities  (ecs_iter_t *);
 static void observer_on_update_handcards(ecs_iter_t *);
 
 ECS_SYSTEM_DECLARE(system_move_cards);
 ECS_SYSTEM_DECLARE(system_move_models);
 ECS_SYSTEM_DECLARE(system_draw_cards);
 ECS_SYSTEM_DECLARE(system_draw_models);
+ECS_SYSTEM_DECLARE(system_draw_board_entities);
 
 
 //
@@ -165,6 +168,8 @@ static enum gamestate_battle g_next_gamestate;
 static struct { float x, y, w, h; } g_button_end_turn;
 static struct hexcoord       g_move_goal;
 
+// debug
+static int g_debug_draw_pathfinder;
 
 // testing
 static Mix_Chunk    *g_place_card_sfx;
@@ -182,6 +187,9 @@ static void load(struct scene_battle_s *battle, struct engine *engine) {
 	g_selected_card = 0;
 	g_pickup_next_card = -0.75f; // wait 0.75s before spawning.
 	g_gamestate = g_next_gamestate = GS_BATTLE_BEGIN;
+#ifdef DEBUG
+	g_debug_draw_pathfinder = 1;
+#endif
 
 	g_button_end_turn.x = g_engine->window_width - 150.0f;
 	g_button_end_turn.y = g_engine->window_height - 200.0f;
@@ -226,6 +234,7 @@ static void load(struct scene_battle_s *battle, struct engine *engine) {
 	g_world = ecs_init();
 	ECS_COMPONENT_DEFINE(g_world, c_pos2d);
 	ECS_COMPONENT_DEFINE(g_world, c_pos3d);
+	ECS_COMPONENT_DEFINE(g_world, c_position);
 	ECS_COMPONENT_DEFINE(g_world, c_card);
 	ECS_COMPONENT_DEFINE(g_world, c_handcard);
 	ECS_COMPONENT_DEFINE(g_world, c_model);
@@ -234,6 +243,7 @@ static void load(struct scene_battle_s *battle, struct engine *engine) {
 	ECS_SYSTEM_DEFINE(g_world, system_move_models, 0, c_pos3d, c_model, c_velocity);
 	ECS_SYSTEM_DEFINE(g_world, system_draw_cards, 0, c_card, ?c_handcard, c_pos2d); _syntax_fix_label:
 	ECS_SYSTEM_DEFINE(g_world, system_draw_models, 0, c_pos3d, c_model);
+	ECS_SYSTEM_DEFINE(g_world, system_draw_board_entities, 0, c_position, c_model);
 
 	g_ordered_handcards = ecs_query(g_world, {
 		.filter.terms = { {ecs_id(c_card)}, {ecs_id(c_handcard)} },
@@ -251,7 +261,7 @@ static void load(struct scene_battle_s *battle, struct engine *engine) {
 	{
 		vec2s p = hexmap_index_to_world_position(&g_hexmap, 3 + 4 * g_hexmap.w);
 		ecs_entity_t e = ecs_new_id(g_world);
-		ecs_set(g_world, e, c_pos3d, { .x=p.x, .y=0.0f, .z=p.y });
+		ecs_set(g_world, e, c_position, { .x=3, .y=4 });
 		ecs_set(g_world, e, c_model, { .model_index=3, .scale=450.0f });
 	}
 
@@ -357,82 +367,85 @@ static void draw(struct scene_battle_s *battle, struct engine *engine) {
 	glEnable(GL_DEPTH_TEST);
 	hexmap_draw(&g_hexmap, &g_camera);
 
-	// draw neighbors & edges
-	NVGcontext *vg = engine->vg;
-	usize n_tiles = (usize)g_hexmap.w * g_hexmap.h;
-	for (usize i = 0; i < n_tiles; ++i) {
-		int edges_count = 0;
-		while (g_hexmap.edges[i + n_tiles * edges_count] < n_tiles && edges_count < 6) {
-			++edges_count;
-		}
-		float pct = edges_count / 6.0f;
-		char text[32];
-		sprintf(text, "%d", edges_count);
+	if (g_debug_draw_pathfinder) {
+		// draw neighbors & edges
+		NVGcontext *vg = engine->vg;
+		usize n_tiles = (usize)g_hexmap.w * g_hexmap.h;
+		for (usize i = 0; i < n_tiles; ++i) {
+			int edges_count = 0;
+			while (g_hexmap.edges[i + n_tiles * edges_count] < n_tiles && edges_count < 6) {
+				++edges_count;
+			}
+			float pct = edges_count / 6.0f;
+			char text[32];
+			sprintf(text, "%d", edges_count);
 
-		vec2s wp = hexmap_index_to_world_position(&g_hexmap, i);
-		vec3s p = (vec3s){ wp.x, 0.0f, wp.y };
-		vec2s screen_pos = world_to_screen_camera(engine, &g_camera, GLM_MAT4_IDENTITY, p);
+			vec2s wp = hexmap_index_to_world_position(&g_hexmap, i);
+			vec3s p = (vec3s){ wp.x, 0.0f, wp.y };
+			vec2s screen_pos = world_to_screen_camera(engine, &g_camera, GLM_MAT4_IDENTITY, p);
 
-		nvgBeginPath(vg);
-		nvgFillColor(vg, nvgRGBf(1.0f - pct, pct, 0.0f));
-		nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
-		nvgFontSize(vg, 12.0f);
-		nvgText(vg, screen_pos.x, screen_pos.y, text, NULL);
+			nvgBeginPath(vg);
+			nvgFillColor(vg, nvgRGBf(1.0f - pct, pct, 0.0f));
+			nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+			nvgFontSize(vg, 12.0f);
+			nvgText(vg, screen_pos.x, screen_pos.y, text, NULL);
 
-		nvgBeginPath(vg);
-		nvgFontSize(vg, 9.0f);
-		nvgFillColor(vg, nvgRGBf(1, 1, 1));
-		char index_text[32];
-		sprintf(index_text, "#%u", i);
-		nvgText(vg, screen_pos.x + 10.0f, screen_pos.y + 10.0f, index_text, NULL);
+			nvgBeginPath(vg);
+			nvgFontSize(vg, 9.0f);
+			nvgFillColor(vg, nvgRGBf(1, 1, 1));
+			char index_text[32];
+			sprintf(index_text, "#%u", i);
+			nvgText(vg, screen_pos.x + 10.0f, screen_pos.y + 10.0f, index_text, NULL);
 
-		nvgStrokeWidth(vg, 3.0f);
-		nvgStrokeColor(vg, nvgRGB(128, 0, 128));
-		if (i == g_hexmap.highlight_tile_index) {
-			for (int j = 0; j < edges_count; ++j) {
-				usize neighbor = g_hexmap.edges[i + n_tiles * j];
-				vec2s nwp = hexmap_index_to_world_position(&g_hexmap, neighbor);
-				vec3s np = (vec3s){ nwp.x, 0.0f, nwp.y };
-				vec2s n_screen_pos = world_to_screen_camera(engine, &g_camera, GLM_MAT4_IDENTITY, np);
+			nvgStrokeWidth(vg, 3.0f);
+			nvgStrokeColor(vg, nvgRGB(128, 0, 128));
+			if (i == g_hexmap.highlight_tile_index) {
+				for (int j = 0; j < edges_count; ++j) {
+					usize neighbor = g_hexmap.edges[i + n_tiles * j];
+					vec2s nwp = hexmap_index_to_world_position(&g_hexmap, neighbor);
+					vec3s np = (vec3s){{ nwp.x, 0.0f, nwp.y }};
+					vec2s n_screen_pos = world_to_screen_camera(engine, &g_camera, GLM_MAT4_IDENTITY, np);
 
-				nvgBeginPath(vg);
-				nvgMoveTo(vg, screen_pos.x, screen_pos.y);
-				nvgLineTo(vg, n_screen_pos.x, n_screen_pos.y);
-				nvgStroke(vg);
+					nvgBeginPath(vg);
+					nvgMoveTo(vg, screen_pos.x, screen_pos.y);
+					nvgLineTo(vg, n_screen_pos.x, n_screen_pos.y);
+					nvgStroke(vg);
+				}
 			}
 		}
-	}
 
-	if (g_hexmap.highlight_tile_index < n_tiles) {
-		nvgBeginPath(vg);
+		if (g_hexmap.highlight_tile_index < n_tiles) {
+			nvgBeginPath(vg);
 
-		usize index = hexmap_coord_to_index(&g_hexmap, g_move_goal);
-		{
-			vec2s wp = hexmap_index_to_world_position(&g_hexmap, index);
-			vec3s p = (vec3s){{ wp.x, 0.0f, wp.y }};
-			vec2s screen_pos = world_to_screen_camera(engine, &g_camera, GLM_MAT4_IDENTITY, p);
-			nvgMoveTo(vg, screen_pos.x, screen_pos.y);
+			usize index = hexmap_coord_to_index(&g_hexmap, g_move_goal);
+			{
+				vec2s wp = hexmap_index_to_world_position(&g_hexmap, index);
+				vec3s p = (vec3s){{ wp.x, 0.0f, wp.y }};
+				vec2s screen_pos = world_to_screen_camera(engine, &g_camera, GLM_MAT4_IDENTITY, p);
+				nvgMoveTo(vg, screen_pos.x, screen_pos.y);
+			}
+
+			while (index < n_tiles) {
+				vec2s wp = hexmap_index_to_world_position(&g_hexmap, index);
+				vec3s p = (vec3s){{ wp.x, 0.0f, wp.y }};
+				vec2s screen_pos = world_to_screen_camera(engine, &g_camera, GLM_MAT4_IDENTITY, p);
+				nvgLineTo(vg, screen_pos.x, screen_pos.y);
+				index = g_hexmap.tiles_flowmap[index];
+			}
+
+			nvgStrokeWidth(vg, 6.0);
+			nvgStrokeColor(vg, nvgRGB(255, 70, 80));
+			nvgStroke(vg);
 		}
-
-		while (index < n_tiles) {
-			vec2s wp = hexmap_index_to_world_position(&g_hexmap, index);
-			vec3s p = (vec3s){{ wp.x, 0.0f, wp.y }};
-			vec2s screen_pos = world_to_screen_camera(engine, &g_camera, GLM_MAT4_IDENTITY, p);
-			nvgLineTo(vg, screen_pos.x, screen_pos.y);
-			index = g_hexmap.tiles_flowmap[index];
-		}
-
-		nvgStrokeWidth(vg, 6.0);
-		nvgStrokeColor(vg, nvgRGB(255, 70, 80));
-		nvgStroke(vg);
-	}
+	} // :g_debug_draw_pathfinder
 
 	ecs_run(g_world, ecs_id(system_draw_models), engine->dt, NULL);
+	ecs_run(g_world, ecs_id(system_draw_board_entities), engine->dt, NULL);
 
 	// Player model
 	{
 		// calculate matrices
-		vec2s pos = hexmap_coord_to_world_position(&g_hexmap, g_character_position.x, g_character_position.y);
+		vec2s pos = hexmap_coord_to_world_position(&g_hexmap, g_character_position);
 		vec3 world_pos = {pos.x, 0.0f, pos.y};
 		mat4 model = GLM_MAT4_IDENTITY_INIT;
 		glm_translate(model, world_pos);
@@ -583,6 +596,7 @@ static void update_gamestate(enum gamestate_battle state, float dt) {
 	}
 	case GS_TURN_PLAYER_END:
 		g_next_gamestate = GS_ROUND_END;
+		g_debug_draw_pathfinder = 0;
 		break;
 	case GS_TURN_BEGIN:
 		break;
@@ -1092,6 +1106,25 @@ static void system_draw_models(ecs_iter_t *it) {
 		shader_set_uniform_mat3(&g_props_model[model->model_index].shader, "u_normalMatrix", (float*)model_matrix);
 		glm_mat4_identity(model_matrix);
 		glm_translate(model_matrix, pos->raw);
+		glm_scale_uni(model_matrix, model->scale);
+		model_draw(&g_props_model[model->model_index], &g_camera, model_matrix);
+	}
+}
+
+static void system_draw_board_entities(ecs_iter_t *it) {
+	c_position *it_positions = ecs_field(it, c_position, 1);
+	c_model    *it_models    = ecs_field(it, c_model,    2);
+	for (int i = 0; i < it->count; ++i) {
+		c_position pos = it_positions[i];
+		c_model *model = &it_models[i];
+
+		vec2s offset = hexmap_coord_to_world_position(&g_hexmap, pos);
+		vec3 world_pos = { offset.x, 0.0f, offset.y };
+
+		mat4 model_matrix = GLM_MAT4_IDENTITY_INIT;
+		shader_set_uniform_mat3(&g_props_model[model->model_index].shader, "u_normalMatrix", (float*)model_matrix);
+		glm_mat4_identity(model_matrix);
+		glm_translate(model_matrix, world_pos);
 		glm_scale_uni(model_matrix, model->scale);
 		model_draw(&g_props_model[model->model_index], &g_camera, model_matrix);
 	}
