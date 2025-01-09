@@ -226,6 +226,7 @@ void hexmap_draw(struct hexmap *map, struct camera *camera) {
 		usize model_index = map->tiles[i].tile;
 		shader_set_uniform_mat3(&map->tile_shader, "u_normalMatrix", (float*)normalMatrix);
 		shader_set_uniform_float(&map->tile_shader, "u_highlight", map->tiles[i].highlight);
+		shader_set_uniform_vec3(&map->tile_shader, "u_tile_coord", (vec3){ i % map->w, (int)(i / (float)map->w), i });
 		model_draw(&map->models[model_index], &map->tile_shader, camera, model);
 		// Draw water for waterless coast tiles
 		if (model_index >= 2 && model_index <= 6) {
