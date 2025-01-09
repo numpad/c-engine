@@ -4,7 +4,7 @@
 #include <cglm/cglm.h>
 #include "gl/camera.h"
 #include "gl/shader.h"
-
+#include "engine.h"
 
 /////////////
 // PRIVATE //
@@ -21,10 +21,16 @@ int hexcoord_equal(struct hexcoord a, struct hexcoord b) {
 }
 
 int hexmap_is_valid_coord(struct hexmap *map, struct hexcoord coord) {
+	assert(map != NULL);
 	return (coord.x >= 0 && coord.y >= 0 && coord.x < map->w && coord.y < map->h);
 }
 
-void hexmap_init(struct hexmap *map) {
+int hexmap_is_valid_index(struct hexmap *map, usize index) {
+	assert(map != NULL);
+	return (index < (usize)map->w * map->h);
+}
+
+void hexmap_init(struct hexmap *map, struct engine *engine) {
 	map->w = 7;
 	map->h = 9;
 	map->tilesize = 115.0f;
@@ -33,6 +39,7 @@ void hexmap_init(struct hexmap *map) {
 	map->edges = malloc(map->w * map->h * sizeof(*map->edges) * HEXMAP_MAX_EDGES);
 	map->highlight_tile_index = (usize)-1;
 	shader_init_from_dir(&map->tile_shader, "res/shader/model/hexmap_tile/");
+	shader_set_uniform_buffer(&map->tile_shader, "Global", &engine->shader_global_ubo);
 
 	// Make some map
 #define M(x, y, T, R) map->tiles[x + map->w * y].tile = T; map->tiles[x + map->w * y].rotation = R;
@@ -62,6 +69,13 @@ void hexmap_init(struct hexmap *map) {
 	M(4, 7, 8, -2);
 	M(4, 8, 7, -1);
 #undef M
+	hexmap_set_tile_effect(map, (struct hexcoord){ .x=2,   .y=5  }, HEXMAP_TILE_EFFECT_MOVEABLE_AREA);
+	hexmap_set_tile_effect(map, (struct hexcoord){ .x=2-1, .y=5-1  }, HEXMAP_TILE_EFFECT_MOVEABLE_AREA);
+	hexmap_set_tile_effect(map, (struct hexcoord){ .x=2+0, .y=5-1  }, HEXMAP_TILE_EFFECT_MOVEABLE_AREA);
+	hexmap_set_tile_effect(map, (struct hexcoord){ .x=2-1, .y=5+0  }, HEXMAP_TILE_EFFECT_MOVEABLE_AREA);
+	hexmap_set_tile_effect(map, (struct hexcoord){ .x=2+1, .y=5+0  }, HEXMAP_TILE_EFFECT_MOVEABLE_AREA);
+	hexmap_set_tile_effect(map, (struct hexcoord){ .x=2-1, .y=5+1  }, HEXMAP_TILE_EFFECT_MOVEABLE_AREA);
+	hexmap_set_tile_effect(map, (struct hexcoord){ .x=2+0, .y=5+1  }, HEXMAP_TILE_EFFECT_MOVEABLE_AREA);
 
 	// precomputed
 	map->tile_offsets = (vec2s){
@@ -220,13 +234,22 @@ void hexmap_draw(struct hexmap *map, struct camera *camera) {
 	}
 }
 
-void hexmap_set_tile_effect(struct hexmap *map, usize index, enum hexmap_tile_effect effect) {
+void hexmap_set_tile_effect(struct hexmap *map, struct hexcoord coord, enum hexmap_tile_effect effect) {
 	assert(map != NULL);
-	assert(index < (usize)map->w * map->h);
+	assert(hexmap_is_valid_coord(map, coord) && "Invalid coord");
+
+	usize index = hexmap_coord_to_index(map, coord);
 	switch (effect) {
 	case HEXMAP_TILE_EFFECT_HIGHLIGHT:
+		// unset previous highlight
+		if (hexmap_is_valid_index(map, map->highlight_tile_index)) {
+			map->tiles[map->highlight_tile_index].highlight = 0;
+		}
 		map->highlight_tile_index = index;
 		map->tiles[index].highlight = 1;
+		break;
+	case HEXMAP_TILE_EFFECT_MOVEABLE_AREA:
+		map->tiles[index].highlight = 2;
 		break;
 	}
 }

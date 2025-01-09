@@ -9,10 +9,12 @@
 #undef NANOVG_GLES3_IMPLEMENTATION
 #include <stb_ds.h>
 #include <cJSON.h>
+#include "event.h"
 #include "scenes/intro.h"
 #include "scenes/menu.h"
 #include "scenes/battle.h"
 #include "scenes/brickbreaker.h"
+#include "gl/shader.h"
 #include "gui/console.h"
 #include "net/message.h"
 #include "util/util.h"
@@ -117,6 +119,7 @@ struct engine *engine_new(int argc, char **argv) {
 		return NULL;
 	}
 
+	// OpenGL
 	engine->gl_ctx = SDL_GL_CreateContext(engine->window);
 	if (SDL_GL_MakeCurrent(engine->window, engine->gl_ctx) != 0) {
 		console_log_ex(engine, CONSOLE_MSG_ERROR, 4.0f, "Failed making context current: %s", SDL_GetError());
@@ -131,6 +134,11 @@ struct engine *engine_new(int argc, char **argv) {
 	glGetIntegerv(GL_MAX_DRAW_BUFFERS_EXT, &max_draw_buffers);
 	if (max_draw_buffers < 4) {
 		console_log_ex(engine, CONSOLE_MSG_ERROR, 8.0f, "Not enough draw_buffers: %d", max_draw_buffers);
+	}
+	GLint max_ubo_components;
+	glGetIntegerv(GL_MAX_VERTEX_UNIFORM_COMPONENTS, &max_ubo_components);
+	if (max_ubo_components < 16) {
+		console_log_ex(engine, CONSOLE_MSG_ERROR, 8.0f, "Not enough UBO components: %d", max_ubo_components);
 	}
 
 	// libs
@@ -156,6 +164,10 @@ struct engine *engine_new(int argc, char **argv) {
 	// camera
 	glm_mat4_identity(engine->u_view);
 	on_window_resized(engine, engine->window_width, engine->window_height);
+	// Shader global data
+	engine->shader_global_data.time_elapsed = 0.9f;
+	shader_ubo_init(&engine->shader_global_ubo, sizeof(engine->shader_global_data),
+			(const void *)&engine->shader_global_data);
 
 	// scene
 	if (is_argv_set(argc, argv, "--scene=menu")) {
@@ -193,6 +205,7 @@ int engine_destroy(struct engine *engine) {
 	// windowing
 	SDL_DestroyWindow(engine->window);
 	SDL_GL_DeleteContext(engine->gl_ctx);
+	shader_ubo_destroy(&engine->shader_global_ubo);
 
 	// net
 	engine_gameserver_disconnect(engine);
@@ -385,6 +398,11 @@ void engine_draw(struct engine *engine) {
 	
 	nvgBeginFrame(engine->vg, engine->window_width, engine->window_height, engine->window_pixel_ratio);
 
+	// update shader global data
+	engine->shader_global_data.time_elapsed = engine->time_elapsed;
+	shader_ubo_update(&engine->shader_global_ubo, sizeof(engine->shader_global_data),
+			(const void *)&engine->shader_global_data);
+
 	// run scene
 	scene_draw(engine->scene, engine);
 
@@ -504,9 +522,10 @@ static void engine_poll_events(struct engine *engine) {
 			case SDL_KEYDOWN:
 			case SDL_KEYUP:
 			{
-				SDL_KeyboardEvent *key_event = (SDL_KeyboardEvent *)&event;
+				SDL_KeyboardEvent key_event = event.key;
+				scene_on_callback(engine->scene, engine, (struct engine_event){ .type = ENGINE_EVENT_KEY, .data.key = key_event });
 				// TODO: pop scene stack, or other data structure?
-				if (key_event->type == SDL_KEYUP && key_event->keysym.sym == SDLK_ESCAPE) {
+				if (key_event.type == SDL_KEYUP && key_event.keysym.sym == SDLK_ESCAPE) {
 					// TODO: open menu first / send event to scene?
 					on_siggoback();
 				}

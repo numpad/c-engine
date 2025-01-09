@@ -12,12 +12,14 @@ in vec2 TEXCOORD_0;
 
 out vec2 v_texcoord0;
 out vec3 v_normal;
-out vec3 v_position;
+out vec3 v_local_position;
+out vec3 v_world_position;
 
 void main() {
 	v_texcoord0 = TEXCOORD_0;
 	v_normal = normalize(u_normalMatrix * NORMAL);
-	v_position = (u_model * vec4(POSITION, 1.0)).xyz;
+	v_local_position = POSITION;
+	v_world_position = (u_model * vec4(POSITION, 1.0)).xyz;
 
 	gl_Position = u_projection * u_view * u_model * vec4(POSITION, 1.0);
 }

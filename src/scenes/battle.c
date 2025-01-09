@@ -216,7 +216,7 @@ static void load(struct scene_battle_s *battle, struct engine *engine) {
 		assert(load_fun_error == 0);
 	}
 
-	hexmap_init(&g_hexmap);
+	hexmap_init(&g_hexmap, g_engine);
 	g_character_position = (struct hexcoord){ .x=2, .y=5 };
 
 	// initialize camera
@@ -521,8 +521,15 @@ void on_callback(struct scene_battle_s *battle, struct engine *engine, struct en
 		camera_resize_projection(&g_portrait_camera, engine->window_width, engine->window_height);
 		g_handcards_updated = 1;
 		break;
+	case ENGINE_EVENT_KEY:
+		if (event.data.key.type == SDL_KEYDOWN && event.data.key.repeat == 0 && event.data.key.keysym.sym == SDLK_r) {
+			console_log_ex(engine, CONSOLE_MSG_SUCCESS, 0.5f, "shader reloaded");
+			shader_reload_source(&g_hexmap.tile_shader);
+		}
+		break;
 	case ENGINE_EVENT_MAX:
-		assert("unhandled event!");
+	default:
+		assert(0 && "unhandled event!");
 		break;
 	};
 }
@@ -579,14 +586,11 @@ static void update_gamestate(enum gamestate_battle state, float dt) {
 		int is_dragging_card = (g_selected_card != 0 && ecs_is_valid(g_world, g_selected_card));
 
 		if (!is_on_button_end_turn && !is_dragging_card && (drag->state != INPUT_DRAG_NONE)) {
-			// Highlight
+			// Highlight & pathfind
 			vec3s p = screen_to_world(g_engine->window_width, g_engine->window_height, g_camera.projection, g_camera.view, g_engine->input_drag.x, g_engine->input_drag.y);
-			usize index = hexmap_world_position_to_index(&g_hexmap, (vec2s){ .x=p.x, .y=p.z });
-			hexmap_set_tile_effect(&g_hexmap, index, HEXMAP_TILE_EFFECT_HIGHLIGHT);
-
-			// Pathfind
 			struct hexcoord new_move_goal = hexmap_world_position_to_coord(&g_hexmap, (vec2s){ .x=p.x, .y=p.z });
 			if (hexmap_is_valid_coord(&g_hexmap, new_move_goal) && !hexcoord_equal(g_move_goal, new_move_goal)) {
+				hexmap_set_tile_effect(&g_hexmap, new_move_goal, HEXMAP_TILE_EFFECT_HIGHLIGHT);
 				g_move_goal = new_move_goal;
 				hexmap_find_path(&g_hexmap, g_character_position, g_move_goal);
 			}

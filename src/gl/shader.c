@@ -4,10 +4,11 @@
 #include <string.h>
 #include <assert.h>
 #include <SDL.h>
-#include <SDL_opengles2.h>
+#include "gl/opengles3.h"
 #include "gl/texture.h"
 #include "util/str.h"
 #include "util/fs.h"
+#include "util/util.h"
 
 //
 // private funtions
@@ -22,22 +23,69 @@ static GLint uniform_location(shader_t *shader, const char *uniform_name);
 // public api
 //
 
+// UBOs - uniform buffer objects
+void shader_ubo_init(struct shader_ubo *ubo, usize data_len, const void *data) {
+	assert(ubo != NULL);
+	assert(data != NULL && data_len > 0);
+
+	// buffer
+	GLuint uniform_buffer;
+	glGenBuffers(1, &uniform_buffer);
+	glBindBuffer(GL_UNIFORM_BUFFER, uniform_buffer);
+	glBufferData(GL_UNIFORM_BUFFER, data_len, data, GL_DYNAMIC_DRAW);
+	glBindBuffer(GL_UNIFORM_BUFFER, 0);
+	// binding point
+	GLuint binding_point = 0;
+	glBindBufferBase(GL_UNIFORM_BUFFER, binding_point, uniform_buffer);
+	//glBindBufferRange(GL_UNIFORM_BUFFER, 0, uniform_buffer, 0, data_len);
+	GL_CHECK_ERROR();
+
+	ubo->buffer_size = data_len;
+	ubo->buffer = uniform_buffer;
+	ubo->binding_point = binding_point;
+}
+
+void shader_ubo_destroy(struct shader_ubo *ubo) {
+	assert(ubo != NULL);
+	glDeleteBuffers(1, &ubo->buffer);
+	ubo->buffer = 0;
+	ubo->buffer_size = 0;
+	ubo->binding_point = 0;
+}
+
+void shader_ubo_update(struct shader_ubo *ubo, usize data_len, const void *data) {
+	assert(ubo != NULL);
+	assert(data != NULL && data_len > 0);
+	// TODO: We only handle updating the whole block,
+	//       fine for now as this would overcomplicate the API.
+	//       Maybe add partial updates in the future, and
+	//       resize the buffer when data_len increases.
+	assert(data_len == ubo->buffer_size);
+	glBindBuffer(GL_UNIFORM_BUFFER, ubo->buffer);
+	glBufferSubData(GL_UNIFORM_BUFFER, 0, data_len, data);
+	glBindBuffer(GL_UNIFORM_BUFFER, 0);
+}
+
 // init & destroy
 
 void shader_init(shader_t *shader, const char *vert_path, const char *frag_path) {
+	assert(shader != NULL);
+	assert(vert_path != NULL);
+	assert(frag_path != NULL);
+	shader->source.vert_path = str_copy(vert_path);
+	shader->source.frag_path = str_copy(frag_path);
 	int vs = shader_stage_new(GL_VERTEX_SHADER, vert_path);
 	int fs = shader_stage_new(GL_FRAGMENT_SHADER, frag_path);
 	assert(vs >= 0);
 	assert(fs >= 0);
-	
 	shader->program = shader_program_new(vs, fs);
 	assert(shader->program >= 0);
 }
 
 void shader_init_from_dir(shader_t *program, const char *dir_path) {
 	const int len = strlen(dir_path) + 13; // Enough room to store "fragment.glsl" and "vertex.glsl".
-	char vert_path[len + 1];
-	char frag_path[len + 1];
+	const char vert_path[len + 1];
+	const char frag_path[len + 1];
 	assert(0 == str_path_replace_filename(dir_path, "vertex.glsl", len + 1, vert_path));
 	assert(0 == str_path_replace_filename(dir_path, "fragment.glsl", len + 1, frag_path));
 
@@ -55,6 +103,20 @@ void shader_destroy(shader_t *shader) {
 
 	glDeleteProgram(shader->program);
 	shader->program = 0;
+
+	str_free(shader->source.vert_path);
+	str_free(shader->source.frag_path);
+	shader->source.vert_path = 0;
+	shader->source.frag_path = 0;
+}
+
+void shader_reload_source(shader_t *shader) {
+	char *vert_path = str_copy(shader->source.vert_path);
+	char *frag_path = str_copy(shader->source.frag_path);
+	shader_destroy(shader);
+	shader_init(shader, vert_path, frag_path);
+	str_free(vert_path);
+	str_free(frag_path);
 }
 
 // use
@@ -63,6 +125,16 @@ void shader_use(shader_t *shader) {
 }
 
 // uniform setters
+
+void shader_set_uniform_buffer(shader_t *shader, const char *uniform_block_name, struct shader_ubo *ubo) {
+	assert(shader != NULL);
+	assert(uniform_block_name != NULL);
+	assert(ubo != NULL);
+
+	GLuint ubo_index = glGetUniformBlockIndex(shader->program, uniform_block_name);
+	GL_CHECK_ERROR();
+	glUniformBlockBinding(shader->program, ubo_index, ubo->binding_point);
+}
 
 void shader_set_uniform_texture(shader_t *shader, const char *uniform_name, GLenum texture_unit, texture_t *texture) {
 	assert(texture_unit >= GL_TEXTURE0 && texture_unit < GL_MAX_COMBINED_TEXTURE_IMAGE_UNITS);
