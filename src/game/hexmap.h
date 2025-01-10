@@ -2,6 +2,7 @@
 #define HEXMAP_H
 
 #include <cglm/vec2.h>
+#include <cglm/vec3.h>
 #include "util/util.h"
 #include "gl/camera.h"
 #include "gl/model.h"
@@ -57,7 +58,7 @@ int hexmap_is_valid_index(struct hexmap *, usize index);
 
 void  hexmap_init(struct hexmap *, struct engine *);
 void  hexmap_destroy(struct hexmap *);
-void  hexmap_draw(struct hexmap *, struct camera *);
+void  hexmap_draw(struct hexmap *, struct camera *, vec3 player_pos);
 
 vec2s hexmap_index_to_world_position(struct hexmap *, usize index);
 vec2s hexmap_coord_to_world_position(struct hexmap *, struct hexcoord);

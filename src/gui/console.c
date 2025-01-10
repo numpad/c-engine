@@ -155,7 +155,7 @@ void console_log(struct engine *engine, const char *fmt, ...) {
 	console_add_message(engine->console, (struct console_msg_s){
 		.message = buf,
 		.created_at = engine->time_elapsed,
-		.duration = {1.0f, 4.0f, 0.4f},
+		.duration = {1.0f, 2.0f, 0.4f},
 		.animation = 0.0f,
 		.type = CONSOLE_MSG_DEFAULT,
 		.state = CONSOLE_MSG_STATE_IN

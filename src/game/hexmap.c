@@ -186,7 +186,7 @@ struct hexcoord hexmap_world_position_to_coord(struct hexmap *map, vec2s positio
 	return (struct hexcoord){ .x=x, .y=y };
 }
 
-void hexmap_draw(struct hexmap *map, struct camera *camera) {
+void hexmap_draw(struct hexmap *map, struct camera *camera, vec3 player_pos) {
 	usize n_tiles = map->w * map->h;
 
 	// Highlight tile.
@@ -211,22 +211,18 @@ void hexmap_draw(struct hexmap *map, struct camera *camera) {
 		glm_rotate_y(model, map->tiles[i].rotation * glm_rad(60.0f), model);
 		glm_scale(model, (vec3){ 100.0f, 100.0f, 100.0f});
 
-		// Scale highlighted tile.
-		if (i == map->highlight_tile_index) {
-			glm_scale_uni(model, 0.8f);
-		}
-
 		mat4 modelView = GLM_MAT4_IDENTITY_INIT;
 		glm_mat4_mul(camera->view, model, modelView);
 		mat3 normalMatrix = GLM_MAT3_IDENTITY_INIT;
 		glm_mat4_pick3(modelView, normalMatrix);
 		glm_mat3_inv(normalMatrix, normalMatrix);
 		glm_mat3_transpose(normalMatrix);
-
-		usize model_index = map->tiles[i].tile;
+		// Set uniforms
 		shader_set_uniform_mat3(&map->tile_shader, "u_normalMatrix", (float*)normalMatrix);
 		shader_set_uniform_float(&map->tile_shader, "u_highlight", map->tiles[i].highlight);
-		shader_set_uniform_vec3(&map->tile_shader, "u_tile_coord", (vec3){ i % map->w, (int)(i / (float)map->w), i });
+		shader_set_uniform_vec3(&map->tile_shader, "u_player_world_pos", player_pos);
+
+		usize model_index = map->tiles[i].tile;
 		model_draw(&map->models[model_index], &map->tile_shader, camera, model);
 		// Draw water for waterless coast tiles
 		if (model_index >= 2 && model_index <= 6) {

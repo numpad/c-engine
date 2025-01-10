@@ -366,7 +366,8 @@ static void draw(struct scene_battle_s *battle, struct engine *engine) {
 	gbuffer_clear(g_gbuffer);
 
 	glEnable(GL_DEPTH_TEST);
-	hexmap_draw(&g_hexmap, &g_camera);
+	vec2s player_pos = hexmap_coord_to_world_position(&g_hexmap, g_character_position);
+	hexmap_draw(&g_hexmap, &g_camera, (vec3){player_pos.x, 0.0f, player_pos.y});
 
 	if (g_debug_draw_pathfinder) {
 		// draw neighbors & edges
