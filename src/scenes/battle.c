@@ -43,13 +43,13 @@ enum card_selection {
 };
 
 enum gamestate_battle {
-	GS_BATTLE_BEGIN    ,
-	GS_ROUND_BEGIN     ,
-	GS_TURN_BEGIN      , GS_TURN_PLAYER_BEGIN,
-	GS_TURN_IN_PROGRESS, GS_TURN_PLAYER_IN_PROGRESS,
-	GS_TURN_END        , GS_TURN_PLAYER_END,
-	GS_ROUND_END       ,
-	GS_BATTLE_END      ,
+	GS_BATTLE_BEGIN           ,
+	GS_ROUND_BEGIN            ,
+	GS_TURN_ENTITY_BEGIN      , GS_TURN_PLAYER_BEGIN,
+	GS_TURN_ENTITY_IN_PROGRESS, GS_TURN_PLAYER_IN_PROGRESS,
+	GS_TURN_ENTITY_END        , GS_TURN_PLAYER_END,
+	GS_ROUND_END              ,
+	GS_BATTLE_END             ,
 };
 
 typedef struct event_info {
@@ -257,7 +257,6 @@ static void load(struct scene_battle_s *battle, struct engine *engine) {
 
 	// Add some models
 	{
-		vec2s p = hexmap_index_to_world_position(&g_hexmap, 3 + 4 * g_hexmap.w);
 		ecs_entity_t e = ecs_new_id(g_world);
 		ecs_set(g_world, e, c_position, { .x=3, .y=4 });
 		ecs_set(g_world, e, c_model, { .model_index=3, .scale=450.0f });
@@ -562,6 +561,7 @@ static int gamestate_changed(enum gamestate_battle old_state, enum gamestate_bat
 }
 
 static void update_gamestate(enum gamestate_battle state, float dt) {
+	static float turn_entity_start_time;
 	switch (state) {
 	case GS_BATTLE_BEGIN:
 		g_next_gamestate = GS_ROUND_BEGIN;
@@ -605,18 +605,24 @@ static void update_gamestate(enum gamestate_battle state, float dt) {
 		break;
 	}
 	case GS_TURN_PLAYER_END:
-		g_next_gamestate = GS_ROUND_END;
 		g_debug_draw_pathfinder = 0;
 		if (hexmap_is_valid_coord(&g_hexmap, g_move_goal)) {
 			hexmap_set_tile_effect(&g_hexmap, g_move_goal, HEXMAP_TILE_EFFECT_NONE);
 		}
 		g_move_goal.x = -1;
+		g_next_gamestate = GS_TURN_ENTITY_BEGIN;
 		break;
-	case GS_TURN_BEGIN:
+	case GS_TURN_ENTITY_BEGIN:
+		turn_entity_start_time = g_engine->time_elapsed;
+		g_next_gamestate = GS_TURN_ENTITY_IN_PROGRESS;
 		break;
-	case GS_TURN_IN_PROGRESS:
+	case GS_TURN_ENTITY_IN_PROGRESS:
+		if (g_engine->time_elapsed - turn_entity_start_time > 3.0f) {
+			g_next_gamestate = GS_TURN_ENTITY_END;
+		}
 		break;
-	case GS_TURN_END:
+	case GS_TURN_ENTITY_END:
+		g_next_gamestate = GS_ROUND_END;
 		break;
 	case GS_ROUND_END:
 		g_next_gamestate = GS_ROUND_BEGIN;
