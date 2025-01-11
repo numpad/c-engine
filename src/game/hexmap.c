@@ -10,6 +10,7 @@
 // PRIVATE //
 /////////////
 
+static const usize NO_EDGE = (usize)-1;
 static const usize NODE_NONE = (usize)-2;
 static const usize NODE_NOT_VISITED = (usize)-1;
 
@@ -73,7 +74,7 @@ void hexmap_init(struct hexmap *map, struct engine *engine) {
 	M(4, 7, 8, -2);
 	M(4, 8, 7, -1);
 #undef M
-	hexmap_set_tile_effect(map, (struct hexcoord){ .x=2,   .y=5  }, HEXMAP_TILE_EFFECT_MOVEABLE_AREA);
+	hexmap_set_tile_effect(map, (struct hexcoord){ .x=2,   .y=5    }, HEXMAP_TILE_EFFECT_MOVEABLE_AREA);
 	hexmap_set_tile_effect(map, (struct hexcoord){ .x=2-1, .y=5-1  }, HEXMAP_TILE_EFFECT_MOVEABLE_AREA);
 	hexmap_set_tile_effect(map, (struct hexcoord){ .x=2+0, .y=5-1  }, HEXMAP_TILE_EFFECT_MOVEABLE_AREA);
 	hexmap_set_tile_effect(map, (struct hexcoord){ .x=2-1, .y=5+0  }, HEXMAP_TILE_EFFECT_MOVEABLE_AREA);
@@ -90,16 +91,12 @@ void hexmap_init(struct hexmap *map, struct engine *engine) {
 	load_hextile_models(map);
 
 	// Generate pathfinding data
-	for (usize i = 0; i < (usize)map->w * map->h; ++i) {
-		for (usize edge_i = 0; edge_i < HEXMAP_MAX_EDGES; ++edge_i) {
-			map->edges[i + (i * edge_i)] = (usize)-1;
-		}
+	for (usize i = 0; i < (usize)map->w * map->h * HEXMAP_MAX_EDGES; ++i) {
+		map->edges[i] = NO_EDGE;
 	}
 	usize n_tiles = (usize)map->w * map->h;
 	for (int y = 0; y < map->h; ++y) {
 		for (int x = 0; x < map->w; ++x) {
-			uint edges_generated = 0;
-
 			int x_nw = (y % 2 == 0) ? x : x - 1;
 			int x_ne = x_nw + 1;
 			int x_sw = (y % 2 == 0) ? x : x - 1;
@@ -115,8 +112,8 @@ void hexmap_init(struct hexmap *map, struct engine *engine) {
 			// Neighbors
 			struct hexcoord tile_nw = (struct hexcoord){ .x=x_nw, .y=y-1 };
 			struct hexcoord tile_ne = (struct hexcoord){ .x=x_ne, .y=y-1 };
-			struct hexcoord tile_w  = (struct hexcoord){ .x=x-1,  .y=y  };
-			struct hexcoord tile_e  = (struct hexcoord){ .x=x+1,  .y=y  };
+			struct hexcoord tile_w  = (struct hexcoord){ .x=x-1,  .y=y   };
+			struct hexcoord tile_e  = (struct hexcoord){ .x=x+1,  .y=y   };
 			struct hexcoord tile_sw = (struct hexcoord){ .x=x_sw, .y=y+1 };
 			struct hexcoord tile_se = (struct hexcoord){ .x=x_se, .y=y+1 };
 			int tile_nw_reachable = hexmap_is_valid_coord(map, tile_nw) && !hexmap_is_tile_obstacle(map, tile_nw);
@@ -126,6 +123,7 @@ void hexmap_init(struct hexmap *map, struct engine *engine) {
 			int tile_sw_reachable = hexmap_is_valid_coord(map, tile_sw) && !hexmap_is_tile_obstacle(map, tile_sw);
 			int tile_se_reachable = hexmap_is_valid_coord(map, tile_se) && !hexmap_is_tile_obstacle(map, tile_se);
 
+			uint edges_generated = 0;
 			if (tile_nw_reachable) map->edges[x + y * map->w + edges_generated++ * n_tiles] = hexmap_coord_to_index(map, tile_nw);
 			if (tile_ne_reachable) map->edges[x + y * map->w + edges_generated++ * n_tiles] = hexmap_coord_to_index(map, tile_ne);
 			if (tile_w_reachable)  map->edges[x + y * map->w + edges_generated++ * n_tiles] = hexmap_coord_to_index(map, tile_w);

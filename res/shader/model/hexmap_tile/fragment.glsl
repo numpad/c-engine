@@ -39,13 +39,13 @@ vec3 sdgHexagon(vec2 p, float r) {
 
 vec3 highlight_walkable_area(vec3 diffuse, vec2 p) {
 	p = vec2(-p.y, p.x); // rotate by 90° because pointy-top hexagons.
+	vec3 highlight_color = vec3(0.31, 0.31, 0.77);
 	// TODO: Floating point inaccuarcies with "time", might look bad after some time.
 	float t = mod(time, PI);
-	float f = abs(sin(t * 2.0) * 0.5);
-	float d = sdgHexagon(p, 2.0 + (t + f) * 0.1).x;
-	float alpha = max(sin(20.0 * d) * f, 0.1);
-	vec3 blue = vec3(0.21, 0.24, 0.95);
-	return mix(diffuse, blue, alpha);
+	float f = abs(sin(t * 1.0) * 0.5);
+	float d = sdgHexagon(p, 0.5 + (t*2.0 + f) * 0.1).x;
+	float alpha = max(sin(17.0 * d) * f, 0.1);
+	return mix(diffuse, highlight_color, alpha);
 }
 
 void main() {

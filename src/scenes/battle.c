@@ -524,8 +524,9 @@ void on_callback(struct scene_battle_s *battle, struct engine *engine, struct en
 		break;
 	case ENGINE_EVENT_KEY:
 		if (event.data.key.type == SDL_KEYDOWN && event.data.key.repeat == 0 && event.data.key.keysym.sym == SDLK_r) {
-			console_log_ex(engine, CONSOLE_MSG_SUCCESS, 0.5f, "shader reloaded");
+			console_log_ex(engine, CONSOLE_MSG_SUCCESS, 0.5f, "2 shaders reloaded.");
 			shader_reload_source(&g_hexmap.tile_shader);
+			shader_reload_source(&g_gbuffer.shader);
 		}
 		break;
 	case ENGINE_EVENT_MAX:
@@ -586,7 +587,7 @@ static void update_gamestate(enum gamestate_battle state, float dt) {
 		int is_on_button_end_turn = drag_in_rect(drag, g_button_end_turn.x, g_button_end_turn.y, g_button_end_turn.w, g_button_end_turn.h);
 		int is_dragging_card = (g_selected_card != 0 && ecs_is_valid(g_world, g_selected_card));
 
-		if (!is_on_button_end_turn && !is_dragging_card && (drag->state != INPUT_DRAG_NONE)) {
+		if (!is_on_button_end_turn && !is_dragging_card && (drag->state != INPUT_DRAG_NONE && drag->state != INPUT_DRAG_END)) {
 			// Highlight & pathfind
 			vec3s p = screen_to_world(g_engine->window_width, g_engine->window_height, g_camera.projection, g_camera.view, g_engine->input_drag.x, g_engine->input_drag.y);
 			struct hexcoord new_move_goal = hexmap_world_position_to_coord(&g_hexmap, (vec2s){ .x=p.x, .y=p.z });
