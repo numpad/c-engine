@@ -13,6 +13,7 @@ struct engine;
 #define HEXMAP_MAX_EDGES 6
 
 enum hexmap_tile_effect {
+	HEXMAP_TILE_EFFECT_NONE = 0,
 	HEXMAP_TILE_EFFECT_HIGHLIGHT,
 	HEXMAP_TILE_EFFECT_MOVEABLE_AREA,
 };
@@ -52,21 +53,26 @@ struct hexcoord {
 	int y;
 };
 
+// coordinates
 int hexcoord_equal(struct hexcoord a, struct hexcoord b);
 int hexmap_is_valid_coord(struct hexmap *, struct hexcoord);
 int hexmap_is_valid_index(struct hexmap *, usize index);
 
-void  hexmap_init(struct hexmap *, struct engine *);
-void  hexmap_destroy(struct hexmap *);
-void  hexmap_draw(struct hexmap *, struct camera *, vec3 player_pos);
+void hexmap_init(struct hexmap *, struct engine *);
+void hexmap_destroy(struct hexmap *);
+void hexmap_draw(struct hexmap *, struct camera *, vec3 player_pos);
 
-vec2s hexmap_index_to_world_position(struct hexmap *, usize index);
-vec2s hexmap_coord_to_world_position(struct hexmap *, struct hexcoord);
-usize hexmap_coord_to_index(struct hexmap *, struct hexcoord);
-usize hexmap_world_position_to_index(struct hexmap *, vec2s position);
+// coordinate systems
+vec2s           hexmap_index_to_world_position(struct hexmap *, usize index);
+vec2s           hexmap_coord_to_world_position(struct hexmap *, struct hexcoord);
+usize           hexmap_coord_to_index(struct hexmap *, struct hexcoord);
+usize           hexmap_world_position_to_index(struct hexmap *, vec2s position);
 struct hexcoord hexmap_world_position_to_coord(struct hexmap *, vec2s position);
 
-void  hexmap_set_tile_effect(struct hexmap *, struct hexcoord, enum hexmap_tile_effect);
+void hexmap_set_tile_effect(struct hexmap *, struct hexcoord, enum hexmap_tile_effect);
+
+// pathfinding
+void hexmap_generate_flowfield(struct hexmap *map, struct hexcoord start_coord);
 enum hexmap_path_result hexmap_find_path(struct hexmap *, struct hexcoord start, struct hexcoord goal);
 
 int hexmap_is_tile_obstacle(struct hexmap *, struct hexcoord);

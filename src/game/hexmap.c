@@ -10,7 +10,11 @@
 // PRIVATE //
 /////////////
 
+static const usize NODE_NONE = (usize)-2;
+static const usize NODE_NOT_VISITED = (usize)-1;
+
 static void load_hextile_models(struct hexmap *);
+static void reset_flowfield(struct hexmap *);
 
 ////////////
 // PUBLIC //
@@ -35,7 +39,7 @@ void hexmap_init(struct hexmap *map, struct engine *engine) {
 	map->h = 9;
 	map->tilesize = 115.0f;
 	map->tiles = calloc(map->w * map->h, sizeof(*map->tiles));
-	map->tiles_flowmap = malloc(map->w * map->h * sizeof(*map->tiles_flowmap));
+	map->tiles_flowmap = calloc(map->w * map->h, sizeof(*map->tiles_flowmap));
 	map->edges = malloc(map->w * map->h * sizeof(*map->edges) * HEXMAP_MAX_EDGES);
 	map->highlight_tile_index = (usize)-1;
 	shader_init_from_dir(&map->tile_shader, "res/shader/model/hexmap_tile/");
@@ -134,6 +138,10 @@ void hexmap_init(struct hexmap *map, struct engine *engine) {
 
 void hexmap_destroy(struct hexmap *map) {
 	assert(map != NULL);
+	// TODO: Store this...
+	for (usize i = 0; i < count_of(map->models); ++i) {
+		model_destroy(&map->models[i]);
+	}
 	free(map->tiles);
 }
 
@@ -237,6 +245,9 @@ void hexmap_set_tile_effect(struct hexmap *map, struct hexcoord coord, enum hexm
 
 	usize index = hexmap_coord_to_index(map, coord);
 	switch (effect) {
+	case HEXMAP_TILE_EFFECT_NONE:
+		map->tiles[index].highlight = 0;
+		break;
 	case HEXMAP_TILE_EFFECT_HIGHLIGHT:
 		// unset previous highlight
 		if (hexmap_is_valid_index(map, map->highlight_tile_index)) {
@@ -251,33 +262,62 @@ void hexmap_set_tile_effect(struct hexmap *map, struct hexcoord coord, enum hexm
 	}
 }
 
-enum hexmap_path_result hexmap_find_path(struct hexmap *map, struct hexcoord start_coord, struct hexcoord goal_coord) {
+void hexmap_generate_flowfield(struct hexmap *map, struct hexcoord start_coord) {
 	assert(map != NULL);
+	assert(hexmap_is_valid_coord(map, start_coord));
+
+	reset_flowfield(map);
+	usize start = hexmap_coord_to_index(map, start_coord);
 
 	usize map_size = (usize)map->w * map->h;
-	if (!hexmap_is_valid_coord(map, start_coord) || !hexmap_is_valid_coord(map, goal_coord)) {
-		for (usize i = 0; i < map_size; ++i) {
-			map->tiles_flowmap[i] = (usize)-2;
-		}
-		return HEXMAP_PATH_INVALID_COORDINATES;
-	}
-
-	if (start_coord.x == goal_coord.x && start_coord.y == goal_coord.y) {
-		return HEXMAP_PATH_OK;
-	}
-
-	const usize NONE = (usize)-2;
-	const usize NOT_VISITED = (usize)-1;
-	usize start = hexmap_coord_to_index(map, start_coord);
-	usize goal  = hexmap_coord_to_index(map, goal_coord);
-
 	RINGBUFFER(usize, frontier, map_size);
 	RINGBUFFER_APPEND(frontier, start);
 
 	usize came_from[map_size];
 	for (usize i = 0; i < map_size; ++i)
-		came_from[i] = NOT_VISITED;
-	came_from[start] = NONE;
+		came_from[i] = NODE_NOT_VISITED;
+	came_from[start] = NODE_NONE;
+
+	usize NUMBER_OF_ITERATIONS = 0;
+	while (frontier.len > 0) {
+		usize current_node_i = RINGBUFFER_CONSUME(frontier);
+		// Check all neighboring nodes.
+		usize edge_i = 0;
+		while (map->edges[current_node_i + edge_i * map_size] < map_size && edge_i < HEXMAP_MAX_EDGES) {
+			usize next_i = map->edges[current_node_i + edge_i * map_size];
+			if (came_from[next_i] == NODE_NOT_VISITED) {
+				RINGBUFFER_APPEND(frontier, next_i);
+				came_from[next_i] = current_node_i;
+			}
+			++edge_i;
+		}
+		assert(NUMBER_OF_ITERATIONS++ < map_size);
+	}
+
+	// TODO: copy output. Current solution is bad design...
+	for (usize i = 0; i < map_size; ++i) {
+		map->tiles_flowmap[i] = came_from[i];
+	}
+}
+
+enum hexmap_path_result hexmap_find_path(struct hexmap *map, struct hexcoord start_coord, struct hexcoord goal_coord) {
+	assert(map != NULL);
+	reset_flowfield(map);
+	if (hexcoord_equal(start_coord, goal_coord)) {
+		return HEXMAP_PATH_OK;
+	}
+
+	usize start = hexmap_coord_to_index(map, start_coord);
+	usize goal  = hexmap_coord_to_index(map, goal_coord);
+
+	usize map_size = (usize)map->w * map->h;
+	RINGBUFFER(usize, frontier, map_size);
+	RINGBUFFER_APPEND(frontier, start);
+
+	usize came_from[map_size];
+	for (usize i = 0; i < map_size; ++i)
+		came_from[i] = NODE_NOT_VISITED;
+	came_from[start] = NODE_NONE;
 
 	usize NUMBER_OF_ITERATIONS = 0;
 	while (frontier.len > 0) {
@@ -293,7 +333,7 @@ enum hexmap_path_result hexmap_find_path(struct hexmap *map, struct hexcoord sta
 		while (map->edges[current_node_i + edge_i * map_size] < map_size && edge_i < HEXMAP_MAX_EDGES) {
 			usize next_i = map->edges[current_node_i + edge_i * map_size];
 
-			if (came_from[next_i] == NOT_VISITED) {
+			if (came_from[next_i] == NODE_NOT_VISITED) {
 				RINGBUFFER_APPEND(frontier, next_i);
 				came_from[next_i] = current_node_i;
 			}
@@ -304,7 +344,7 @@ enum hexmap_path_result hexmap_find_path(struct hexmap *map, struct hexcoord sta
 		assert(NUMBER_OF_ITERATIONS++ < map_size);
 	}
 
-	// copy output, not good design...
+	// TODO: copy output. Current solution is bad design...
 	for (usize i = 0; i < map_size; ++i) {
 		map->tiles_flowmap[i] = came_from[i];
 	}
@@ -325,6 +365,7 @@ int hexmap_is_tile_obstacle(struct hexmap *map, struct hexcoord coord) {
 ////////////
 
 static void load_hextile_models(struct hexmap *map) {
+	assert(map != NULL);
 	const char *models[] = {
 		"res/models/tiles/base/hex_grass.gltf",
 		"res/models/tiles/base/hex_water.gltf",
@@ -341,6 +382,13 @@ static void load_hextile_models(struct hexmap *map) {
 	for (uint i = 0; i < count_of(models); ++i) {
 		int err = model_init_from_file(&map->models[i], models[i]);
 		assert(err == 0);
+	}
+}
+
+static void reset_flowfield(struct hexmap *map) {
+	assert(map != NULL);
+	for (usize i = 0; i < (usize)map->w * map->h; ++i) {
+		map->tiles_flowmap[i] = NODE_NOT_VISITED;
 	}
 }
 

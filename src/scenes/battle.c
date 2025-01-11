@@ -606,6 +606,10 @@ static void update_gamestate(enum gamestate_battle state, float dt) {
 	case GS_TURN_PLAYER_END:
 		g_next_gamestate = GS_ROUND_END;
 		g_debug_draw_pathfinder = 0;
+		if (hexmap_is_valid_coord(&g_hexmap, g_move_goal)) {
+			hexmap_set_tile_effect(&g_hexmap, g_move_goal, HEXMAP_TILE_EFFECT_NONE);
+		}
+		g_move_goal.x = -1;
 		break;
 	case GS_TURN_BEGIN:
 		break;

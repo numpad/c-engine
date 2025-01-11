@@ -35,9 +35,10 @@ void shader_ubo_init(struct shader_ubo *ubo, usize data_len, const void *data) {
 	glBufferData(GL_UNIFORM_BUFFER, data_len, data, GL_DYNAMIC_DRAW);
 	glBindBuffer(GL_UNIFORM_BUFFER, 0);
 	// binding point
+	// TODO: Handle multiple binding points...
 	GLuint binding_point = 0;
 	glBindBufferBase(GL_UNIFORM_BUFFER, binding_point, uniform_buffer);
-	//glBindBufferRange(GL_UNIFORM_BUFFER, 0, uniform_buffer, 0, data_len);
+	//glBindBufferRange(GL_UNIFORM_BUFFER, binding_point, uniform_buffer, 0, data_len);
 	GL_CHECK_ERROR();
 
 	ubo->buffer_size = data_len;
