@@ -62,7 +62,7 @@ struct engine {
 	mat4 u_projection;
 	mat4 u_view;
 	struct {
-		float time_elapsed;
+		float periodic_time;
 		float _padding[3]; // TODO: is this really required for std140?
 	} shader_global_data;
 	struct shader_ubo shader_global_ubo;

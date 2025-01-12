@@ -4,7 +4,7 @@ precision mediump float;
 #define PI 3.141592654
 
 layout(std140) uniform Global {
-	float time;
+	float periodic_time;
 };
 
 uniform sampler2D u_diffuse;
@@ -22,7 +22,7 @@ layout(location=2) out vec4 Normal;
 
 // SDFs
 //
-vec3 sdgCircle(in vec2 p, in float r) {
+vec3 sdgCircle(vec2 p, float r) {
 	float d = length(p);
 	return vec3( d-r, p/d );
 }
@@ -41,7 +41,10 @@ vec3 highlight_walkable_area(vec3 diffuse, vec2 p) {
 	p = vec2(-p.y, p.x); // rotate by 90° because pointy-top hexagons.
 	vec3 highlight_color = vec3(0.31, 0.31, 0.77);
 	// TODO: Floating point inaccuarcies with "time", might look bad after some time.
-	float t = mod(time * 0.3, 1.0 + 1e8); // small epsilon to prevent jumps?
+	// TODO: This only works on mobile with highp?
+	//       float t = mod(time * 0.3, 1.0 + 1e8); // small epsilon to prevent jumps?
+	float t = periodic_time;
+
 	float circle = sdgCircle(p, t).x;
 	float fast_circle = sdgCircle(p, t * 10.0).x;
 	float ripples = max(cos(20.0 * circle), 0.0);

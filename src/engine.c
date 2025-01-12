@@ -165,7 +165,7 @@ struct engine *engine_new(int argc, char **argv) {
 	glm_mat4_identity(engine->u_view);
 	on_window_resized(engine, engine->window_width, engine->window_height);
 	// Shader global data
-	engine->shader_global_data.time_elapsed = 0.9f;
+	engine->shader_global_data.periodic_time = 0.0f;
 	shader_ubo_init(&engine->shader_global_ubo, sizeof(engine->shader_global_data),
 			(const void *)&engine->shader_global_data);
 
@@ -399,7 +399,7 @@ void engine_draw(struct engine *engine) {
 	nvgBeginFrame(engine->vg, engine->window_width, engine->window_height, engine->window_pixel_ratio);
 
 	// update shader global data
-	engine->shader_global_data.time_elapsed = engine->time_elapsed;
+	engine->shader_global_data.periodic_time = (float)fmod(engine->time_elapsed * 0.3, 1.0 + 1e8);
 	shader_ubo_update(&engine->shader_global_ubo, sizeof(engine->shader_global_data),
 			(const void *)&engine->shader_global_data);
 
