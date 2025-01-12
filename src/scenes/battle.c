@@ -2,6 +2,7 @@
 
 #include <assert.h>
 #include <math.h>
+#include <stdlib.h>
 #include <time.h>
 #include <SDL_opengles2.h>
 #include <SDL_net.h>
@@ -70,8 +71,9 @@ static int          count_handcards(void);
 static void         interact_with_handcards(struct input_drag_s *drag);
 static int          add_cards_to_hand(float dt);
 static void         spawn_random_card(void);
-static void         update_gamestate(enum gamestate_battle state, float dt);
 static int          gamestate_changed(enum gamestate_battle old_state, enum gamestate_battle new_state);
+static void         update_gamestate(enum gamestate_battle state, float dt);
+static void         highlight_reachable_tiles(struct hexcoord origin, usize distance);
 
 //
 // ecs
@@ -85,7 +87,7 @@ typedef vec3s  c_pos3d;
 typedef struct hexcoord c_position;
 
 typedef struct {
-	int   model_index;
+	model_t *model;
 	float scale;
 } c_model;
 
@@ -163,10 +165,12 @@ static struct camera         g_camera;
 static struct camera         g_portrait_camera;
 static struct hexmap         g_hexmap;
 static struct hexcoord       g_character_position;
+static struct hexcoord       g_enemy_position;
 static enum gamestate_battle g_gamestate;
 static enum gamestate_battle g_next_gamestate;
 static struct { float x, y, w, h; } g_button_end_turn;
 static struct hexcoord       g_move_goal;
+static usize                 g_player_movement_this_turn;
 
 // debug
 static int g_debug_draw_pathfinder;
@@ -218,6 +222,7 @@ static void load(struct scene_battle_s *battle, struct engine *engine) {
 
 	hexmap_init(&g_hexmap, g_engine);
 	g_character_position = (struct hexcoord){ .x=2, .y=5 };
+	g_enemy_position = (struct hexcoord){ .x=3, .y=3 };
 
 	// initialize camera
 	camera_init_default(&g_camera, engine->window_width, engine->window_height);
@@ -259,7 +264,12 @@ static void load(struct scene_battle_s *battle, struct engine *engine) {
 	{
 		ecs_entity_t e = ecs_new_id(g_world);
 		ecs_set(g_world, e, c_position, { .x=3, .y=4 });
-		ecs_set(g_world, e, c_model, { .model_index=3, .scale=450.0f });
+		ecs_set(g_world, e, c_model, { .model=&g_props_model[3], .scale=450.0f });
+
+		e = ecs_new_id(g_world);
+		ecs_set(g_world, e, c_position, { .x=3, .y=1 });
+		ecs_set(g_world, e, c_model, { .model=&g_props_model[2], .scale=450.0f });
+
 	}
 
 	// Character Shader
@@ -340,7 +350,6 @@ static void destroy(struct scene_battle_s *battle, struct engine *engine) {
 }
 
 static void update(struct scene_battle_s *battle, struct engine *engine, float dt) {
-	interact_with_handcards(&engine->input_drag);
 	if (g_handcards_updated) {
 		g_handcards_updated = 0;
 		recalculate_handcards();
@@ -395,7 +404,7 @@ static void draw(struct scene_battle_s *battle, struct engine *engine) {
 			nvgFontSize(vg, 9.0f);
 			nvgFillColor(vg, nvgRGBf(1, 1, 1));
 			char index_text[32];
-			sprintf(index_text, "#%u", i);
+			sprintf(index_text, "#%lu", i);
 			nvgText(vg, screen_pos.x + 10.0f, screen_pos.y + 10.0f, index_text, NULL);
 
 			nvgStrokeWidth(vg, 3.0f);
@@ -468,7 +477,7 @@ static void draw(struct scene_battle_s *battle, struct engine *engine) {
 
 		// Draw enemy
 		glm_mat4_identity(model);
-		vec2s p = hexmap_index_to_world_position(&g_hexmap, 3 + 3 * g_hexmap.w);
+		vec2s p = hexmap_coord_to_world_position(&g_hexmap, g_enemy_position);
 		glm_translate(model, (vec3){ p.x, (fabsf(fminf(0.0f, sinf(g_engine->time_elapsed * 10.0f)))) * 50.0f, p.y });
 		glm_rotate_y(model, glm_rad(30.0f), model);
 		glm_scale_uni(model, scale);
@@ -553,8 +562,22 @@ void scene_battle_init(struct scene_battle_s *scene_battle, struct engine *engin
 //
 
 static int gamestate_changed(enum gamestate_battle old_state, enum gamestate_battle new_state) {
-	if (new_state == GS_TURN_PLAYER_IN_PROGRESS) {
-		console_log(g_engine, "Your turn!");
+	switch (new_state) {
+		case GS_BATTLE_BEGIN:
+		case GS_ROUND_BEGIN:
+			break;
+		case GS_TURN_PLAYER_BEGIN:
+			console_log(g_engine, "Your turn!");
+			g_player_movement_this_turn = 2;
+			break;
+		case GS_TURN_PLAYER_IN_PROGRESS:
+		case GS_TURN_PLAYER_END:
+		case GS_TURN_ENTITY_BEGIN:
+		case GS_TURN_ENTITY_IN_PROGRESS:
+		case GS_TURN_ENTITY_END:
+		case GS_ROUND_END:
+		case GS_BATTLE_END:
+			break;
 	}
 
 	return 1;
@@ -568,7 +591,8 @@ static void update_gamestate(enum gamestate_battle state, float dt) {
 		break;
 	case GS_ROUND_BEGIN: {
 		const int number_of_cards = count_handcards();
-		for (int i = number_of_cards; i < 5; ++i) {
+		const int max_cards_to_draw_at_turn_start = 5;
+		for (int i = number_of_cards; i < max_cards_to_draw_at_turn_start; ++i) {
 			spawn_random_card();
 		}
 
@@ -578,6 +602,7 @@ static void update_gamestate(enum gamestate_battle state, float dt) {
 	case GS_TURN_PLAYER_BEGIN: {
 		int done = add_cards_to_hand(dt);
 		if (done) {
+			highlight_reachable_tiles(g_character_position, g_player_movement_this_turn);
 			g_next_gamestate = GS_TURN_PLAYER_IN_PROGRESS;
 		}
 		break;
@@ -593,10 +618,22 @@ static void update_gamestate(enum gamestate_battle state, float dt) {
 			struct hexcoord new_move_goal = hexmap_world_position_to_coord(&g_hexmap, (vec2s){ .x=p.x, .y=p.z });
 			if (hexmap_is_valid_coord(&g_hexmap, new_move_goal) && !hexcoord_equal(g_move_goal, new_move_goal)) {
 				hexmap_set_tile_effect(&g_hexmap, new_move_goal, HEXMAP_TILE_EFFECT_HIGHLIGHT);
-				g_move_goal = new_move_goal;
-				hexmap_find_path(&g_hexmap, g_character_position, g_move_goal);
+				g_move_goal = (struct hexcoord){ new_move_goal.x, new_move_goal.y };
+				// pathfinding to move target
+				usize flowfield[g_hexmap.w * g_hexmap.h];
+				hexmap_generate_flowfield(&g_hexmap, g_character_position,
+						count_of(flowfield), flowfield);
+				usize distance = hexmap_flowfield_distance(
+						&g_hexmap, g_move_goal, count_of(flowfield), flowfield);
+				if (distance >= 1 && distance <= g_player_movement_this_turn) {
+					g_player_movement_this_turn -= distance;
+					g_character_position = (struct hexcoord){ .x=g_move_goal.x, .y=g_move_goal.y };
+					highlight_reachable_tiles(g_character_position, g_player_movement_this_turn);
+				}
 			}
 		}
+
+		interact_with_handcards(&g_engine->input_drag);
 
 		int clicked_on_button_end_turn = drag_clicked_in_rect(drag, g_button_end_turn.x, g_button_end_turn.y, g_button_end_turn.w, g_button_end_turn.h);
 		if (clicked_on_button_end_turn) {
@@ -617,7 +654,7 @@ static void update_gamestate(enum gamestate_battle state, float dt) {
 		g_next_gamestate = GS_TURN_ENTITY_IN_PROGRESS;
 		break;
 	case GS_TURN_ENTITY_IN_PROGRESS:
-		if (g_engine->time_elapsed - turn_entity_start_time > 3.0f) {
+		if (g_engine->time_elapsed - turn_entity_start_time > 1.0f) {
 			g_next_gamestate = GS_TURN_ENTITY_END;
 		}
 		break;
@@ -630,6 +667,22 @@ static void update_gamestate(enum gamestate_battle state, float dt) {
 	case GS_BATTLE_END:
 		break;
 	};
+}
+
+static void highlight_reachable_tiles(struct hexcoord origin, usize distance) {
+	// Regenerate flow field
+	usize flowfield[g_hexmap.w * g_hexmap.h];
+	hexmap_generate_flowfield(&g_hexmap, origin, count_of(flowfield), flowfield);
+	// highlight new movement range
+	hexmap_clear_tile_effect(&g_hexmap, HEXMAP_TILE_EFFECT_MOVEABLE_AREA);
+	hexmap_set_tile_effect(&g_hexmap, origin, HEXMAP_TILE_EFFECT_MOVEABLE_AREA);
+	for (usize i = 0; i < (usize)g_hexmap.w * g_hexmap.h; ++i) {
+		struct hexcoord coord = hexmap_index_to_coord(&g_hexmap, i);
+		usize distance_to_reachable = hexmap_flowfield_distance(&g_hexmap, coord, count_of(flowfield), flowfield);
+		if (distance_to_reachable >= 1 && distance_to_reachable <= distance) {
+			hexmap_set_tile_effect(&g_hexmap, coord, HEXMAP_TILE_EFFECT_MOVEABLE_AREA);
+		}
+	}
 }
 
 static void recalculate_handcards(void) {
@@ -800,42 +853,7 @@ static void on_game_event_play_card(event_info_t *info) {
 			g_engine->window_width, g_engine->window_height, g_camera.projection, g_camera.view,
 			g_engine->input_drag.x, g_engine->input_drag.y);
 
-	if (card->image_id == 0) {
-		for (int i = 0; i < 20; ++i) {
-			ecs_entity_t e = ecs_new_id(g_world);
-			ecs_set(g_world, e, c_pos3d, { .x=world_position.x, .y=world_position.y, .z=world_position.z });
-			ecs_set(g_world, e, c_model, {
-				.model_index=2, .scale=200.0f + 100.0f * rng_f() });
-			ecs_set(g_world, e, c_velocity, {
-				.vel={{rng_f() * 20.0f - 10.0f, 10.0f + rng_f() * 10.0f, rng_f() * 20.0f - 10.0f}}});
-		}
-	} else if (card->image_id == 1) {
-		for (int i = 0; i < 30; ++i) {
-			ecs_entity_t e = ecs_new_id(g_world);
-			ecs_set(g_world, e, c_pos3d, { .x=world_position.x, .y=world_position.y, .z=world_position.z });
-			ecs_set(g_world, e, c_model, {
-				.model_index=0, .scale=300.0f });
-			ecs_set(g_world, e, c_velocity, {
-				.vel={
-					.x=cosf((i / 30.0f) * 3.1415926f) * 9.0f,
-					.y=10.0f + rng_f() * 10.0f,
-					.z=sinf((i / 15.0f) * 3.1415926f) * 20.0f,
-				} });
-		}
-	} else if (card->image_id == 2) {
-		for (int i = 0; i < 30; ++i) {
-			ecs_entity_t e = ecs_new_id(g_world);
-			ecs_set(g_world, e, c_pos3d, { .x=world_position.x, .y=world_position.y, .z=world_position.z });
-			ecs_set(g_world, e, c_model, {
-				.model_index=1, .scale=150.0f + 150.0f * rng_f() });
-			ecs_set(g_world, e, c_velocity, {
-				.vel={
-					.x=cosf(((i*2.0f) / 30.0f) * M_PI) * 8.0f,
-					.y=10.0f + rng_f() * 10.0f,
-					.z=sinf(((i*2.0f) / 30.0f) * M_PI) * 20.0f,
-				} });
-		}
-	}
+	// TODO: Do something with card
 
 	// remove card
 	ecs_delete(g_world, g_selected_card);
@@ -995,7 +1013,7 @@ static void system_move_models(ecs_iter_t *it) {
 
 	for (int i = 0; i < it->count; ++i) {
 		c_pos3d *pos = &pos_it[i];
-		c_model *model = &model_it[i];
+		c_model *_model = &model_it[i];
 		c_velocity *velocity = &velocity_it[i];
 
 		glm_vec3_add(pos->raw, velocity->vel.raw, pos->raw);
@@ -1146,7 +1164,7 @@ static void system_draw_board_entities(ecs_iter_t *it) {
 		glm_mat4_identity(model_matrix);
 		glm_translate(model_matrix, world_pos);
 		glm_scale_uni(model_matrix, model->scale);
-		model_draw(&g_props_model[model->model_index], &g_character_model_shader, &g_camera, model_matrix);
+		model_draw(model->model, &g_character_model_shader, &g_camera, model_matrix);
 	}
 }
 

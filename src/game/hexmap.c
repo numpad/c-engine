@@ -5,6 +5,7 @@
 #include "gl/camera.h"
 #include "gl/shader.h"
 #include "engine.h"
+#include "util/util.h"
 
 /////////////
 // PRIVATE //
@@ -74,13 +75,6 @@ void hexmap_init(struct hexmap *map, struct engine *engine) {
 	M(4, 7, 8, -2);
 	M(4, 8, 7, -1);
 #undef M
-	hexmap_set_tile_effect(map, (struct hexcoord){ .x=2,   .y=5    }, HEXMAP_TILE_EFFECT_MOVEABLE_AREA);
-	hexmap_set_tile_effect(map, (struct hexcoord){ .x=2-1, .y=5-1  }, HEXMAP_TILE_EFFECT_MOVEABLE_AREA);
-	hexmap_set_tile_effect(map, (struct hexcoord){ .x=2+0, .y=5-1  }, HEXMAP_TILE_EFFECT_MOVEABLE_AREA);
-	hexmap_set_tile_effect(map, (struct hexcoord){ .x=2-1, .y=5+0  }, HEXMAP_TILE_EFFECT_MOVEABLE_AREA);
-	hexmap_set_tile_effect(map, (struct hexcoord){ .x=2+1, .y=5+0  }, HEXMAP_TILE_EFFECT_MOVEABLE_AREA);
-	hexmap_set_tile_effect(map, (struct hexcoord){ .x=2-1, .y=5+1  }, HEXMAP_TILE_EFFECT_MOVEABLE_AREA);
-	hexmap_set_tile_effect(map, (struct hexcoord){ .x=2+0, .y=5+1  }, HEXMAP_TILE_EFFECT_MOVEABLE_AREA);
 
 	// precomputed
 	map->tile_offsets = (vec2s){
@@ -172,6 +166,12 @@ vec2s hexmap_index_to_world_position(struct hexmap *map, usize index) {
 	};
 }
 
+struct hexcoord hexmap_index_to_coord(struct hexmap *map, usize index) {
+	assert(map != NULL);
+	assert(hexmap_is_valid_index(map, index));
+	return (struct hexcoord){ .x=index % map->w, .y=(int)(index / (float)map->w) };
+}
+
 usize hexmap_world_position_to_index(struct hexmap *map, vec2s position) {
 	assert(map != NULL);
 
@@ -190,6 +190,23 @@ struct hexcoord hexmap_world_position_to_coord(struct hexmap *map, vec2s positio
 	usize x = (position.x + x_offset) / map->tile_offsets.x;
 
 	return (struct hexcoord){ .x=x, .y=y };
+}
+
+struct hexcoord hexmap_get_neighbor_coord(struct hexmap *map, struct hexcoord tile, enum hexmap_neighbor neighbor) {
+	assert(map != NULL);
+	assert(hexmap_is_valid_coord(map, tile));
+
+	static const int dx_odd[] = {1, 0, -1, -1, -1, 0};
+	static const int dx_even[]  = {1, 1, 0, -1, 0, 1};
+	static const int dy[]  = {0, 1, 1, 0, -1, -1};
+
+	const int *dx = (tile.y % 2 == 0) ? dx_even : dx_odd;
+
+	struct hexcoord neighbor_coord;
+	neighbor_coord.x = tile.x + dx[neighbor];
+	neighbor_coord.y = tile.y + dy[neighbor];
+
+	return neighbor_coord;
 }
 
 void hexmap_draw(struct hexmap *map, struct camera *camera, vec3 player_pos) {
@@ -260,9 +277,21 @@ void hexmap_set_tile_effect(struct hexmap *map, struct hexcoord coord, enum hexm
 	}
 }
 
-void hexmap_generate_flowfield(struct hexmap *map, struct hexcoord start_coord) {
+void hexmap_clear_tile_effect(struct hexmap *map, enum hexmap_tile_effect effect_to_reset) {
+	assert(map != NULL);
+	for (usize i = 0; i < (usize)map->w * map->h; ++i) {
+		if (map->tiles[i].highlight == effect_to_reset) {
+			map->tiles[i].highlight = HEXMAP_TILE_EFFECT_NONE;
+		}
+	}
+}
+
+void hexmap_generate_flowfield(struct hexmap *map, struct hexcoord start_coord, usize flowfield_len, usize *flowfield) {
 	assert(map != NULL);
 	assert(hexmap_is_valid_coord(map, start_coord));
+	assert(flowfield != NULL);
+	// TODO: this param just makes sure i allocate enough memory, meh...
+	assert(flowfield_len == (usize)map->w * map->h);
 
 	reset_flowfield(map);
 	usize start = hexmap_coord_to_index(map, start_coord);
@@ -271,7 +300,9 @@ void hexmap_generate_flowfield(struct hexmap *map, struct hexcoord start_coord) 
 	RINGBUFFER(usize, frontier, map_size);
 	RINGBUFFER_APPEND(frontier, start);
 
-	usize came_from[map_size];
+	// Readability, came_from[tile] means the index of the tile 1 step closer to the `start_coord`.
+	usize *came_from = flowfield;
+
 	for (usize i = 0; i < map_size; ++i)
 		came_from[i] = NODE_NOT_VISITED;
 	came_from[start] = NODE_NONE;
@@ -290,11 +321,6 @@ void hexmap_generate_flowfield(struct hexmap *map, struct hexcoord start_coord) 
 			++edge_i;
 		}
 		assert(NUMBER_OF_ITERATIONS++ < map_size);
-	}
-
-	// TODO: copy output. Current solution is bad design...
-	for (usize i = 0; i < map_size; ++i) {
-		map->tiles_flowmap[i] = came_from[i];
 	}
 }
 
@@ -348,6 +374,46 @@ enum hexmap_path_result hexmap_find_path(struct hexmap *map, struct hexcoord sta
 	}
 
 	return HEXMAP_PATH_OK;
+}
+
+// Calculate the distance from the `flowfield` origin to the `goal`.
+// Returns the distance in tiles in case of success.
+// On error, returns (usize)-1.
+usize hexmap_flowfield_distance(struct hexmap *map, struct hexcoord goal_coord, usize flowfield_len, usize flowfield[flowfield_len]) {
+	assert(map != NULL);
+	assert(hexmap_is_valid_coord(map, goal_coord));
+	assert(flowfield_len == (usize)map->w * map->h);
+#ifdef DEBUG
+	usize none_nodes = 0;
+	for (usize i = 0; i < flowfield_len; ++i) {
+		//assert(flowfield[i] != NODE_NOT_VISITED);
+		if (flowfield[i] == none_nodes) {
+			++none_nodes;
+		}
+	}
+	//assert(none_nodes == 1 && "Flowfield has either zero or multiple goals, allowed is exactly one.");
+#endif
+
+	const usize max_distance = (usize)map->w * map->h;
+
+	usize goal = hexmap_coord_to_index(map, goal_coord);
+	usize *came_from = flowfield;
+	if (came_from[goal] == NODE_NOT_VISITED) {
+		// invalid target
+		return -1;
+	}
+	if (came_from[goal] == NODE_NONE) {
+		// goal is the same as origin
+		return 0;
+	}
+
+	usize index = came_from[goal];
+	usize distance = 0;
+	while (index != NODE_NONE && distance < max_distance) {
+		index = came_from[index];
+		++distance;
+	}
+	return distance;
 }
 
 int hexmap_is_tile_obstacle(struct hexmap *map, struct hexcoord coord) {
