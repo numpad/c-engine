@@ -612,19 +612,28 @@ static void update_gamestate(enum gamestate_battle state, float dt) {
 		int is_on_button_end_turn = drag_in_rect(drag, g_button_end_turn.x, g_button_end_turn.y, g_button_end_turn.w, g_button_end_turn.h);
 		int is_dragging_card = (g_selected_card != 0 && ecs_is_valid(g_world, g_selected_card));
 
-		if (!is_on_button_end_turn && !is_dragging_card && (drag->state != INPUT_DRAG_NONE && drag->state != INPUT_DRAG_END)) {
+		if (!is_on_button_end_turn && !is_dragging_card && drag->state == INPUT_DRAG_END) {
 			// Highlight & pathfind
-			vec3s p = screen_to_world(g_engine->window_width, g_engine->window_height, g_camera.projection, g_camera.view, g_engine->input_drag.x, g_engine->input_drag.y);
-			struct hexcoord new_move_goal = hexmap_world_position_to_coord(&g_hexmap, (vec2s){ .x=p.x, .y=p.z });
-			if (hexmap_is_valid_coord(&g_hexmap, new_move_goal) && !hexcoord_equal(g_move_goal, new_move_goal)) {
-				hexmap_set_tile_effect(&g_hexmap, new_move_goal, HEXMAP_TILE_EFFECT_HIGHLIGHT);
+			vec3s p_begin = screen_to_world(g_engine->window_width, g_engine->window_height, g_camera.projection, g_camera.view, g_engine->input_drag.begin_x, g_engine->input_drag.begin_y);
+			vec3s p_end = screen_to_world(g_engine->window_width, g_engine->window_height, g_camera.projection, g_camera.view, g_engine->input_drag.end_x, g_engine->input_drag.end_y);
+			struct hexcoord begin_coord = hexmap_world_position_to_coord(&g_hexmap, (vec2s){ .x=p_begin.x, .y=p_begin.z });
+			struct hexcoord end_coord = hexmap_world_position_to_coord(&g_hexmap, (vec2s){ .x=p_end.x, .y=p_end.z });
+
+			struct hexcoord new_move_goal = end_coord;
+			if (hexcoord_equal(begin_coord, end_coord) && hexmap_is_valid_coord(&g_hexmap, new_move_goal) && !hexcoord_equal(g_move_goal, new_move_goal)) {
 				g_move_goal = (struct hexcoord){ new_move_goal.x, new_move_goal.y };
 				// pathfinding to move target
 				usize flowfield[g_hexmap.w * g_hexmap.h];
-				hexmap_generate_flowfield(&g_hexmap, g_character_position,
-						count_of(flowfield), flowfield);
+				hexmap_generate_flowfield(&g_hexmap, g_character_position, count_of(flowfield), flowfield);
 				usize distance = hexmap_flowfield_distance(
 						&g_hexmap, g_move_goal, count_of(flowfield), flowfield);
+				// Highlight red for unreachable tile
+				if (distance > g_player_movement_this_turn && g_player_movement_this_turn > 0) {
+					hexmap_set_tile_effect(&g_hexmap, g_move_goal, HEXMAP_TILE_EFFECT_HIGHLIGHT);
+				} else {
+					hexmap_clear_tile_effect(&g_hexmap, HEXMAP_TILE_EFFECT_HIGHLIGHT);
+				}
+				// Highlight the walkable area
 				if (distance >= 1 && distance <= g_player_movement_this_turn) {
 					g_player_movement_this_turn -= distance;
 					g_character_position = (struct hexcoord){ .x=g_move_goal.x, .y=g_move_goal.y };
@@ -646,6 +655,7 @@ static void update_gamestate(enum gamestate_battle state, float dt) {
 		if (hexmap_is_valid_coord(&g_hexmap, g_move_goal)) {
 			hexmap_set_tile_effect(&g_hexmap, g_move_goal, HEXMAP_TILE_EFFECT_NONE);
 		}
+		hexmap_clear_tile_effect(&g_hexmap, HEXMAP_TILE_EFFECT_MOVEABLE_AREA);
 		g_move_goal.x = -1;
 		g_next_gamestate = GS_TURN_ENTITY_BEGIN;
 		break;
@@ -675,7 +685,9 @@ static void highlight_reachable_tiles(struct hexcoord origin, usize distance) {
 	hexmap_generate_flowfield(&g_hexmap, origin, count_of(flowfield), flowfield);
 	// highlight new movement range
 	hexmap_clear_tile_effect(&g_hexmap, HEXMAP_TILE_EFFECT_MOVEABLE_AREA);
-	hexmap_set_tile_effect(&g_hexmap, origin, HEXMAP_TILE_EFFECT_MOVEABLE_AREA);
+	if (distance >= 1) {
+		hexmap_set_tile_effect(&g_hexmap, origin, HEXMAP_TILE_EFFECT_MOVEABLE_AREA);
+	}
 	for (usize i = 0; i < (usize)g_hexmap.w * g_hexmap.h; ++i) {
 		struct hexcoord coord = hexmap_index_to_coord(&g_hexmap, i);
 		usize distance_to_reachable = hexmap_flowfield_distance(&g_hexmap, coord, count_of(flowfield), flowfield);

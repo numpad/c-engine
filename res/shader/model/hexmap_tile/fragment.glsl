@@ -39,7 +39,7 @@ vec3 sdgHexagon(vec2 p, float r) {
 
 vec3 highlight_walkable_area(vec3 diffuse, vec2 p) {
 	p = vec2(-p.y, p.x); // rotate by 90° because pointy-top hexagons.
-	vec3 highlight_color = vec3(0.31, 0.31, 0.77);
+	vec3 highlight_color = vec3(1.0); // blue: vec3(0.31, 0.31, 0.77);
 	// TODO: Floating point inaccuarcies with "time", might look bad after some time.
 	// TODO: This only works on mobile with highp?
 	//       float t = mod(time * 0.3, 1.0 + 1e8); // small epsilon to prevent jumps?
@@ -49,7 +49,7 @@ vec3 highlight_walkable_area(vec3 diffuse, vec2 p) {
 	float fast_circle = sdgCircle(p, t * 10.0).x;
 	float ripples = max(cos(20.0 * circle), 0.0);
 	float wave = max(cos(1.0 * fast_circle), 0.0);
-	float alpha = ripples * wave * 0.3;
+	float alpha = ripples * wave * 0.3 + 0.2;
 	return mix(diffuse, highlight_color, alpha);
 }
 

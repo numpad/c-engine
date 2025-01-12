@@ -265,7 +265,8 @@ void hexmap_set_tile_effect(struct hexmap *map, struct hexcoord coord, enum hexm
 		break;
 	case HEXMAP_TILE_EFFECT_HIGHLIGHT:
 		// unset previous highlight
-		if (hexmap_is_valid_index(map, map->highlight_tile_index)) {
+		if (hexmap_is_valid_index(map, map->highlight_tile_index)
+			&& map->tiles[map->highlight_tile_index].highlight == HEXMAP_TILE_EFFECT_HIGHLIGHT) {
 			map->tiles[map->highlight_tile_index].highlight = 0;
 		}
 		map->highlight_tile_index = index;
