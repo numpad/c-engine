@@ -388,6 +388,15 @@ void engine_update(struct engine *engine, double dt) {
 	// poll events
 	engine_poll_events(engine);
 
+	// update shader global data
+	engine->shader_global_data.periodic_time += dt * 0.33333;
+	if (engine->shader_global_data.periodic_time >= GLM_PI) {
+		engine->shader_global_data.periodic_time -= GLM_PI;
+	}
+	shader_ubo_update(&engine->shader_global_ubo, sizeof(engine->shader_global_data),
+			(const void *)&engine->shader_global_data);
+
+
 	// update
 	console_update(engine->console, engine, dt);
 	scene_update(engine->scene, engine, dt);
@@ -397,11 +406,6 @@ void engine_draw(struct engine *engine) {
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
 	
 	nvgBeginFrame(engine->vg, engine->window_width, engine->window_height, engine->window_pixel_ratio);
-
-	// update shader global data
-	engine->shader_global_data.periodic_time = (float)fmod(engine->time_elapsed * 0.3, 1.0 + 1e8);
-	shader_ubo_update(&engine->shader_global_ubo, sizeof(engine->shader_global_data),
-			(const void *)&engine->shader_global_data);
 
 	// run scene
 	scene_draw(engine->scene, engine);
