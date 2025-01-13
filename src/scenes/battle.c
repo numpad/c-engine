@@ -840,6 +840,18 @@ static void draw_ui(pipeline_t *pipeline) {
 	drawcmd_set_texture_subrect(&cmd, g_ui_pipeline.texture, 48, 0, 16, hp);
 	pipeline_emit(&g_ui_pipeline, &cmd);
 
+	// Enemy healthbar
+	vec2s enemy_worldpos = hexmap_coord_to_world_position(&g_hexmap, g_enemy_position);
+	vec2s enemy_screenpos = world_to_screen_camera(g_engine, &g_camera, GLM_MAT4_IDENTITY, (vec3s){{ enemy_worldpos.x, 0.0f, enemy_worldpos.y }});
+	cmd = DRAWCMD_INIT;
+	cmd.size.x = 32 * 2;
+	cmd.size.y = 16 * 2;
+	cmd.position.x = (int)(enemy_screenpos.x - cmd.size.x * 0.5f);
+	cmd.position.y = enemy_screenpos.y + 3.0f;
+	cmd.position.z = 0.9f;
+	drawcmd_set_texture_subrect(&cmd, g_ui_pipeline.texture, 64, 80, 32, 16);
+	pipeline_emit(&g_ui_pipeline, &cmd);
+
 	// Draw "End turn" button
 	if (g_gamestate == GS_TURN_PLAYER_IN_PROGRESS) {
 		int is_on_button_end_turn = drag_in_rect(&g_engine->input_drag, g_button_end_turn.x, g_button_end_turn.y, g_button_end_turn.w, g_button_end_turn.h);

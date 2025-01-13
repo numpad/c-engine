@@ -104,12 +104,13 @@ void hexmap_init(struct hexmap *map, struct engine *engine) {
 			}
 
 			// Neighbors
-			struct hexcoord tile_nw = (struct hexcoord){ .x=x_nw, .y=y-1 };
-			struct hexcoord tile_ne = (struct hexcoord){ .x=x_ne, .y=y-1 };
-			struct hexcoord tile_w  = (struct hexcoord){ .x=x-1,  .y=y   };
-			struct hexcoord tile_e  = (struct hexcoord){ .x=x+1,  .y=y   };
-			struct hexcoord tile_sw = (struct hexcoord){ .x=x_sw, .y=y+1 };
-			struct hexcoord tile_se = (struct hexcoord){ .x=x_se, .y=y+1 };
+			struct hexcoord current = { .x=x, .y=y };
+			struct hexcoord tile_nw = hexmap_get_neighbor_coord(map, current, HEXMAP_NW);
+			struct hexcoord tile_ne = hexmap_get_neighbor_coord(map, current, HEXMAP_NE);
+			struct hexcoord tile_w  = hexmap_get_neighbor_coord(map, current, HEXMAP_W);
+			struct hexcoord tile_e  = hexmap_get_neighbor_coord(map, current, HEXMAP_E);
+			struct hexcoord tile_sw = hexmap_get_neighbor_coord(map, current, HEXMAP_SW);
+			struct hexcoord tile_se = hexmap_get_neighbor_coord(map, current, HEXMAP_SE);
 			int tile_nw_reachable = hexmap_is_valid_coord(map, tile_nw) && !hexmap_is_tile_obstacle(map, tile_nw);
 			int tile_ne_reachable = hexmap_is_valid_coord(map, tile_ne) && !hexmap_is_tile_obstacle(map, tile_ne);
 			int tile_w_reachable  = hexmap_is_valid_coord(map, tile_w)  && !hexmap_is_tile_obstacle(map, tile_w);
