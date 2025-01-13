@@ -134,7 +134,7 @@ typedef struct {
 typedef struct {
 	float hp;
 	float max_hp;
-} c_health;
+} c_healthpoints;
 
 typedef struct {
 	int current_frame;
@@ -179,7 +179,7 @@ static void use_reward(reward_t *);
 static void collect_xp(float xp);
 static void player_shoot(c_pos *pp, c_player *ply, c_plane *pl);
 
-static void hit_enemy(ecs_entity_t e_bullet, ecs_entity_t e_enemy, c_bullet *bullet, c_pos *pos_bullet, c_sprite *spr_enemy, c_health *hl_enemy, c_plane *pl_enemy);
+static void hit_enemy(ecs_entity_t e_bullet, ecs_entity_t e_enemy, c_bullet *bullet, c_pos *pos_bullet, c_sprite *spr_enemy, c_healthpoints *hl_enemy, c_plane *pl_enemy);
 static void spawn_bulletshot(vec2 p, float angle, enum faction faction, float spread, float dmg, float speed);
 static void spawn_homing_shot(vec2 p, float angle, ecs_entity_t target, enum faction faction, float dmg, float speed);
 
@@ -300,7 +300,7 @@ ECS_COMPONENT_DECLARE(c_shadow);
 ECS_COMPONENT_DECLARE(c_despawn_after);
 ECS_COMPONENT_DECLARE(c_faction);
 ECS_COMPONENT_DECLARE(c_particle);
-ECS_COMPONENT_DECLARE(c_health);
+ECS_COMPONENT_DECLARE(c_healthpoints);
 ECS_COMPONENT_DECLARE(c_animation);
 ECS_COMPONENT_DECLARE(c_target);
 ECS_COMPONENT_DECLARE(c_homing);
@@ -363,7 +363,7 @@ static void load(struct scene_planes_s *scene, struct engine *engine) {
 	ECS_COMPONENT_DEFINE(g_ecs, c_despawn_after);
 	ECS_COMPONENT_DEFINE(g_ecs, c_faction);
 	ECS_COMPONENT_DEFINE(g_ecs, c_particle);
-	ECS_COMPONENT_DEFINE(g_ecs, c_health);
+	ECS_COMPONENT_DEFINE(g_ecs, c_healthpoints);
 	ECS_COMPONENT_DEFINE(g_ecs, c_animation);
 	ECS_COMPONENT_DEFINE(g_ecs, c_target);
 	ECS_COMPONENT_DEFINE(g_ecs, c_homing);
@@ -382,7 +382,7 @@ static void load(struct scene_planes_s *scene, struct engine *engine) {
 
 	g_enemies_query = ecs_query(g_ecs, {
 		.filter.terms = {
-			{ ecs_id(c_pos) }, { ecs_id(c_plane) }, { ecs_id(c_sprite) }, { ecs_id(c_faction) }, { ecs_id(c_health) }
+			{ ecs_id(c_pos) }, { ecs_id(c_plane) }, { ecs_id(c_sprite) }, { ecs_id(c_faction) }, { ecs_id(c_healthpoints) }
 		},
 	});
 
@@ -454,7 +454,7 @@ static void load(struct scene_planes_s *scene, struct engine *engine) {
 		});
 		ecs_set(g_ecs, e, c_shadow, { .distance = 32.0f });
 		ecs_set(g_ecs, e, c_faction, { .faction = FACTION_ENEMY });
-		ecs_set(g_ecs, e, c_health, { .hp = 2.0f, .max_hp = 2.0f });
+		ecs_set(g_ecs, e, c_healthpoints, { .hp = 2.0f, .max_hp = 2.0f });
 	}
 
 	// items
@@ -1010,7 +1010,7 @@ static void collect_xp(float xp) {
 	}
 }
 
-static void hit_enemy(ecs_entity_t e_bullet, ecs_entity_t e_enemy, c_bullet *bullet, c_pos *pos_bullet, c_sprite *spr_enemy, c_health *hl_enemy, c_plane *pl_enemy) {
+static void hit_enemy(ecs_entity_t e_bullet, ecs_entity_t e_enemy, c_bullet *bullet, c_pos *pos_bullet, c_sprite *spr_enemy, c_healthpoints *hl_enemy, c_plane *pl_enemy) {
 	spr_enemy->hurt = 1.0f;
 	hl_enemy->hp -= bullet->damage;
 
@@ -1169,7 +1169,7 @@ static void system_move_bullets(ecs_iter_t *it_bullet) {
 			c_plane   *planes        = ecs_field(&it_enemy, c_plane,   2);
 			c_sprite  *spr_planes    = ecs_field(&it_enemy, c_sprite,  3);
 			c_faction *fac_planes    = ecs_field(&it_enemy, c_faction, 4);
-			c_health  *health_planes = ecs_field(&it_enemy, c_health,  5);
+			c_healthpoints  *health_planes = ecs_field(&it_enemy, c_healthpoints,  5);
 
 			for (int j = 0; j < it_enemy.count; ++j) {
 				if (fac_bullets[i].faction == fac_planes[j].faction) {
@@ -1323,7 +1323,7 @@ static void system_spawn_enemies(ecs_iter_t *it) {
 		ecs_set(g_ecs, e, c_shadow, { .distance = 32.0f });
 		ecs_set(g_ecs, e, c_faction, { .faction = FACTION_ENEMY });
 		ecs_set(g_ecs, e, c_despawn_after, { .seconds=30.0f });
-		ecs_set(g_ecs, e, c_health, { .hp = hp, .max_hp = hp });
+		ecs_set(g_ecs, e, c_healthpoints, { .hp = hp, .max_hp = hp });
 	}
 }
 

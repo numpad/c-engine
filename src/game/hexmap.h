@@ -19,9 +19,12 @@ enum hexmap_tile_effect {
 	HEXMAP_TILE_EFFECT_MOVEABLE_AREA,
 };
 
+// Indicates whether a pathfind operation
+// succeeded `HEXMAP_PATH_OK` or failed.
 enum hexmap_path_result {
-	HEXMAP_PATH_OK,
-	HEXMAP_PATH_INVALID_COORDINATES
+	HEXMAP_PATH_OK = 0,
+	HEXMAP_PATH_ERROR,
+	HEXMAP_PATH_INCOMPLETE_FLOWFIELD
 };
 
 enum hexmap_neighbor {
@@ -54,7 +57,6 @@ struct hexmap {
 
 	// Tiles
 	struct hextile *tiles;
-	usize *tiles_flowmap;
 	usize *edges;
 
 	// Rendering
@@ -64,6 +66,14 @@ struct hexmap {
 
 	// Special tiles
 	usize highlight_tile_index;
+};
+
+struct hexmap_path {
+	enum hexmap_path_result result;
+	struct hexcoord start;
+	struct hexcoord goal;
+	usize distance_in_tiles;
+	usize *tiles;
 };
 
 // coordinates
@@ -87,10 +97,12 @@ struct hexcoord hexmap_get_neighbor_coord     (struct hexmap *, struct hexcoord 
 void hexmap_set_tile_effect(struct hexmap *, struct hexcoord, enum hexmap_tile_effect);
 void hexmap_clear_tile_effect(struct hexmap *, enum hexmap_tile_effect);
 
-// pathfinding
+// flowfield
 void hexmap_generate_flowfield(struct hexmap *map, struct hexcoord start_coord, usize flowfield_len, usize *flowfield);
-enum hexmap_path_result hexmap_find_path(struct hexmap *, struct hexcoord start, struct hexcoord goal);
 usize hexmap_flowfield_distance(struct hexmap *map, struct hexcoord goal, usize flowfield_len, usize flowfield[flowfield_len]);
+// pathfinding
+enum hexmap_path_result hexmap_path_find(struct hexmap *, struct hexcoord start, struct hexcoord goal, struct hexmap_path *);
+void hexmap_path_destroy(struct hexmap_path *);
 
 int hexmap_is_tile_obstacle(struct hexmap *, struct hexcoord);
 

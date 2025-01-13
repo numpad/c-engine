@@ -16,7 +16,6 @@ static const usize NODE_NONE = (usize)-2;
 static const usize NODE_NOT_VISITED = (usize)-1;
 
 static void load_hextile_models(struct hexmap *);
-static void reset_flowfield(struct hexmap *);
 
 ////////////
 // PUBLIC //
@@ -41,7 +40,6 @@ void hexmap_init(struct hexmap *map, struct engine *engine) {
 	map->h = 9;
 	map->tilesize = 115.0f;
 	map->tiles = calloc(map->w * map->h, sizeof(*map->tiles));
-	map->tiles_flowmap = calloc(map->w * map->h, sizeof(*map->tiles_flowmap));
 	map->edges = malloc(map->w * map->h * sizeof(*map->edges) * HEXMAP_MAX_EDGES);
 	map->highlight_tile_index = (usize)-1;
 	shader_init_from_dir(&map->tile_shader, "res/shader/model/hexmap_tile/");
@@ -295,7 +293,6 @@ void hexmap_generate_flowfield(struct hexmap *map, struct hexcoord start_coord, 
 	// TODO: this param just makes sure i allocate enough memory, meh...
 	assert(flowfield_len == (usize)map->w * map->h);
 
-	reset_flowfield(map);
 	usize start = hexmap_coord_to_index(map, start_coord);
 
 	usize map_size = (usize)map->w * map->h;
@@ -326,17 +323,31 @@ void hexmap_generate_flowfield(struct hexmap *map, struct hexcoord start_coord, 
 	}
 }
 
-enum hexmap_path_result hexmap_find_path(struct hexmap *map, struct hexcoord start_coord, struct hexcoord goal_coord) {
+enum hexmap_path_result hexmap_path_find(struct hexmap *map, struct hexcoord start_coord, struct hexcoord goal_coord, struct hexmap_path *output_path) {
 	assert(map != NULL);
-	reset_flowfield(map);
-	if (hexcoord_equal(start_coord, goal_coord)) {
-		return HEXMAP_PATH_OK;
+	output_path->distance_in_tiles = 0;
+	output_path->start             = start_coord;
+	output_path->goal              = goal_coord;
+	output_path->result            = HEXMAP_PATH_ERROR;
+	output_path->tiles             = NULL;
+
+	// start & goal need to be valid
+	const int is_valid_start = hexmap_is_valid_coord(map, start_coord);
+	const int is_valid_goal  = hexmap_is_valid_coord(map, goal_coord);
+	if (!is_valid_start || !is_valid_goal) {
+		output_path->result = HEXMAP_PATH_ERROR;
+		return output_path->result;
 	}
 
-	usize start = hexmap_coord_to_index(map, start_coord);
-	usize goal  = hexmap_coord_to_index(map, goal_coord);
+	if (hexcoord_equal(start_coord, goal_coord)) {
+		// no pathfinding needed
+		output_path->result = HEXMAP_PATH_OK;
+		return output_path->result;
+	}
 
-	usize map_size = (usize)map->w * map->h;
+	const usize start    = hexmap_coord_to_index(map, start_coord);
+	const usize goal     = hexmap_coord_to_index(map, goal_coord);
+	const usize map_size = (usize)map->w * map->h;
 	RINGBUFFER(usize, frontier, map_size);
 	RINGBUFFER_APPEND(frontier, start);
 
@@ -345,37 +356,77 @@ enum hexmap_path_result hexmap_find_path(struct hexmap *map, struct hexcoord sta
 		came_from[i] = NODE_NOT_VISITED;
 	came_from[start] = NODE_NONE;
 
-	usize NUMBER_OF_ITERATIONS = 0;
-	while (frontier.len > 0) {
-		usize current_node_i = RINGBUFFER_CONSUME(frontier);
-
-		// Early Exit
-		if (current_node_i == goal) {
-			break;
-		}
-
-		// Check all neighboring nodes.
-		usize edge_i = 0;
-		while (map->edges[current_node_i + edge_i * map_size] < map_size && edge_i < HEXMAP_MAX_EDGES) {
-			usize next_i = map->edges[current_node_i + edge_i * map_size];
-
-			if (came_from[next_i] == NODE_NOT_VISITED) {
-				RINGBUFFER_APPEND(frontier, next_i);
-				came_from[next_i] = current_node_i;
+	{ // store relevant nodes in the `came_from` flowfield
+		usize NUMBER_OF_ITERATIONS = 0;
+		while (frontier.len > 0) {
+			usize current_node_i = RINGBUFFER_CONSUME(frontier);
+			// Early Exit
+			if (current_node_i == goal) {
+				break;
 			}
-			
-			++edge_i;
+			// Check all neighboring nodes.
+			usize edge_i = 0;
+			while (map->edges[current_node_i + edge_i * map_size] < map_size && edge_i < HEXMAP_MAX_EDGES) {
+				usize next_i = map->edges[current_node_i + edge_i * map_size];
+				if (came_from[next_i] == NODE_NOT_VISITED) {
+					RINGBUFFER_APPEND(frontier, next_i);
+					came_from[next_i] = current_node_i;
+				}
+				++edge_i;
+			}
+
+			assert(NUMBER_OF_ITERATIONS++ < map_size);
 		}
-
-		assert(NUMBER_OF_ITERATIONS++ < map_size);
 	}
 
-	// TODO: copy output. Current solution is bad design...
-	for (usize i = 0; i < map_size; ++i) {
-		map->tiles_flowmap[i] = came_from[i];
-	}
+	// allocate enough memory to store the longest possible path (visits each node once)
+	output_path->tiles = malloc(map_size * sizeof(*output_path->tiles));
 
-	return HEXMAP_PATH_OK;
+	{ // walk back to build final path
+		usize walk_back_iter = goal;
+		usize NUMBER_OF_ITERATIONS = 0;
+		output_path->distance_in_tiles = 0;
+		while (walk_back_iter != start && walk_back_iter != NODE_NOT_VISITED) {
+			assert(walk_back_iter != NODE_NONE);
+			assert(walk_back_iter != NODE_NOT_VISITED);
+			assert(walk_back_iter < map_size);
+			output_path->tiles[output_path->distance_in_tiles] = walk_back_iter;
+			walk_back_iter = came_from[walk_back_iter];
+			++output_path->distance_in_tiles;
+			assert(NUMBER_OF_ITERATIONS++ < map_size);
+		}
+		if (walk_back_iter == start) {
+			output_path->tiles[output_path->distance_in_tiles] = start;
+			assert(output_path->tiles[0] == goal);
+			assert(output_path->tiles[output_path->distance_in_tiles] == start);
+			output_path->result = HEXMAP_PATH_OK;
+		} else {
+			free(output_path->tiles);
+			output_path->tiles = NULL;
+			output_path->distance_in_tiles = 0;
+			output_path->result = (walk_back_iter == NODE_NOT_VISITED)
+				? HEXMAP_PATH_INCOMPLETE_FLOWFIELD
+				: HEXMAP_PATH_ERROR;
+		}
+	}
+	return output_path->result;
+}
+
+void hexmap_path_destroy(struct hexmap_path *path) {
+	assert(path != NULL);
+	switch (path->result) {
+	case HEXMAP_PATH_OK:
+		// `path->tiles` can be NULL.
+		free(path->tiles);
+		break;
+	case HEXMAP_PATH_ERROR:
+	case HEXMAP_PATH_INCOMPLETE_FLOWFIELD:
+		break;
+	};
+	path->tiles = NULL;
+	path->distance_in_tiles = 0;
+	path->result = HEXMAP_PATH_ERROR;
+	path->start = path->goal = (struct hexcoord){ .x=-1, .y=-1 };
 }
 
 // Calculate the distance from the `flowfield` origin to the `goal`.
@@ -402,7 +453,7 @@ usize hexmap_flowfield_distance(struct hexmap *map, struct hexcoord goal_coord, 
 	usize *came_from = flowfield;
 	if (came_from[goal] == NODE_NOT_VISITED) {
 		// invalid target
-		return -1;
+		return (usize)-1;
 	}
 	if (came_from[goal] == NODE_NONE) {
 		// goal is the same as origin
@@ -448,13 +499,6 @@ static void load_hextile_models(struct hexmap *map) {
 	for (uint i = 0; i < count_of(models); ++i) {
 		int err = model_init_from_file(&map->models[i], models[i]);
 		assert(err == 0);
-	}
-}
-
-static void reset_flowfield(struct hexmap *map) {
-	assert(map != NULL);
-	for (usize i = 0; i < (usize)map->w * map->h; ++i) {
-		map->tiles_flowmap[i] = NODE_NOT_VISITED;
 	}
 }
 
