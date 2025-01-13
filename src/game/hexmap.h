@@ -10,7 +10,8 @@
 
 struct engine;
 
-#define HEXMAP_MAX_EDGES 6
+#define HEXMAP_MAX_EDGES     6
+#define HEXMAP_MAX_NEIGHBORS 6
 
 enum hexmap_tile_effect {
 	HEXMAP_TILE_EFFECT_NONE = 0,

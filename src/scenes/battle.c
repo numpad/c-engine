@@ -187,6 +187,8 @@ static Mix_Chunk    *g_slide_card_sfx;
 
 static void load(struct scene_battle_s *battle, struct engine *engine) {
 	g_engine = engine;
+	rng_seed(time(NULL));
+
 	g_handcards_updated = 0;
 	g_selected_card = 0;
 	g_pickup_next_card = -0.75f; // wait 0.75s before spawning.
@@ -564,6 +566,7 @@ void scene_battle_init(struct scene_battle_s *scene_battle, struct engine *engin
 static int gamestate_changed(enum gamestate_battle old_state, enum gamestate_battle new_state) {
 	switch (new_state) {
 		case GS_BATTLE_BEGIN:
+			break;
 		case GS_ROUND_BEGIN:
 			break;
 		case GS_TURN_PLAYER_BEGIN:
@@ -571,11 +574,36 @@ static int gamestate_changed(enum gamestate_battle old_state, enum gamestate_bat
 			g_player_movement_this_turn = 2;
 			break;
 		case GS_TURN_PLAYER_IN_PROGRESS:
+			break;
 		case GS_TURN_PLAYER_END:
+			break;
 		case GS_TURN_ENTITY_BEGIN:
+			break;
 		case GS_TURN_ENTITY_IN_PROGRESS:
-		case GS_TURN_ENTITY_END:
+			break;
+		case GS_TURN_ENTITY_END: {
+			// Move to a random neighbor
+			struct hexcoord random_neighbor;
+			uint iterations = HEXMAP_MAX_NEIGHBORS;
+			int start = rng_i() % (HEXMAP_N_LAST - HEXMAP_N_FIRST);
+			do {
+				random_neighbor = hexmap_get_neighbor_coord(&g_hexmap, g_enemy_position, (start + iterations) % HEXMAP_N_LAST);
+#if DEBUG
+				if (iterations - 1 == 0) {
+					console_log_ex(g_engine, CONSOLE_MSG_ERROR, 2.0f, "Enemy has 0 valid neighbors?!");
+				}
+#endif
+			} while (iterations-- > 0 && (!hexmap_is_valid_coord(&g_hexmap, random_neighbor) || hexmap_is_tile_obstacle(&g_hexmap, random_neighbor)));
+
+			if (hexmap_is_valid_coord(&g_hexmap, random_neighbor) && !hexmap_is_tile_obstacle(&g_hexmap, random_neighbor)) {
+				g_enemy_position = random_neighbor;
+			} else {
+				console_log_ex(g_engine, CONSOLE_MSG_ERROR, 2.0f, "Did not move?");
+			}
+			break;
+		}
 		case GS_ROUND_END:
+			break;
 		case GS_BATTLE_END:
 			break;
 	}
