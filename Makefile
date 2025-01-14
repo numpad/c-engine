@@ -9,7 +9,7 @@ CFLAGS = -std=gnu99 -fPIC -Wall -Wextra -pedantic                            \
 		 -Werror=switch-enum -Wcast-qual -Wnull-dereference -Wunused-result  \
 		 -DFLECS_CUSTOM_BUILD -DFLECS_SYSTEM -DFLECS_MODULE -DFLECS_PIPELINE \
 		 -DFLECS_TIMER -DFLECS_HTTP -DFLECS_SNAPSHOT -DFLECS_PARSER          \
-		 -DFLECS_APP -DFLECS_OS_API_IMPL
+		 -DFLECS_APP -DFLECS_OS_API_IMPL -DFLECS_JSON
 
 # Sanitizer runtime is not compatible with RTLD_DEEPBIND, so hot reload does not work.
 CFLAGS_EXTRA_SAFE = -Warray-bounds -Warray-bounds-pointer-arithmetic        \
@@ -47,10 +47,7 @@ TARGET = cengine
 ifeq ($(CC), emcc)
 	TARGET = cengine.html
 	BIN = bin/emcc/
-	SHELL_FILE = src/web/shell_start_on_click.html
-
-	# Start immediately:
-	#SHELL_FILE = src/web/source_homescreen.html
+	SHELL_FILE = src/web/shell.html
 
 	# TODO: Let's not add everything to CFLAGS, some should only be used when linking.
 	# TODO: Does `-simd128 -msse2` reduce the devices we can target?

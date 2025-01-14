@@ -117,6 +117,10 @@ typedef struct {
 	u16 max_hp;
 } c_health;
 
+typedef struct {
+	u8 _dummy;
+} c_npc;
+
 ECS_COMPONENT_DECLARE(c_pos2d);
 ECS_COMPONENT_DECLARE(c_pos3d);
 ECS_COMPONENT_DECLARE(c_position);
@@ -125,6 +129,7 @@ ECS_COMPONENT_DECLARE(c_handcard);
 ECS_COMPONENT_DECLARE(c_model);
 ECS_COMPONENT_DECLARE(c_velocity);
 ECS_COMPONENT_DECLARE(c_health);
+ECS_COMPONENT_DECLARE(c_npc);
 
 // queries
 static ecs_query_t *g_ordered_handcards;
@@ -137,6 +142,7 @@ static void system_draw_cards           (ecs_iter_t *);
 static void system_draw_props           (ecs_iter_t *);
 static void system_draw_board_entities  (ecs_iter_t *);
 static void system_draw_healthbars      (ecs_iter_t *);
+static void system_enemy_turn           (ecs_iter_t *);
 static void observer_on_update_handcards(ecs_iter_t *);
 
 ECS_SYSTEM_DECLARE(system_move_cards);
@@ -145,6 +151,7 @@ ECS_SYSTEM_DECLARE(system_draw_cards);
 ECS_SYSTEM_DECLARE(system_draw_props);
 ECS_SYSTEM_DECLARE(system_draw_board_entities);
 ECS_SYSTEM_DECLARE(system_draw_healthbars);
+ECS_SYSTEM_DECLARE(system_enemy_turn);
 
 
 //
@@ -164,6 +171,7 @@ static pipeline_t            g_ui_pipeline;
 static pipeline_t            g_text_pipeline;
 static ecs_world_t          *g_world;
 static ecs_entity_t          g_selected_card;
+static ecs_entity_t          g_player;
 static fontatlas_t           g_card_font;
 static model_t               g_player_model;
 static model_t               g_enemy_model;
@@ -172,8 +180,6 @@ static float                 g_pickup_next_card;
 static struct camera         g_camera;
 static struct camera         g_portrait_camera;
 static struct hexmap         g_hexmap;
-static struct hexcoord       g_character_position;
-static struct hexcoord       g_enemy_position;
 static enum gamestate_battle g_gamestate;
 static enum gamestate_battle g_next_gamestate;
 static struct { float x, y, w, h; } g_button_end_turn;
@@ -231,10 +237,6 @@ static void load(struct scene_battle_s *battle, struct engine *engine) {
 	}
 
 	hexmap_init(&g_hexmap, g_engine);
-	g_character_position = (struct hexcoord){ .x=2, .y=5 };
-	g_enemy_position     = (struct hexcoord){ .x=3, .y=3 };
-	hexmap_tile_at(&g_hexmap, g_character_position)->movement_cost = HEXMAP_MOVEMENT_COST_MAX;
-	hexmap_tile_at(&g_hexmap, g_enemy_position)->movement_cost     = HEXMAP_MOVEMENT_COST_MAX;
 
 	// initialize camera
 	camera_init_default(&g_camera, engine->window_width, engine->window_height);
@@ -255,12 +257,14 @@ static void load(struct scene_battle_s *battle, struct engine *engine) {
 	ECS_COMPONENT_DEFINE(g_world, c_model);
 	ECS_COMPONENT_DEFINE(g_world, c_velocity);
 	ECS_COMPONENT_DEFINE(g_world, c_health);
+	ECS_COMPONENT_DEFINE(g_world, c_npc);
 	ECS_SYSTEM_DEFINE(g_world, system_move_cards,          0, c_pos2d, c_handcard);
 	ECS_SYSTEM_DEFINE(g_world, system_move_models,         0, c_pos3d, c_model, c_velocity);
 	ECS_SYSTEM_DEFINE(g_world, system_draw_cards,          0, c_card, ?c_handcard, c_pos2d); _syntax_fix_label:
 	ECS_SYSTEM_DEFINE(g_world, system_draw_props,          0, c_pos3d, c_model);
 	ECS_SYSTEM_DEFINE(g_world, system_draw_board_entities, 0, c_position, c_model);
 	ECS_SYSTEM_DEFINE(g_world, system_draw_healthbars,     0, c_position, c_health);
+	ECS_SYSTEM_DEFINE(g_world, system_enemy_turn,          0, c_position, c_npc);
 
 	g_ordered_handcards = ecs_query(g_world, {
 		.filter.terms = { {ecs_id(c_card)}, {ecs_id(c_handcard)} },
@@ -274,21 +278,30 @@ static void load(struct scene_battle_s *battle, struct engine *engine) {
 		.callback = observer_on_update_handcards,
 		});
 
-	// Add some models
+	// Add some entities
 	{
 		ecs_entity_t e;
-		// campfile
+		// campfire decoration
+		struct hexcoord campfire_pos = { .x=3, .y=4 };
 		e = ecs_new_id(g_world);
-		ecs_set(g_world, e, c_position, { .x=3, .y=4 });
-		ecs_set(g_world, e, c_model, { .model=&g_props_model[3], .scale=450.0f });
-		ecs_set(g_world, e, c_health, { .hp=8, .max_hp=8 });
-		hexmap_tile_at(&g_hexmap, (struct hexcoord){ .x=3, .y=4 })->movement_cost = HEXMAP_MOVEMENT_COST_MAX;
+		ecs_set(g_world, e, c_position, { .x=campfire_pos.x, .y=campfire_pos.y });
+		ecs_set(g_world, e, c_model,    { .model=&g_props_model[3], .scale=450.0f });
+		hexmap_tile_at(&g_hexmap, campfire_pos)->movement_cost = HEXMAP_MOVEMENT_COST_MAX;
 		// enemy
+		struct hexcoord enemy_pos = { .x=3, .y=3 };
 		e = ecs_new_id(g_world);
-		ecs_set(g_world, e, c_position, { .x=3, .y=1 });
-		ecs_set(g_world, e, c_model, { .model=&g_enemy_model, .scale=80.0f });
-		ecs_set(g_world, e, c_health, { .hp=8, .max_hp=8 });
-		hexmap_tile_at(&g_hexmap, (struct hexcoord){ .x=3, .y=1 })->movement_cost = HEXMAP_MOVEMENT_COST_MAX;
+		ecs_set(g_world, e, c_position,  { .x=enemy_pos.x, .y=enemy_pos.y });
+		ecs_set(g_world, e, c_model,     { .model=&g_enemy_model, .scale=80.0f });
+		ecs_set(g_world, e, c_health,    { .hp=19, .max_hp=19 });
+		ecs_set(g_world, e, c_npc, { ._dummy=1 });
+		hexmap_tile_at(&g_hexmap, enemy_pos)->movement_cost = HEXMAP_MOVEMENT_COST_MAX;
+		// player
+		struct hexcoord player_pos = { .x=2, .y=5 };
+		g_player = ecs_new_id(g_world);
+		ecs_set(g_world, g_player, c_position,  { .x=player_pos.x, .y=player_pos.y });
+		ecs_set(g_world, g_player, c_model,     { .model=&g_enemy_model, .scale=80.0f });
+		ecs_set(g_world, g_player, c_health,    { .hp=7, .max_hp=10 });
+		hexmap_tile_at(&g_hexmap, player_pos)->movement_cost = HEXMAP_MOVEMENT_COST_MAX;
 
 		hexmap_update_edges(&g_hexmap);
 	}
@@ -395,7 +408,9 @@ static void draw(struct scene_battle_s *battle, struct engine *engine) {
 	gbuffer_clear(g_gbuffer);
 
 	glEnable(GL_DEPTH_TEST);
-	vec2s player_pos = hexmap_coord_to_world_position(&g_hexmap, g_character_position);
+
+	c_position *player_coord = ecs_get(g_world, g_player, c_position);
+	vec2s player_pos = hexmap_coord_to_world_position(&g_hexmap, *player_coord);
 	hexmap_draw(&g_hexmap, &g_camera, (vec3){player_pos.x, 0.0f, player_pos.y});
 
 	if (g_debug_draw_pathfinder) {
@@ -468,8 +483,7 @@ static void draw(struct scene_battle_s *battle, struct engine *engine) {
 	// Player model
 	{
 		// calculate matrices
-		vec2s pos = hexmap_coord_to_world_position(&g_hexmap, g_character_position);
-		vec3 world_pos = {pos.x, 0.0f, pos.y};
+		vec3 world_pos = {player_pos.x, 0.0f, player_pos.y};
 		mat4 model = GLM_MAT4_IDENTITY_INIT;
 		glm_translate(model, world_pos);
 		//glm_rotate_y(model, glm_rad(sinf(g_engine->time_elapsed * 2.0f) * 80.0f), model);
@@ -488,27 +502,6 @@ static void draw(struct scene_battle_s *battle, struct engine *engine) {
 		shader_set_uniform_mat3(&g_character_model_shader, "u_normalMatrix", (float*)normalMatrix);
 		model_draw(&g_player_model, &g_character_model_shader, &g_camera, model);
 
-		// Draw enemy
-		glm_mat4_identity(model);
-		vec2s p = hexmap_coord_to_world_position(&g_hexmap, g_enemy_position);
-		glm_translate(model, (vec3){ p.x, (fabsf(fminf(0.0f, sinf(g_engine->time_elapsed * 10.0f)))) * 50.0f, p.y });
-		glm_rotate_y(model, glm_rad(g_engine->time_elapsed), model);
-		glm_scale_uni(model, scale);
-		shader_set_uniform_mat3(&g_character_model_shader, "u_normalMatrix", (float*)normalMatrix);
-		model_draw(&g_enemy_model, &g_character_model_shader, &g_camera, model);
-
-		// Portrait model
-		glm_mat4_identity(model);
-		glm_translate(model, (vec3){ engine->window_width - 100.0f, engine->window_height - 240.0f, -300.0f });
-		glm_rotate_x(model, glm_rad(10.0f + cosf(g_engine->time_elapsed) * 10.0f), model);
-		glm_rotate_y(model, glm_rad(sinf(g_engine->time_elapsed) * 40.0f), model);
-		glm_scale(model, (vec3){ 75.0f, 75.0f, 75.0f});
-		const float pr = engine->window_pixel_ratio;
-		glEnable(GL_SCISSOR_TEST);
-		glScissor(engine->window_width * pr - 85.0f * pr, engine->window_height * pr - 85.0f * pr, 66 * pr, 66 * pr);
-		model_draw(&g_player_model, &g_character_model_shader, &g_portrait_camera, model);
-		glDisable(GL_SCISSOR_TEST);
-
 	}
 	glDisable(GL_DEPTH_TEST);
 
@@ -525,15 +518,30 @@ static void draw(struct scene_battle_s *battle, struct engine *engine) {
 	pipeline_reset(&g_cards_pipeline);
 	g_cards_pipeline.texture = &g_cards_texture;
 
-	ecs_run(g_world, ecs_id(system_draw_cards), engine->dt, NULL);
 	ecs_run(g_world, ecs_id(system_draw_healthbars), engine->dt, NULL);
 
-	// draw ui
+	// Draw UI - borders & elements
 	draw_hud(&g_ui_pipeline);
 
-	glEnable(GL_DEPTH_TEST);
-	pipeline_draw_ortho(&g_ui_pipeline, g_engine->window_width, g_engine->window_height);
 	glDisable(GL_DEPTH_TEST);
+	pipeline_draw_ortho(&g_ui_pipeline, g_engine->window_width, g_engine->window_height);
+	ecs_run(g_world, ecs_id(system_draw_cards), engine->dt, NULL);
+
+	{ // Draw UI - Portrait
+		// TODO: this doesn't write to gbuffer, but rather renders with no lighting.
+		glEnable(GL_DEPTH_TEST);
+		mat4 model = GLM_MAT4_IDENTITY_INIT;
+		glm_translate(model, (vec3){ engine->window_width - 100.0f, engine->window_height - 240.0f, -300.0f });
+		glm_rotate_x(model, glm_rad(10.0f + cosf(g_engine->time_elapsed) * 10.0f), model);
+		glm_rotate_y(model, glm_rad(sinf(g_engine->time_elapsed) * 40.0f), model);
+		glm_scale(model, (vec3){ 75.0f, 75.0f, 75.0f});
+		const float pr = engine->window_pixel_ratio;
+		glEnable(GL_SCISSOR_TEST);
+		glScissor(engine->window_width * pr - 85.0f * pr, engine->window_height * pr - 85.0f * pr, 66 * pr, 66 * pr);
+		model_draw(&g_player_model, &g_character_model_shader, &g_portrait_camera, model);
+		glDisable(GL_SCISSOR_TEST);
+		glDisable(GL_DEPTH_TEST);
+	}
 }
 
 void on_callback(struct scene_battle_s *battle, struct engine *engine, struct engine_event event) {
@@ -590,33 +598,12 @@ static int gamestate_changed(enum gamestate_battle old_state, enum gamestate_bat
 		case GS_TURN_PLAYER_END:
 			break;
 		case GS_TURN_ENTITY_BEGIN:
+			ecs_run(g_world, ecs_id(system_enemy_turn), g_engine->dt, NULL);
 			break;
 		case GS_TURN_ENTITY_IN_PROGRESS:
 			break;
-		case GS_TURN_ENTITY_END: {
-			// Move to a random neighbor
-			struct hexcoord random_neighbor;
-			uint iterations = HEXMAP_MAX_NEIGHBORS;
-			int start = rng_i() % (HEXMAP_N_LAST - HEXMAP_N_FIRST);
-			do {
-				random_neighbor = hexmap_get_neighbor_coord(&g_hexmap, g_enemy_position, (start + iterations) % HEXMAP_N_LAST);
-#if DEBUG
-				if (iterations - 1 == 0) {
-					console_log_ex(g_engine, CONSOLE_MSG_ERROR, 2.0f, "Enemy has 0 valid neighbors?!");
-				}
-#endif
-			} while (iterations-- > 0 && (!hexmap_is_valid_coord(&g_hexmap, random_neighbor) || hexmap_is_tile_obstacle(&g_hexmap, random_neighbor)));
-
-			if (hexmap_is_valid_coord(&g_hexmap, random_neighbor) && !hexmap_is_tile_obstacle(&g_hexmap, random_neighbor)) {
-				hexmap_tile_at(&g_hexmap, random_neighbor)->movement_cost = HEXMAP_MOVEMENT_COST_MAX;
-				hexmap_tile_at(&g_hexmap, g_enemy_position)->movement_cost = 1;
-				hexmap_update_edges(&g_hexmap);
-				g_enemy_position = random_neighbor;
-			} else {
-				console_log_ex(g_engine, CONSOLE_MSG_ERROR, 2.0f, "Did not move?");
-			}
+		case GS_TURN_ENTITY_END:
 			break;
-		}
 		case GS_ROUND_END:
 			break;
 		case GS_BATTLE_END:
@@ -627,6 +614,7 @@ static int gamestate_changed(enum gamestate_battle old_state, enum gamestate_bat
 }
 
 static void update_gamestate(enum gamestate_battle state, float dt) {
+	c_position *player_coord = ecs_get_mut(g_world, g_player, c_position);
 	switch (state) {
 	case GS_BATTLE_BEGIN:
 		g_next_gamestate = GS_ROUND_BEGIN;
@@ -644,7 +632,7 @@ static void update_gamestate(enum gamestate_battle state, float dt) {
 	case GS_TURN_PLAYER_BEGIN: {
 		int done = add_cards_to_hand(dt);
 		if (done) {
-			highlight_reachable_tiles(g_character_position, g_player_movement_this_turn);
+			highlight_reachable_tiles(*player_coord, g_player_movement_this_turn);
 			g_next_gamestate = GS_TURN_PLAYER_IN_PROGRESS;
 		}
 		break;
@@ -666,7 +654,7 @@ static void update_gamestate(enum gamestate_battle state, float dt) {
 					hexmap_set_tile_effect(&g_hexmap, new_move_goal, HEXMAP_TILE_EFFECT_HIGHLIGHT);
 				}
 				struct hexmap_path path;
-				hexmap_path_find(&g_hexmap, g_character_position, new_move_goal, &path);
+				hexmap_path_find(&g_hexmap, *player_coord, new_move_goal, &path);
 				if (path.result == HEXMAP_PATH_OK) {
 					g_move_goal = new_move_goal;
 					// Highlight red for unreachable tile
@@ -678,11 +666,11 @@ static void update_gamestate(enum gamestate_battle state, float dt) {
 					// Update character position
 					if (path.distance_in_tiles >= 1 && path.distance_in_tiles <= g_player_movement_this_turn) {
 						hexmap_tile_at(&g_hexmap, g_move_goal)->movement_cost = HEXMAP_MOVEMENT_COST_MAX;
-						hexmap_tile_at(&g_hexmap, g_character_position)->movement_cost = 1;
+						hexmap_tile_at(&g_hexmap, *player_coord)->movement_cost = 1;
 						hexmap_update_edges(&g_hexmap);
 						g_player_movement_this_turn -= path.distance_in_tiles;
-						g_character_position = g_move_goal;
-						highlight_reachable_tiles(g_character_position, g_player_movement_this_turn);
+						*player_coord = g_move_goal;
+						highlight_reachable_tiles(*player_coord, g_player_movement_this_turn);
 					}
 				}
 				hexmap_path_destroy(&path);
@@ -985,20 +973,19 @@ static void interact_with_handcards(struct input_drag_s *drag) {
 
 int add_cards_to_hand(float dt) {
 	int done = 0;
+	ecs_filter_t *filter = ecs_filter_init(g_world, &(ecs_filter_desc_t){
+		.terms = {
+			{ .id = ecs_id(c_card) },
+			{ .id = ecs_id(c_pos2d), .oper = EcsNot },
+			{ .id = ecs_id(c_handcard), .oper = EcsNot },
+		},
+	});
 
 	const float card_add_speed = 0.25f;
 	g_pickup_next_card += dt;
 	if (g_pickup_next_card >= card_add_speed) {
 		g_pickup_next_card -= card_add_speed;
 		
-		ecs_filter_t *filter = ecs_filter_init(g_world, &(ecs_filter_desc_t){
-			.terms = {
-				{ .id = ecs_id(c_card) },
-				{ .id = ecs_id(c_pos2d), .oper = EcsNot },
-				{ .id = ecs_id(c_handcard), .oper = EcsNot },
-			},
-		});
-
 		ecs_iter_t it = ecs_filter_iter(g_world, filter);
 		int has_entity = 0;
 		while (ecs_filter_next(&it)) {
@@ -1220,6 +1207,7 @@ static void system_draw_board_entities(ecs_iter_t *it) {
 		glm_mat4_identity(model_matrix);
 		glm_translate(model_matrix, world_pos);
 		glm_scale_uni(model_matrix, model->scale);
+		// TODO: either only draw characters here, or specify which shader to use?
 		model_draw(model->model, &g_character_model_shader, &g_camera, model_matrix);
 	}
 }
@@ -1230,6 +1218,7 @@ static void system_draw_healthbars(ecs_iter_t *it) {
 	for (int i = 0; i < it->count; ++i) {
 		c_position pos = it_position[i];
 		c_health health = it_health[i];
+		float health_pct = (float)health.hp / health.max_hp;
 
 		// Enemy healthbar
 		vec2s worldpos = hexmap_coord_to_world_position(&g_hexmap, pos);
@@ -1239,10 +1228,42 @@ static void system_draw_healthbars(ecs_iter_t *it) {
 		cmd.size.y = 16 * 2;
 		cmd.position.x = floorf(screenpos.x - cmd.size.x * 0.5f);
 		cmd.position.y = screenpos.y + 3.0f;
-		cmd.position.z = 0.5f;
-		drawcmd_set_texture_subrect(&cmd, g_ui_pipeline.texture, 64, 80, 32, 16);
+		cmd.position.z = 0.0f;
+		drawcmd_set_texture_subrect(&cmd, g_ui_pipeline.texture, 0, 32, 32, 16);
 		pipeline_emit(&g_ui_pipeline, &cmd);
 
+		cmd.size.x = 32 * 2;
+		drawcmd_set_texture_subrect(&cmd, g_ui_pipeline.texture, 0, 48, 32, 16);
+		pipeline_emit(&g_ui_pipeline, &cmd);
+	}
+}
+
+static void system_enemy_turn(ecs_iter_t *it) {
+	c_position *it_position = ecs_field(it, c_position,  1);
+	c_npc      *it_npc      = ecs_field(it, c_npc,       2);
+	for (int i = 0; i < it->count; ++i) {
+		c_position *pos = &it_position[i];
+		c_npc npc = it_npc[i];
+
+		// Move to a random neighbor
+		struct hexcoord random_neighbor;
+		uint iterations = HEXMAP_MAX_NEIGHBORS;
+		int start = rng_i() % (HEXMAP_N_LAST - HEXMAP_N_FIRST);
+		do {
+			random_neighbor = hexmap_get_neighbor_coord(&g_hexmap, *pos, (start + iterations) % HEXMAP_N_LAST);
+			if (iterations - 1 == 0) {
+				console_log_ex(g_engine, CONSOLE_MSG_ERROR, 2.0f, "Enemy has 0 valid neighbors?!");
+			}
+		} while (iterations-- > 0 && (!hexmap_is_valid_coord(&g_hexmap, random_neighbor) || hexmap_is_tile_obstacle(&g_hexmap, random_neighbor)));
+
+		if (hexmap_is_valid_coord(&g_hexmap, random_neighbor) && !hexmap_is_tile_obstacle(&g_hexmap, random_neighbor)) {
+			hexmap_tile_at(&g_hexmap, random_neighbor)->movement_cost = HEXMAP_MOVEMENT_COST_MAX;
+			hexmap_tile_at(&g_hexmap, *pos)->movement_cost = 1;
+			hexmap_update_edges(&g_hexmap);
+			*pos = random_neighbor;
+		} else {
+			console_log_ex(g_engine, CONSOLE_MSG_ERROR, 2.0f, "Did not move?");
+		}
 	}
 }
 
