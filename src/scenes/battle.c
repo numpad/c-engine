@@ -232,7 +232,9 @@ static void load(struct scene_battle_s *battle, struct engine *engine) {
 
 	hexmap_init(&g_hexmap, g_engine);
 	g_character_position = (struct hexcoord){ .x=2, .y=5 };
-	g_enemy_position = (struct hexcoord){ .x=3, .y=3 };
+	g_enemy_position     = (struct hexcoord){ .x=3, .y=3 };
+	hexmap_tile_at(&g_hexmap, g_character_position)->movement_cost = HEXMAP_MOVEMENT_COST_MAX;
+	hexmap_tile_at(&g_hexmap, g_enemy_position)->movement_cost     = HEXMAP_MOVEMENT_COST_MAX;
 
 	// initialize camera
 	camera_init_default(&g_camera, engine->window_width, engine->window_height);
@@ -274,15 +276,21 @@ static void load(struct scene_battle_s *battle, struct engine *engine) {
 
 	// Add some models
 	{
-		ecs_entity_t e = ecs_new_id(g_world);
+		ecs_entity_t e;
+		// campfile
+		e = ecs_new_id(g_world);
 		ecs_set(g_world, e, c_position, { .x=3, .y=4 });
 		ecs_set(g_world, e, c_model, { .model=&g_props_model[3], .scale=450.0f });
-
+		ecs_set(g_world, e, c_health, { .hp=8, .max_hp=8 });
+		hexmap_tile_at(&g_hexmap, (struct hexcoord){ .x=3, .y=4 })->movement_cost = HEXMAP_MOVEMENT_COST_MAX;
+		// enemy
 		e = ecs_new_id(g_world);
 		ecs_set(g_world, e, c_position, { .x=3, .y=1 });
-		ecs_set(g_world, e, c_model,    { .model=&g_props_model[2], .scale=450.0f });
+		ecs_set(g_world, e, c_model, { .model=&g_enemy_model, .scale=80.0f });
 		ecs_set(g_world, e, c_health, { .hp=8, .max_hp=8 });
+		hexmap_tile_at(&g_hexmap, (struct hexcoord){ .x=3, .y=1 })->movement_cost = HEXMAP_MOVEMENT_COST_MAX;
 
+		hexmap_update_edges(&g_hexmap);
 	}
 
 	// Character Shader
@@ -399,26 +407,42 @@ static void draw(struct scene_battle_s *battle, struct engine *engine) {
 			while (g_hexmap.edges[i + n_tiles * edges_count] < n_tiles && edges_count < 6) {
 				++edges_count;
 			}
-			float pct = edges_count / 6.0f;
-			char text[32];
-			sprintf(text, "%d", edges_count);
 
 			vec2s wp = hexmap_index_to_world_position(&g_hexmap, i);
 			vec3s p = (vec3s){{ wp.x, 0.0f, wp.y }};
 			vec2s screen_pos = world_to_screen_camera(engine, &g_camera, GLM_MAT4_IDENTITY, p);
 
+			// movement cost (center)
+			float movecost_pct = g_hexmap.tiles[i].movement_cost < HEXMAP_MOVEMENT_COST_MAX ? 1.0f : 0.0f;
 			nvgBeginPath(vg);
-			nvgFillColor(vg, nvgRGBf(1.0f - pct, pct, 0.0f));
+			nvgFillColor(vg, nvgRGBf(1.0f - movecost_pct, movecost_pct, 0.0f));
 			nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
 			nvgFontSize(vg, 12.0f);
-			nvgText(vg, screen_pos.x, screen_pos.y, text, NULL);
+			char movecost_text[32];
+			if (g_hexmap.tiles[i].movement_cost >= HEXMAP_MOVEMENT_COST_MAX) {
+				sprintf(movecost_text, "#");
+			} else {
+				sprintf(movecost_text, "%d", g_hexmap.tiles[i].movement_cost);
+			}
+			nvgText(vg, screen_pos.x, screen_pos.y, movecost_text, NULL);
 
+			// neighbors (lower left)
+			float neighbors_pct = edges_count / 6.0f;
+			nvgBeginPath(vg);
+			nvgFillColor(vg, nvgRGBf(1.0f - neighbors_pct, neighbors_pct, 0.0f));
+			nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+			nvgFontSize(vg, 9.0f);
+			char text[32];
+			sprintf(text, "N=%d", edges_count);
+			nvgText(vg, screen_pos.x - 12.0f, screen_pos.y + 10.0f, text, NULL);
+
+			// index (lower right)
 			nvgBeginPath(vg);
 			nvgFontSize(vg, 9.0f);
 			nvgFillColor(vg, nvgRGBf(1, 1, 1));
 			char index_text[32];
 			sprintf(index_text, "#%lu", i);
-			nvgText(vg, screen_pos.x + 10.0f, screen_pos.y + 10.0f, index_text, NULL);
+			nvgText(vg, screen_pos.x + 12.0f, screen_pos.y + 10.0f, index_text, NULL);
 
 			nvgStrokeWidth(vg, 3.0f);
 			nvgStrokeColor(vg, nvgRGB(128, 0, 128));
@@ -584,6 +608,9 @@ static int gamestate_changed(enum gamestate_battle old_state, enum gamestate_bat
 			} while (iterations-- > 0 && (!hexmap_is_valid_coord(&g_hexmap, random_neighbor) || hexmap_is_tile_obstacle(&g_hexmap, random_neighbor)));
 
 			if (hexmap_is_valid_coord(&g_hexmap, random_neighbor) && !hexmap_is_tile_obstacle(&g_hexmap, random_neighbor)) {
+				hexmap_tile_at(&g_hexmap, random_neighbor)->movement_cost = HEXMAP_MOVEMENT_COST_MAX;
+				hexmap_tile_at(&g_hexmap, g_enemy_position)->movement_cost = 1;
+				hexmap_update_edges(&g_hexmap);
 				g_enemy_position = random_neighbor;
 			} else {
 				console_log_ex(g_engine, CONSOLE_MSG_ERROR, 2.0f, "Did not move?");
@@ -632,10 +659,12 @@ static void update_gamestate(enum gamestate_battle state, float dt) {
 			vec3s p_begin = screen_to_world(g_engine->window_width, g_engine->window_height, g_camera.projection, g_camera.view, g_engine->input_drag.begin_x, g_engine->input_drag.begin_y);
 			vec3s p_end = screen_to_world(g_engine->window_width, g_engine->window_height, g_camera.projection, g_camera.view, g_engine->input_drag.end_x, g_engine->input_drag.end_y);
 			struct hexcoord begin_coord = hexmap_world_position_to_coord(&g_hexmap, (vec2s){ .x=p_begin.x, .y=p_begin.z });
-			struct hexcoord end_coord = hexmap_world_position_to_coord(&g_hexmap, (vec2s){ .x=p_end.x, .y=p_end.z });
-			struct hexcoord new_move_goal = end_coord;
+			struct hexcoord new_move_goal = hexmap_world_position_to_coord(&g_hexmap, (vec2s){ .x=p_end.x, .y=p_end.z });
 
-			if (hexmap_is_valid_coord(&g_hexmap, begin_coord) && hexmap_is_valid_coord(&g_hexmap, end_coord)) {
+			if (hexmap_is_valid_coord(&g_hexmap, begin_coord) && hexmap_is_valid_coord(&g_hexmap, new_move_goal) && hexcoord_equal(begin_coord, new_move_goal)) {
+				if (hexmap_is_tile_obstacle(&g_hexmap, new_move_goal)) {
+					hexmap_set_tile_effect(&g_hexmap, new_move_goal, HEXMAP_TILE_EFFECT_HIGHLIGHT);
+				}
 				struct hexmap_path path;
 				hexmap_path_find(&g_hexmap, g_character_position, new_move_goal, &path);
 				if (path.result == HEXMAP_PATH_OK) {
@@ -646,10 +675,13 @@ static void update_gamestate(enum gamestate_battle state, float dt) {
 					} else {
 						hexmap_clear_tile_effect(&g_hexmap, HEXMAP_TILE_EFFECT_HIGHLIGHT);
 					}
-					// Highlight the walkable area
+					// Update character position
 					if (path.distance_in_tiles >= 1 && path.distance_in_tiles <= g_player_movement_this_turn) {
+						hexmap_tile_at(&g_hexmap, g_move_goal)->movement_cost = HEXMAP_MOVEMENT_COST_MAX;
+						hexmap_tile_at(&g_hexmap, g_character_position)->movement_cost = 1;
+						hexmap_update_edges(&g_hexmap);
 						g_player_movement_this_turn -= path.distance_in_tiles;
-						g_character_position = (struct hexcoord){ .x=g_move_goal.x, .y=g_move_goal.y };
+						g_character_position = g_move_goal;
 						highlight_reachable_tiles(g_character_position, g_player_movement_this_turn);
 					}
 				}

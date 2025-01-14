@@ -13,6 +13,8 @@ struct engine;
 #define HEXMAP_MAX_EDGES     6
 #define HEXMAP_MAX_NEIGHBORS 6
 
+#define HEXMAP_MOVEMENT_COST_MAX 200
+
 enum hexmap_tile_effect {
 	HEXMAP_TILE_EFFECT_NONE = 0,
 	HEXMAP_TILE_EFFECT_HIGHLIGHT,
@@ -43,6 +45,7 @@ struct hextile {
 	u16 tile;
 	i16 rotation;
 	u8 highlight;
+	u8 movement_cost;
 };
 
 struct hexcoord {
@@ -81,6 +84,7 @@ int hexcoord_equal(struct hexcoord a, struct hexcoord b);
 int hexmap_is_valid_coord(struct hexmap *, struct hexcoord);
 int hexmap_is_valid_index(struct hexmap *, usize index);
 
+//
 void hexmap_init(struct hexmap *, struct engine *);
 void hexmap_destroy(struct hexmap *);
 void hexmap_draw(struct hexmap *, struct camera *, vec3 player_pos);
@@ -93,11 +97,14 @@ usize           hexmap_coord_to_index         (struct hexmap *, struct hexcoord)
 usize           hexmap_world_position_to_index(struct hexmap *, vec2s position);
 struct hexcoord hexmap_world_position_to_coord(struct hexmap *, vec2s position);
 struct hexcoord hexmap_get_neighbor_coord     (struct hexmap *, struct hexcoord tile, enum hexmap_neighbor neighbor);
+struct hextile *hexmap_tile_at                (struct hexmap *, struct hexcoord at);
 
 void hexmap_set_tile_effect(struct hexmap *, struct hexcoord, enum hexmap_tile_effect);
 void hexmap_clear_tile_effect(struct hexmap *, enum hexmap_tile_effect);
 
+
 // flowfield
+void hexmap_update_edges(struct hexmap *map);
 void hexmap_generate_flowfield(struct hexmap *map, struct hexcoord start_coord, usize flowfield_len, usize *flowfield);
 usize hexmap_flowfield_distance(struct hexmap *map, struct hexcoord goal, usize flowfield_len, usize flowfield[flowfield_len]);
 // pathfinding

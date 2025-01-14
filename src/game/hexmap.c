@@ -39,39 +39,46 @@ void hexmap_init(struct hexmap *map, struct engine *engine) {
 	map->w = 7;
 	map->h = 9;
 	map->tilesize = 115.0f;
-	map->tiles = calloc(map->w * map->h, sizeof(*map->tiles));
 	map->edges = malloc(map->w * map->h * sizeof(*map->edges) * HEXMAP_MAX_EDGES);
 	map->highlight_tile_index = (usize)-1;
+	map->tiles = calloc(map->w * map->h, sizeof(*map->tiles));
+	for (usize i = 0; i < (usize)map->w * map->h; ++i) {
+		map->tiles[i].movement_cost = 1;
+	}
 	shader_init_from_dir(&map->tile_shader, "res/shader/model/hexmap_tile/");
 	shader_set_uniform_buffer(&map->tile_shader, "Global", &engine->shader_global_ubo);
 
 	// Make some map
-#define M(x, y, T, R) map->tiles[x + map->w * y].tile = T; map->tiles[x + map->w * y].rotation = R;
-	M(0, 0, 1,  0);
-	M(1, 0, 4, -1);
-	M(2, 0, 6, -1);
-	M(0, 1, 1,  0);
-	M(1, 1, 1,  0);
-	M(2, 1, 4, -2);
-	M(0, 2, 1,  0);
-	M(1, 2, 5, -3);
-	M(2, 2, 6, -2);
-	M(0, 3, 3, -4);
-	M(1, 3, 4, -3);
-	M(2, 3, 6, -2);
-	M(0, 4, 6, -3);
+#define M(x, y, T, R, M) \
+	map->tiles[x + map->w * y].tile = T;     \
+	map->tiles[x + map->w * y].rotation = R; \
+	map->tiles[x + map->w * y].movement_cost = M;
+	
+	M(0, 0, 1,  0, HEXMAP_MOVEMENT_COST_MAX);
+	M(1, 0, 4, -1, HEXMAP_MOVEMENT_COST_MAX);
+	M(2, 0, 6, -1, 1);
+	M(0, 1, 1,  0, HEXMAP_MOVEMENT_COST_MAX);
+	M(1, 1, 1,  0, HEXMAP_MOVEMENT_COST_MAX);
+	M(2, 1, 4, -2, HEXMAP_MOVEMENT_COST_MAX);
+	M(0, 2, 1,  0, HEXMAP_MOVEMENT_COST_MAX);
+	M(1, 2, 5, -3, HEXMAP_MOVEMENT_COST_MAX);
+	M(2, 2, 6, -2, 1);
+	M(0, 3, 3, -4, HEXMAP_MOVEMENT_COST_MAX);
+	M(1, 3, 4, -3, HEXMAP_MOVEMENT_COST_MAX);
+	M(2, 3, 6, -2, 1);
+	M(0, 4, 6, -3, 1);
 
-	M(4, 0, 8,  1);
-	M(4, 1, 8, -2);
-	M(4, 2, 9, -1);
-	M(5, 2, 7,  0);
-	M(6, 2, 7,  0);
-	M(5, 3, 8,  1);
-	M(4, 4, 7, -2);
-	M(4, 5, 8, -2);
-	M(4, 6, 8,  1);
-	M(4, 7, 8, -2);
-	M(4, 8, 7, -1);
+	M(4, 0, 8,  1, 1);
+	M(4, 1, 8, -2, 1);
+	M(4, 2, 9, -1, 1);
+	M(5, 2, 7,  0, 1);
+	M(6, 2, 7,  0, 1);
+	M(5, 3, 8,  1, 1);
+	M(4, 4, 7, -2, 1);
+	M(4, 5, 8, -2, 1);
+	M(4, 6, 8,  1, 1);
+	M(4, 7, 8, -2, 1);
+	M(4, 8, 7, -1, 1);
 #undef M
 
 	// precomputed
@@ -83,48 +90,7 @@ void hexmap_init(struct hexmap *map, struct engine *engine) {
 	load_hextile_models(map);
 
 	// Generate pathfinding data
-	for (usize i = 0; i < (usize)map->w * map->h * HEXMAP_MAX_EDGES; ++i) {
-		map->edges[i] = NO_EDGE;
-	}
-	usize n_tiles = (usize)map->w * map->h;
-	for (int y = 0; y < map->h; ++y) {
-		for (int x = 0; x < map->w; ++x) {
-			int x_nw = (y % 2 == 0) ? x : x - 1;
-			int x_ne = x_nw + 1;
-			int x_sw = (y % 2 == 0) ? x : x - 1;
-			int x_se = x_sw + 1;
-
-			// TODO: remove. test unwalkable tiles.
-			//       not completely enough, can still move to this tile.
-			struct hexcoord coord = { .x=x, .y=y };
-			if (hexmap_is_tile_obstacle(map, coord)) {
-				continue;
-			}
-
-			// Neighbors
-			struct hexcoord current = { .x=x, .y=y };
-			struct hexcoord tile_nw = hexmap_get_neighbor_coord(map, current, HEXMAP_NW);
-			struct hexcoord tile_ne = hexmap_get_neighbor_coord(map, current, HEXMAP_NE);
-			struct hexcoord tile_w  = hexmap_get_neighbor_coord(map, current, HEXMAP_W);
-			struct hexcoord tile_e  = hexmap_get_neighbor_coord(map, current, HEXMAP_E);
-			struct hexcoord tile_sw = hexmap_get_neighbor_coord(map, current, HEXMAP_SW);
-			struct hexcoord tile_se = hexmap_get_neighbor_coord(map, current, HEXMAP_SE);
-			int tile_nw_reachable = hexmap_is_valid_coord(map, tile_nw) && !hexmap_is_tile_obstacle(map, tile_nw);
-			int tile_ne_reachable = hexmap_is_valid_coord(map, tile_ne) && !hexmap_is_tile_obstacle(map, tile_ne);
-			int tile_w_reachable  = hexmap_is_valid_coord(map, tile_w)  && !hexmap_is_tile_obstacle(map, tile_w);
-			int tile_e_reachable  = hexmap_is_valid_coord(map, tile_e)  && !hexmap_is_tile_obstacle(map, tile_e);
-			int tile_sw_reachable = hexmap_is_valid_coord(map, tile_sw) && !hexmap_is_tile_obstacle(map, tile_sw);
-			int tile_se_reachable = hexmap_is_valid_coord(map, tile_se) && !hexmap_is_tile_obstacle(map, tile_se);
-
-			uint edges_generated = 0;
-			if (tile_nw_reachable) map->edges[x + y * map->w + edges_generated++ * n_tiles] = hexmap_coord_to_index(map, tile_nw);
-			if (tile_ne_reachable) map->edges[x + y * map->w + edges_generated++ * n_tiles] = hexmap_coord_to_index(map, tile_ne);
-			if (tile_w_reachable)  map->edges[x + y * map->w + edges_generated++ * n_tiles] = hexmap_coord_to_index(map, tile_w);
-			if (tile_e_reachable)  map->edges[x + y * map->w + edges_generated++ * n_tiles] = hexmap_coord_to_index(map, tile_e);
-			if (tile_sw_reachable) map->edges[x + y * map->w + edges_generated++ * n_tiles] = hexmap_coord_to_index(map, tile_sw);
-			if (tile_se_reachable) map->edges[x + y * map->w + edges_generated++ * n_tiles] = hexmap_coord_to_index(map, tile_se);
-		}
-	}
+	hexmap_update_edges(map);
 }
 
 void hexmap_destroy(struct hexmap *map) {
@@ -208,6 +174,13 @@ struct hexcoord hexmap_get_neighbor_coord(struct hexmap *map, struct hexcoord ti
 	return neighbor_coord;
 }
 
+struct hextile *hexmap_tile_at(struct hexmap *map, struct hexcoord at) {
+	assert(map != NULL);
+	assert(hexmap_is_valid_coord(map, at));
+	usize i = hexmap_coord_to_index(map, at);
+	return &map->tiles[i];
+}
+
 void hexmap_draw(struct hexmap *map, struct camera *camera, vec3 player_pos) {
 	usize n_tiles = map->w * map->h;
 
@@ -282,6 +255,35 @@ void hexmap_clear_tile_effect(struct hexmap *map, enum hexmap_tile_effect effect
 	for (usize i = 0; i < (usize)map->w * map->h; ++i) {
 		if (map->tiles[i].highlight == effect_to_reset) {
 			map->tiles[i].highlight = HEXMAP_TILE_EFFECT_NONE;
+		}
+	}
+}
+
+void hexmap_update_edges(struct hexmap *map) {
+	for (usize i = 0; i < (usize)map->w * map->h * HEXMAP_MAX_EDGES; ++i) {
+		map->edges[i] = NO_EDGE;
+	}
+	usize n_tiles = (usize)map->w * map->h;
+	for (int y = 0; y < map->h; ++y) {
+		for (int x = 0; x < map->w; ++x) {
+			// Neighbors
+			struct hexcoord current_coord = { .x=x, .y=y };
+			usize current = hexmap_coord_to_index(map, current_coord);
+			// TODO: Allow leaving from HEXMAP_MOVEMENT_COST_MAX?
+			//if (map->tiles[current].movement_cost >= HEXMAP_MOVEMENT_COST_MAX) {
+			//	continue;
+			//}
+
+			uint edges_generated = 0;
+			for (enum hexmap_neighbor i = HEXMAP_N_FIRST; i <= HEXMAP_N_LAST; ++i) {
+				struct hexcoord neighbor_coord = hexmap_get_neighbor_coord(map, current_coord, i);
+				if (hexmap_is_valid_coord(map, neighbor_coord)) {
+					usize neighbor = hexmap_coord_to_index(map, neighbor_coord);
+					if (map->tiles[neighbor].movement_cost < HEXMAP_MOVEMENT_COST_MAX) {
+						map->edges[current + edges_generated++ * n_tiles] = hexmap_coord_to_index(map, neighbor_coord);
+					}
+				}
+			}
 		}
 	}
 }
@@ -473,8 +475,7 @@ int hexmap_is_tile_obstacle(struct hexmap *map, struct hexcoord coord) {
 	assert(map != NULL);
 	assert(hexmap_is_valid_coord(map, coord));
 	usize i = hexmap_coord_to_index(map, coord);
-	return (i == 0 || i == 1 || i == 7 || i == 8 || i == 9 || i == 14
-			|| i == 15 || i == 21 || i == 22 || i == 24 || i == 31);
+	return map->tiles[i].movement_cost >= HEXMAP_MOVEMENT_COST_MAX;
 }
 
 ////////////
