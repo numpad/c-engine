@@ -1199,17 +1199,20 @@ static void system_draw_healthbars(ecs_iter_t *it) {
 		vec2s worldpos = hexmap_coord_to_world_position(&g_hexmap, pos);
 		vec2s screenpos = world_to_screen_camera(g_engine, &g_camera, GLM_MAT4_IDENTITY, (vec3s){{ worldpos.x, 0.0f, worldpos.y }});
 		drawcmd_t cmd = DRAWCMD_INIT;
-		cmd.size.x = 32 * 2;
-		cmd.size.y = 16 * 2;
+		cmd.size.x = 26 * 2;
+		cmd.size.y =  6 * 2;
 		cmd.position.x = floorf(screenpos.x - cmd.size.x * 0.5f);
-		cmd.position.y = screenpos.y + 3.0f;
+		cmd.position.y = screenpos.y + 9.0f;
 		cmd.position.z = 0.0f;
 		// border
-		drawcmd_set_texture_subrect(&cmd, g_ui_pipeline.texture, 0, 32, 32, 16);
+		drawcmd_set_texture_subrect(&cmd, g_ui_pipeline.texture, 16, 32, 26, 6);
 		pipeline_emit(&g_ui_pipeline, &cmd);
 		// health
-		cmd.size.x = (32 * 2) * health_pct;
-		drawcmd_set_texture_subrect(&cmd, g_ui_pipeline.texture, 0, 48, 32 * health_pct, 16);
+		cmd.position.x += 4;
+		cmd.position.y += 4;
+		cmd.size.x = (22 * 2) * health_pct;
+		cmd.size.y =   2 * 2;
+		drawcmd_set_texture_subrect(&cmd, g_ui_pipeline.texture, 16, 48, 22 * health_pct, 2);
 		pipeline_emit(&g_ui_pipeline, &cmd);
 	}
 }
