@@ -4,7 +4,6 @@
 #include <math.h>
 #include <stdlib.h>
 #include <time.h>
-#include <SDL_opengles2.h>
 #include <SDL_net.h>
 #include <SDL_mixer.h>
 #include <nanovg.h>
@@ -15,6 +14,7 @@
 #include <flecs.h>
 #include <cglm/cglm.h>
 #include "engine.h"
+#include "gl/opengles3.h"
 #include "gl/texture.h"
 #include "gl/shader.h"
 #include "gl/graphics2d.h"
@@ -650,19 +650,10 @@ static void update_gamestate(enum gamestate_battle state, float dt) {
 			struct hexcoord new_move_goal = hexmap_world_position_to_coord(&g_hexmap, (vec2s){ .x=p_end.x, .y=p_end.z });
 
 			if (hexmap_is_valid_coord(&g_hexmap, begin_coord) && hexmap_is_valid_coord(&g_hexmap, new_move_goal) && hexcoord_equal(begin_coord, new_move_goal)) {
-				if (hexmap_is_tile_obstacle(&g_hexmap, new_move_goal)) {
-					hexmap_set_tile_effect(&g_hexmap, new_move_goal, HEXMAP_TILE_EFFECT_HIGHLIGHT);
-				}
 				struct hexmap_path path;
 				hexmap_path_find(&g_hexmap, *player_coord, new_move_goal, &path);
 				if (path.result == HEXMAP_PATH_OK) {
 					g_move_goal = new_move_goal;
-					// Highlight red for unreachable tile
-					if (path.distance_in_tiles > g_player_movement_this_turn && g_player_movement_this_turn > 0) {
-						hexmap_set_tile_effect(&g_hexmap, g_move_goal, HEXMAP_TILE_EFFECT_HIGHLIGHT);
-					} else {
-						hexmap_clear_tile_effect(&g_hexmap, HEXMAP_TILE_EFFECT_HIGHLIGHT);
-					}
 					// Update character position
 					if (path.distance_in_tiles >= 1 && path.distance_in_tiles <= g_player_movement_this_turn) {
 						hexmap_tile_at(&g_hexmap, g_move_goal)->movement_cost = HEXMAP_MOVEMENT_COST_MAX;
@@ -1076,9 +1067,9 @@ static void system_move_models(ecs_iter_t *it) {
 }
 
 static void system_draw_cards(ecs_iter_t *it) {
-	c_card *cards = ecs_field(it, c_card, 1);
+	c_card     *cards     = ecs_field(it, c_card,  1);
 	c_handcard *handcards = NULL;
-	c_pos2d *positions = ecs_field(it, c_pos2d, 3);
+	c_pos2d    *positions = ecs_field(it, c_pos2d, 3);
 
 	if (ecs_field_is_set(it, 2)) {
 		handcards = ecs_field(it, c_handcard, 2);
@@ -1229,11 +1220,12 @@ static void system_draw_healthbars(ecs_iter_t *it) {
 		cmd.position.x = floorf(screenpos.x - cmd.size.x * 0.5f);
 		cmd.position.y = screenpos.y + 3.0f;
 		cmd.position.z = 0.0f;
+		// border
 		drawcmd_set_texture_subrect(&cmd, g_ui_pipeline.texture, 0, 32, 32, 16);
 		pipeline_emit(&g_ui_pipeline, &cmd);
-
-		cmd.size.x = 32 * 2;
-		drawcmd_set_texture_subrect(&cmd, g_ui_pipeline.texture, 0, 48, 32, 16);
+		// health
+		cmd.size.x = (32 * 2) * health_pct;
+		drawcmd_set_texture_subrect(&cmd, g_ui_pipeline.texture, 0, 48, 32 * health_pct, 16);
 		pipeline_emit(&g_ui_pipeline, &cmd);
 	}
 }
@@ -1248,9 +1240,9 @@ static void system_enemy_turn(ecs_iter_t *it) {
 		// Move to a random neighbor
 		struct hexcoord random_neighbor;
 		uint iterations = HEXMAP_MAX_NEIGHBORS;
-		int start = rng_i() % (HEXMAP_N_LAST - HEXMAP_N_FIRST);
+		int start = rng_i() % (HEXMAP_N_LAST - HEXMAP_N_FIRST + 1);
 		do {
-			random_neighbor = hexmap_get_neighbor_coord(&g_hexmap, *pos, (start + iterations) % HEXMAP_N_LAST);
+			random_neighbor = hexmap_get_neighbor_coord(&g_hexmap, *pos, (start + iterations) % (HEXMAP_N_LAST + 1));
 			if (iterations - 1 == 0) {
 				console_log_ex(g_engine, CONSOLE_MSG_ERROR, 2.0f, "Enemy has 0 valid neighbors?!");
 			}
@@ -1260,6 +1252,8 @@ static void system_enemy_turn(ecs_iter_t *it) {
 			hexmap_tile_at(&g_hexmap, random_neighbor)->movement_cost = HEXMAP_MOVEMENT_COST_MAX;
 			hexmap_tile_at(&g_hexmap, *pos)->movement_cost = 1;
 			hexmap_update_edges(&g_hexmap);
+			hexmap_set_tile_effect(&g_hexmap, random_neighbor, HEXMAP_TILE_EFFECT_ATTACKABLE);
+			hexmap_set_tile_effect(&g_hexmap, *pos, HEXMAP_TILE_EFFECT_NONE);
 			*pos = random_neighbor;
 		} else {
 			console_log_ex(g_engine, CONSOLE_MSG_ERROR, 2.0f, "Did not move?");
@@ -1268,8 +1262,8 @@ static void system_enemy_turn(ecs_iter_t *it) {
 }
 
 static void observer_on_update_handcards(ecs_iter_t *it) {
-	c_card *changed_cards = ecs_field(it, c_card, 1);
-	c_handcard *changed_handcards = ecs_field(it, c_handcard, 2);
+	//c_card *changed_cards = ecs_field(it, c_card, 1);
+	//c_handcard *changed_handcards = ecs_field(it, c_handcard, 2);
 
 	g_handcards_updated = 1;
 }

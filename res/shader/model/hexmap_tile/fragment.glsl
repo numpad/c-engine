@@ -37,6 +37,14 @@ vec3 sdgHexagon(vec2 p, float r) {
 	return vec3(d, s*g/d);
 }
 
+vec3 highlight_enemy_tile(vec3 diffuse, vec2 p) {
+	p = vec2(-p.y, p.x); // rotate by 90° because pointy-top hexagons.
+	vec3 highlight_color = vec3(0.82, 0.14, 0.12);
+	float hex = sdgHexagon(p, 0.5).x;
+	float border = smoothstep(0.1, 0.8, hex);
+	float alpha = min(step(0.4, border), 0.15) + clamp(smoothstep(0.2, 0.6, hex), 0.1, 0.5);
+	return mix(diffuse, highlight_color, alpha);
+}
 vec3 highlight_walkable_area(vec3 diffuse, vec2 p) {
 	p = vec2(-p.y, p.x); // rotate by 90° because pointy-top hexagons.
 	vec3 highlight_color = vec3(1.0); // blue: vec3(0.31, 0.31, 0.77);
@@ -56,11 +64,11 @@ vec3 highlight_walkable_area(vec3 diffuse, vec2 p) {
 void main() {
 	vec4 diffuse = texture(u_diffuse, v_texcoord0);
 	if (int(u_highlight) == 1) {
-		Albedo = vec4(mix(vec3(1.0, 0.0, 0.0), diffuse.rgb, 0.5), diffuse.a);
+		vec3 effect = highlight_enemy_tile(diffuse.rgb, v_local_position.xz);
+		Albedo = vec4(effect, diffuse.a);
 	} else if (int(u_highlight) == 2) {
 		vec2 p = v_world_position.xz - u_player_world_pos.xz;
 		p *= 0.01;
-
 		vec3 effect = highlight_walkable_area(diffuse.rgb, p);
 		Albedo = vec4(effect, diffuse.a);
 	} else {
