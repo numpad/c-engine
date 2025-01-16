@@ -863,6 +863,7 @@ static void on_game_event_play_card(event_info_t *info) {
 
 	ecs_entity_t card_entity = info->play_card.card;
 	const c_card *card = ecs_get(g_world, card_entity, c_card);
+	c_handcard *handcard = ecs_get_mut(g_world, card_entity, c_handcard);
 
 	// TODO: Do something with card
 	// TODO: Unique card id
@@ -870,7 +871,18 @@ static void on_game_event_play_card(event_info_t *info) {
 		c_health *health = ecs_get_mut(g_world, g_player, c_health);
 		int heal_until_max = health->max_hp - health->hp;
 		int heal_for = (heal_until_max > 2 ? 2 : heal_until_max);
+		if (heal_for <= 0) {
+			// TODO: Deny placing card, better way?
+			handcard->can_be_placed = 0;
+			handcard->is_selected = CS_NOT_SELECTED;
+			ecs_modified(g_world, card_entity, c_handcard);
+			g_selected_card = 0;
+
+			console_log_ex(g_engine, CONSOLE_MSG_SUCCESS, 1.0f, "Already at full HP");
+			return;
+		}
 		health->hp += heal_for;
+		ecs_modified(g_world, g_player, c_health);
 		console_log_ex(g_engine, CONSOLE_MSG_SUCCESS, 1.0f, "Healed for %d HP", heal_for);
 	}
 
