@@ -54,7 +54,10 @@ enum gamestate_battle {
 };
 
 typedef struct event_info {
-	ecs_entity_t entity;
+	struct  {
+		ecs_entity_t card;
+		ecs_entity_t caused_by;
+	} play_card;
 } event_info_t;
 
 //
@@ -409,73 +412,9 @@ static void draw(struct scene_battle_s *battle, struct engine *engine) {
 
 	glEnable(GL_DEPTH_TEST);
 
-	c_position *player_coord = ecs_get(g_world, g_player, c_position);
+	const c_position *player_coord = ecs_get(g_world, g_player, c_position);
 	vec2s player_pos = hexmap_coord_to_world_position(&g_hexmap, *player_coord);
 	hexmap_draw(&g_hexmap, &g_camera, (vec3){player_pos.x, 0.0f, player_pos.y});
-
-	if (g_debug_draw_pathfinder) {
-		// draw neighbors & edges
-		NVGcontext *vg = engine->vg;
-		usize n_tiles = (usize)g_hexmap.w * g_hexmap.h;
-		for (usize i = 0; i < n_tiles; ++i) {
-			int edges_count = 0;
-			while (g_hexmap.edges[i + n_tiles * edges_count] < n_tiles && edges_count < 6) {
-				++edges_count;
-			}
-
-			vec2s wp = hexmap_index_to_world_position(&g_hexmap, i);
-			vec3s p = (vec3s){{ wp.x, 0.0f, wp.y }};
-			vec2s screen_pos = world_to_screen_camera(engine, &g_camera, GLM_MAT4_IDENTITY, p);
-
-			// movement cost (center)
-			float movecost_pct = g_hexmap.tiles[i].movement_cost < HEXMAP_MOVEMENT_COST_MAX ? 1.0f : 0.0f;
-			nvgBeginPath(vg);
-			nvgFillColor(vg, nvgRGBf(1.0f - movecost_pct, movecost_pct, 0.0f));
-			nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
-			nvgFontSize(vg, 12.0f);
-			char movecost_text[32];
-			if (g_hexmap.tiles[i].movement_cost >= HEXMAP_MOVEMENT_COST_MAX) {
-				sprintf(movecost_text, "#");
-			} else {
-				sprintf(movecost_text, "%d", g_hexmap.tiles[i].movement_cost);
-			}
-			nvgText(vg, screen_pos.x, screen_pos.y, movecost_text, NULL);
-
-			// neighbors (lower left)
-			float neighbors_pct = edges_count / 6.0f;
-			nvgBeginPath(vg);
-			nvgFillColor(vg, nvgRGBf(1.0f - neighbors_pct, neighbors_pct, 0.0f));
-			nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
-			nvgFontSize(vg, 9.0f);
-			char text[32];
-			sprintf(text, "N=%d", edges_count);
-			nvgText(vg, screen_pos.x - 12.0f, screen_pos.y + 10.0f, text, NULL);
-
-			// index (lower right)
-			nvgBeginPath(vg);
-			nvgFontSize(vg, 9.0f);
-			nvgFillColor(vg, nvgRGBf(1, 1, 1));
-			char index_text[32];
-			sprintf(index_text, "#%lu", i);
-			nvgText(vg, screen_pos.x + 12.0f, screen_pos.y + 10.0f, index_text, NULL);
-
-			nvgStrokeWidth(vg, 3.0f);
-			nvgStrokeColor(vg, nvgRGB(128, 0, 128));
-			if (i == g_hexmap.highlight_tile_index) {
-				for (int j = 0; j < edges_count; ++j) {
-					usize neighbor = g_hexmap.edges[i + n_tiles * j];
-					vec2s nwp = hexmap_index_to_world_position(&g_hexmap, neighbor);
-					vec3s np = (vec3s){{ nwp.x, 0.0f, nwp.y }};
-					vec2s n_screen_pos = world_to_screen_camera(engine, &g_camera, GLM_MAT4_IDENTITY, np);
-
-					nvgBeginPath(vg);
-					nvgMoveTo(vg, screen_pos.x, screen_pos.y);
-					nvgLineTo(vg, n_screen_pos.x, n_screen_pos.y);
-					nvgStroke(vg);
-				}
-			}
-		}
-	} // :g_debug_draw_pathfinder
 
 	ecs_run(g_world, ecs_id(system_draw_props), engine->dt, NULL);
 	ecs_run(g_world, ecs_id(system_draw_board_entities), engine->dt, NULL);
@@ -527,17 +466,18 @@ static void draw(struct scene_battle_s *battle, struct engine *engine) {
 	pipeline_draw_ortho(&g_ui_pipeline, g_engine->window_width, g_engine->window_height);
 	ecs_run(g_world, ecs_id(system_draw_cards), engine->dt, NULL);
 
+
 	{ // Draw UI - Portrait
 		// TODO: this doesn't write to gbuffer, but rather renders with no lighting.
 		glEnable(GL_DEPTH_TEST);
 		mat4 model = GLM_MAT4_IDENTITY_INIT;
-		glm_translate(model, (vec3){ engine->window_width - 100.0f, engine->window_height - 240.0f, -300.0f });
+		glm_translate(model, (vec3){ -g_engine->window_width + 100.0f, g_engine->window_height - 240.0f, -300.0f });
 		glm_rotate_x(model, glm_rad(10.0f + cosf(g_engine->time_elapsed) * 10.0f), model);
 		glm_rotate_y(model, glm_rad(sinf(g_engine->time_elapsed) * 40.0f), model);
 		glm_scale(model, (vec3){ 75.0f, 75.0f, 75.0f});
-		const float pr = engine->window_pixel_ratio;
+		const float pr = g_engine->window_pixel_ratio;
 		glEnable(GL_SCISSOR_TEST);
-		glScissor(engine->window_width * pr - 85.0f * pr, engine->window_height * pr - 85.0f * pr, 66 * pr, 66 * pr);
+		glScissor(15.0f * pr, g_engine->window_height * pr - 81.0f * pr, 66 * pr, 66 * pr);
 		model_draw(&g_player_model, &g_character_model_shader, &g_portrait_camera, model);
 		glDisable(GL_SCISSOR_TEST);
 		glDisable(GL_DEPTH_TEST);
@@ -804,36 +744,26 @@ static int order_handcards(ecs_entity_t e1, const void *data1, ecs_entity_t e2, 
 
 static void draw_hud(pipeline_t *pipeline) {
 	drawcmd_t cmd;
-
-	// Frame
+	// Frame (portrait & healthbar)
 	cmd = DRAWCMD_INIT;
-	cmd.size.x = 96;
-	cmd.size.y = 96;
-	cmd.position.x = g_engine->window_width - 96 - 4;
-	cmd.position.y = 4;
+	cmd.size.x = 64*3;
+	cmd.size.y = 32*3;
+	cmd.position.x = 3;
+	cmd.position.y = 3;
 	cmd.position.z = -0.9f;
-	drawcmd_set_texture_subrect(&cmd, g_ui_pipeline.texture, 0, 0, 32, 32);
-	pipeline_emit(&g_ui_pipeline, &cmd);
-
-	// Healthbar frame
+	drawcmd_set_texture_subrect(&cmd, pipeline->texture, 64, 0, 64, 32);
+	pipeline_emit(pipeline, &cmd);
+	// health
+	const c_health *player_health = ecs_get(g_world, g_player, c_health);
+	float player_health_pct = (float)player_health->hp / player_health->max_hp;
 	cmd = DRAWCMD_INIT;
-	cmd.size.x = 48;
-	cmd.size.y = 192;
-	cmd.position.x = 1;
-	cmd.position.y = 4;
-	drawcmd_set_texture_subrect(&cmd, g_ui_pipeline.texture, 32, 0, 16, 64);
-	pipeline_emit(&g_ui_pipeline, &cmd);
-
-	// Healthbar fill
-	int hp = 64.0f * fabsf(cosf(g_engine->time_elapsed));
-	cmd = DRAWCMD_INIT;
-	cmd.size.x = 48;
-	cmd.size.y = hp * 3.0f;
-	cmd.position.x = 1;
-	cmd.position.y = 4;
-	cmd.position.z = 0.1f;
-	drawcmd_set_texture_subrect(&cmd, g_ui_pipeline.texture, 48, 0, 16, hp);
-	pipeline_emit(&g_ui_pipeline, &cmd);
+	cmd.size.x = 36*3 * player_health_pct;
+	cmd.size.y = 2*3;
+	cmd.position.x = 3 + 75;
+	cmd.position.y = 3 + 12;
+	cmd.position.z = -0.9f;
+	drawcmd_set_texture_subrect(&cmd, pipeline->texture, 80, 32, 36 * player_health_pct, 2);
+	pipeline_emit(pipeline, &cmd);
 
 	// Draw "End turn" button
 	if (g_gamestate == GS_TURN_PLAYER_IN_PROGRESS) {
@@ -859,6 +789,58 @@ static void draw_hud(pipeline_t *pipeline) {
 		nvgFillColor(vg, nvgRGB(92, 35, 35));
 		nvgText(vg, g_button_end_turn.x + g_button_end_turn.w * 0.5f, g_button_end_turn.y + g_button_end_turn.h * 0.5f + 16.0f, "(X cards left)", NULL);
 	}
+
+	if (g_debug_draw_pathfinder) {
+		// draw neighbors & edges
+		NVGcontext *vg = g_engine->vg;
+		usize n_tiles = (usize)g_hexmap.w * g_hexmap.h;
+		for (usize i = 0; i < n_tiles; ++i) {
+			int edges_count = 0;
+			while (g_hexmap.edges[i + n_tiles * edges_count] < n_tiles && edges_count < 6) {
+				++edges_count;
+			}
+
+			vec2s wp = hexmap_index_to_world_position(&g_hexmap, i);
+			vec3s p = (vec3s){{ wp.x, 0.0f, wp.y }};
+			vec2s screen_pos = world_to_screen_camera(g_engine, &g_camera, GLM_MAT4_IDENTITY, p);
+
+			// movement cost (center)
+			float movecost_pct = g_hexmap.tiles[i].movement_cost < HEXMAP_MOVEMENT_COST_MAX ? 1.0f : 0.0f;
+			nvgBeginPath(vg);
+			nvgFillColor(vg, nvgRGBf(1.0f - movecost_pct, movecost_pct, 0.0f));
+			nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+			nvgFontSize(vg, 12.0f);
+			char movecost_text[32];
+			if (g_hexmap.tiles[i].movement_cost >= HEXMAP_MOVEMENT_COST_MAX) {
+				sprintf(movecost_text, "#");
+			} else {
+				sprintf(movecost_text, "%d", g_hexmap.tiles[i].movement_cost);
+			}
+			nvgText(vg, screen_pos.x, screen_pos.y, movecost_text, NULL);
+
+			// neighbors (lower left)
+			float neighbors_pct = edges_count / 6.0f;
+			nvgBeginPath(vg);
+			nvgFillColor(vg, nvgRGBf(1.0f - neighbors_pct, neighbors_pct, 0.0f));
+			nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+			nvgFontSize(vg, 9.0f);
+			char text[32];
+			sprintf(text, "N=%d", edges_count);
+			nvgText(vg, screen_pos.x - 12.0f, screen_pos.y + 10.0f, text, NULL);
+
+			// index (lower right)
+			nvgBeginPath(vg);
+			nvgFontSize(vg, 9.0f);
+			nvgFillColor(vg, nvgRGBf(1, 1, 1));
+			char index_text[32];
+			sprintf(index_text, "#%lu", i);
+			nvgText(vg, screen_pos.x + 12.0f, screen_pos.y + 10.0f, index_text, NULL);
+
+			nvgStrokeWidth(vg, 3.0f);
+			nvgStrokeColor(vg, nvgRGB(128, 0, 128));
+		}
+	} // :g_debug_draw_pathfinder
+
 }
 
 
@@ -876,19 +858,21 @@ static void on_game_event(enum event_type type, event_info_t *info) {
 
 static void on_game_event_play_card(event_info_t *info) {
 	assert(info != NULL);
-	assert(info->entity != 0);
-	assert(ecs_is_valid(g_world, info->entity));
+	assert(info->play_card.card != 0);
+	assert(ecs_is_valid(g_world, info->play_card.card));
 
-	ecs_entity_t card_entity = info->entity;
-
+	ecs_entity_t card_entity = info->play_card.card;
 	const c_card *card = ecs_get(g_world, card_entity, c_card);
-	//console_log(g_engine, "Played card: \"%s\"...", card->name);
-
-	vec3s world_position = screen_to_world(
-			g_engine->window_width, g_engine->window_height, g_camera.projection, g_camera.view,
-			g_engine->input_drag.x, g_engine->input_drag.y);
 
 	// TODO: Do something with card
+	// TODO: Unique card id
+	if (card->image_id == 1) {
+		c_health *health = ecs_get_mut(g_world, g_player, c_health);
+		int heal_until_max = health->max_hp - health->hp;
+		int heal_for = (heal_until_max > 2 ? 2 : heal_until_max);
+		health->hp += heal_for;
+		console_log_ex(g_engine, CONSOLE_MSG_SUCCESS, 1.0f, "Healed for %d HP", heal_for);
+	}
 
 	// remove card
 	ecs_delete(g_world, g_selected_card);
@@ -934,7 +918,7 @@ static void interact_with_handcards(struct input_drag_s *drag) {
 			c_handcard *hc = ecs_get_mut(g_world, g_selected_card, c_handcard);
 
 			if (hc->can_be_placed) {
-				on_game_event(EVENT_PLAY_CARD, &(event_info_t){ .entity = g_selected_card });
+				on_game_event(EVENT_PLAY_CARD, &(event_info_t){ .play_card={ .caused_by=g_player, .card=g_selected_card } });
 			} else {
 				hc->hand_space = 1.0f;
 				hc->is_selected = CS_NOT_SELECTED;

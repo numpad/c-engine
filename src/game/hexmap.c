@@ -40,7 +40,6 @@ void hexmap_init(struct hexmap *map, struct engine *engine) {
 	map->h = 9;
 	map->tilesize = 115.0f;
 	map->edges = malloc(map->w * map->h * sizeof(*map->edges) * HEXMAP_MAX_EDGES);
-	map->highlight_tile_index = (usize)-1;
 	map->tiles = calloc(map->w * map->h, sizeof(*map->tiles));
 	for (usize i = 0; i < (usize)map->w * map->h; ++i) {
 		map->tiles[i].movement_cost = 1;
@@ -235,13 +234,7 @@ void hexmap_set_tile_effect(struct hexmap *map, struct hexcoord coord, enum hexm
 	case HEXMAP_TILE_EFFECT_NONE:
 		map->tiles[index].highlight = 0;
 		break;
-	case HEXMAP_TILE_EFFECT_HIGHLIGHT:
-		// unset previous highlight
-		if (hexmap_is_valid_index(map, map->highlight_tile_index)
-			&& map->tiles[map->highlight_tile_index].highlight == HEXMAP_TILE_EFFECT_HIGHLIGHT) {
-			map->tiles[map->highlight_tile_index].highlight = 0;
-		}
-		map->highlight_tile_index = index;
+	case HEXMAP_TILE_EFFECT_ATTACKABLE:
 		map->tiles[index].highlight = 1;
 		break;
 	case HEXMAP_TILE_EFFECT_MOVEABLE_AREA:
