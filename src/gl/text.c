@@ -8,6 +8,7 @@
 #include <cglm/types.h>
 #include <hb.h>
 #include <hb-ft.h>
+#include "engine.h"
 #include "gl/texture.h"
 
 
@@ -34,16 +35,18 @@ static fontatlas_glyph_t *fa_find_glyph(fontatlas_t *fa, unsigned long glyph, un
 	return NULL;
 }
 
-void fontatlas_init(fontatlas_t *fa, FT_Library library) {
+void fontatlas_init(fontatlas_t *fa, struct engine *engine) {
 	assert(fa != NULL);
-	assert(library != NULL);
+	assert(engine != NULL);
+	assert(engine->freetype != NULL);
 
-	fa->library_ref = library;
+	fa->library_ref = engine->freetype;
 	fa->faces = NULL;
 	fa->num_faces = 0;
 	fa->glyphs = NULL;
 	fa->num_glyphs = 0;
 	fa->atlas_padding = 2;
+	fa->pixel_ratio = engine->window_pixel_ratio;
 
 	struct texture_settings_s settings = TEXTURE_SETTINGS_INIT;
 	settings.filter_min = GL_LINEAR;
@@ -86,16 +89,10 @@ unsigned int fontatlas_add_face(fontatlas_t *fa, const char *filename, int size)
 	error = FT_New_Face(fa->library_ref, filename, 0, &(fa->faces[face_index]));
 	assert(!error);
 
-	// TODO: handle dpi correctly.
-	//       GetDisplayDPI doesnt really work on linux for me, reporting wrong DPI.
-	//       The docs say SDL3 might fix this?
-	//       Set_Pixel_Sizes works, but isn't crisp on highdpi.
-
-	//float ddpi, hdpi, vdpi;
-	//assert(SDL_GetDisplayDPI(0, &ddpi, &hdpi, &vdpi) == 0);
-	//printf("Diagonal DPI: %f, Horizontal DPI: %f, Vertical DPI: %f", ddpi, hdpi, vdpi);
-	//error = FT_Set_Char_Size(fa->faces[face_index], 0, 48*64, hdpi, vdpi); // 16 points
-	error = FT_Set_Pixel_Sizes(fa->faces[face_index], 0, size);
+	// TODO: This already improves High-DPI handling, but is this enough?
+	float hdpi = (96.0f * fa->pixel_ratio);
+	float vdpi = (96.0f * fa->pixel_ratio);
+	error = FT_Set_Char_Size(fa->faces[face_index], 0, size * 64.0f, hdpi, vdpi);
 	assert(!error);
 
 	return face_index;
@@ -243,17 +240,18 @@ void fontatlas_write(fontatlas_t *fa, pipeline_t *pipeline, unsigned int str_len
 
 		// skip non-drawable characters
 		// TODO: differentiate between non-drawable and just not rasterized (yet?)
+		const float pr = fa->pixel_ratio;
 		if (glyph_info) {
-			cmd.position.x = cursor.x + positions[i].x_offset + glyph_info->bearing.x;
-			cmd.position.y = cursor.y + positions[i].y_offset - glyph_info->bearing.y;
-			cmd.size.x = glyph_info->texture_rect.z;
-			cmd.size.y = glyph_info->texture_rect.w;
+			cmd.position.x = cursor.x + (positions[i].x_offset + glyph_info->bearing.x) / pr;
+			cmd.position.y = cursor.y + (positions[i].y_offset - glyph_info->bearing.y) / pr;
+			cmd.size.x = glyph_info->texture_rect.z / pr;
+			cmd.size.y = glyph_info->texture_rect.w / pr;
 			drawcmd_set_texture_subrect(&cmd, pipeline->texture, glyph_info->texture_rect.x, glyph_info->texture_rect.y, glyph_info->texture_rect.z, glyph_info->texture_rect.w);
 			pipeline_emit(pipeline, &cmd);
 		}
 
-		cursor.x += positions[i].x_advance / 64.0f;
-		cursor.y += positions[i].y_advance / 64.0f;
+		cursor.x += (positions[i].x_advance / 64.0f) / pr;
+		cursor.y += (positions[i].y_advance / 64.0f) / pr;
 loop_end:
 		last_character = character;
 	}

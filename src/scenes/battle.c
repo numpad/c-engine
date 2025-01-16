@@ -334,19 +334,17 @@ static void load(struct scene_battle_s *battle, struct engine *engine) {
 
 	// text rendering
 	{
-		fontatlas_init(&g_card_font, engine->freetype);
-		fontatlas_add_face(&g_card_font, "res/font/NotoSans-Regular.ttf",    11);
-		fontatlas_add_face(&g_card_font, "res/font/NotoSans-Bold.ttf",       11);
-		fontatlas_add_face(&g_card_font, "res/font/NotoSans-Italic.ttf",     11);
-		fontatlas_add_face(&g_card_font, "res/font/NotoSans-BoldItalic.ttf", 11);
+		fontatlas_init(&g_card_font, engine);
+		fontatlas_add_face(&g_card_font, "res/font/NotoSans-Regular.ttf",    9);
+		fontatlas_add_face(&g_card_font, "res/font/NotoSans-Bold.ttf",       9);
+		fontatlas_add_face(&g_card_font, "res/font/NotoSans-Italic.ttf",     9);
+		fontatlas_add_face(&g_card_font, "res/font/NotoSans-BoldItalic.ttf", 9);
 		// printable ascii characters
 		fontatlas_add_ascii_glyphs(&g_card_font);
 
 		shader_init_from_dir(&g_text_shader, "res/shader/text/");
 		pipeline_init(&g_text_pipeline, &g_text_shader, 2048);
 		g_text_pipeline.texture = &g_card_font.texture_atlas;
-		pipeline_reset(&g_text_pipeline);
-		fontatlas_writef(&g_card_font, &g_text_pipeline, "   $0CARD$0 $B$1T$2I$3T$1L$2E$0");
 	}
 
 	// background
@@ -1158,6 +1156,8 @@ static void system_draw_cards(ecs_iter_t *it) {
 		);
 		glm_translate(model, (vec3){5, 64 * extra_scale + 11 + 5, 0});
 		pipeline_set_transform(&g_text_pipeline, model);
+		pipeline_reset(&g_text_pipeline);
+		fontatlas_writef(&g_card_font, &g_text_pipeline, "%s $B$1%c$2%c$3%c$0", cards[i].name, 'a' + rand() % 26, 'a' + rand() % 26, 'a' + rand() % 26);
 		pipeline_draw_ortho(&g_text_pipeline, g_engine->window_width, g_engine->window_height);
 	}
 }

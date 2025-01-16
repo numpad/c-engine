@@ -35,10 +35,13 @@ struct fontatlas_s {
 
 	struct fontatlas_glyph_s *glyphs;
 	unsigned int num_glyphs;
+
+	// From engine->window_pixel_ratio
+	float pixel_ratio;
 };
 
 // init/destroy
-void fontatlas_init(fontatlas_t *, FT_Library);
+void fontatlas_init(fontatlas_t *, struct engine *engine);
 void fontatlas_destroy(fontatlas_t *);
 // faces
 unsigned int fontatlas_add_face(fontatlas_t *, const char *filename, int size);
