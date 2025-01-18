@@ -14,25 +14,69 @@
 
 // font atlas
 
-static void fa_append_face_memory(fontatlas_t *fa) {
-	++fa->num_faces;
-	fa->faces = realloc(fa->faces, sizeof(FT_Face) * fa->num_faces);
-}
-
 static void fa_append_glyph_memory(fontatlas_t *fa) {
 	++fa->num_glyphs;
 	fa->glyphs = realloc(fa->glyphs, sizeof(fontatlas_glyph_t) * fa->num_glyphs);
 }
 
-static fontatlas_glyph_t *fa_find_glyph(fontatlas_t *fa, unsigned long glyph, unsigned char face_index) {
+static fontatlas_glyph_t *fa_find_glyph(fontatlas_t *fa, unsigned long glyph, unsigned char style) {
+	// TODO: binary search for ascii/all chars?
+	//       we read a lot more often than writing, so reordering
+	//       should be better than linear search on every read.
+	//       measure this once it becomes relevant...
 	for (unsigned int i = 0; i < fa->num_glyphs; ++i) {
 		fontatlas_glyph_t *g = &fa->glyphs[i];
-		if (g->code == glyph && g->face_index == face_index) {
+		if (g->code == glyph && g->style == style) {
 			return g;
 		}
 	}
 
 	return NULL;
+}
+
+static void apply_styling(uint character, enum fontatlas_font_style *style, drawcmd_t *cmd, int *is_printable) {
+	*is_printable = 0;
+	switch (character) {
+		// 0-9 : Colors
+		case '0': // reset all
+			glm_vec4_zero(cmd->color_add);
+			*style = FONTATLAS_REGULAR;
+			break;
+		case '1': // red
+			glm_vec4_zero(cmd->color_add);
+			cmd->color_add[0] = 1.0f;
+			break;
+		case '2': // green
+			glm_vec4_zero(cmd->color_add);
+			cmd->color_add[1] = 1.0f;
+			break;
+		case '3': // blue
+			glm_vec4_zero(cmd->color_add);
+			cmd->color_add[2] = 1.0f;
+			break;
+			// B,I : Style
+		case 'B':
+			if (*style == FONTATLAS_ITALIC) {
+				*style = FONTATLAS_BOLDITALIC;
+			} else {
+				*style = FONTATLAS_BOLD;
+			}
+			break;
+		case 'I':
+			if (*style == FONTATLAS_ITALIC) {
+				*style = FONTATLAS_BOLDITALIC;
+			} else {
+				*style = FONTATLAS_ITALIC;
+			}
+			break;
+
+		default: *is_printable = 1; break;
+	};
+}
+
+static void cursor_newline(vec2s *cursor, long line_height) {
+	cursor->x = 0.0f;
+	cursor->y += line_height;
 }
 
 void fontatlas_init(fontatlas_t *fa, struct engine *engine) {
@@ -41,8 +85,9 @@ void fontatlas_init(fontatlas_t *fa, struct engine *engine) {
 	assert(engine->freetype != NULL);
 
 	fa->library_ref = engine->freetype;
-	fa->faces = NULL;
-	fa->num_faces = 0;
+	for (usize i = 0; i < FONTATLAS_FONT_STYLE_MAX; ++i) {
+		fa->faces[i] = NULL;
+	}
 	fa->glyphs = NULL;
 	fa->num_glyphs = 0;
 	fa->atlas_padding = 2;
@@ -64,12 +109,9 @@ void fontatlas_destroy(fontatlas_t *fa) {
 	assert(fa != NULL);
 
 	fa->library_ref = NULL;
-	for (unsigned int i = 0; i < fa->num_faces; ++i) {
+	for (unsigned int i = 0; i < FONTATLAS_FONT_STYLE_MAX; ++i) {
 		FT_Done_Face(fa->faces[i]);
 	}
-	free(fa->faces);
-	fa->faces = NULL;
-	fa->num_faces = 0;
 	free(fa->glyphs);
 	fa->glyphs = NULL;
 	fa->num_glyphs = 0;
@@ -82,25 +124,38 @@ unsigned int fontatlas_add_face(fontatlas_t *fa, const char *filename, int size)
 	assert(filename != NULL);
 	assert(fa->num_glyphs == 0); // TODO: update existing glyphs
 
-	fa_append_face_memory(fa);
-	unsigned int face_index = fa->num_faces - 1;
+	FT_Face face;
 
 	FT_Error error;
-	error = FT_New_Face(fa->library_ref, filename, 0, &(fa->faces[face_index]));
-	assert(!error);
+	error = FT_New_Face(fa->library_ref, filename, 0, &face);
+	assert(error == 0 && "Could not open or create face");
 
 	// TODO: This already improves High-DPI handling, but is this enough?
 	float hdpi = (96.0f * fa->pixel_ratio);
 	float vdpi = (96.0f * fa->pixel_ratio);
-	error = FT_Set_Char_Size(fa->faces[face_index], 0, size * 64.0f, hdpi, vdpi);
+	error = FT_Set_Char_Size(face, 0, size * 64.0f, hdpi, vdpi);
 	assert(!error);
 
-	return face_index;
+	usize style          = FONTATLAS_FONT_STYLE_MAX;
+	const uint is_bold   = face->style_flags & FT_STYLE_FLAG_BOLD;
+	const uint is_italic = face->style_flags & FT_STYLE_FLAG_ITALIC;
+	if (is_bold && is_italic) {
+		style = FONTATLAS_BOLDITALIC;
+	} else if (is_bold) {
+		style = FONTATLAS_BOLD;
+	} else if (is_italic) {
+		style = FONTATLAS_ITALIC;
+	} else {
+		style = FONTATLAS_REGULAR;
+	}
+	assert(fa->faces[style] == NULL && "Font face is already loaded, replacing isn't supported!");
+	fa->faces[style] = face;
+
+	return style;
 }
 
 void fontatlas_add_glyph(fontatlas_t *fa, unsigned long character) {
 	assert(fa != NULL);
-	assert(fa->num_faces > 0); // TODO: doesn't make sense as we wouldnt create any glyphs
 	
 	glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
 	glBindTexture(GL_TEXTURE_2D, fa->texture_atlas.texture);
@@ -110,13 +165,14 @@ void fontatlas_add_glyph(fontatlas_t *fa, unsigned long character) {
 	static int free_y = 0;
 	static int height_max = 0;
 
-	for (unsigned int face_index = 0; face_index < fa->num_faces; ++face_index) {
-		FT_Face face = fa->faces[face_index];
+	for (unsigned int style = 0; style < FONTATLAS_FONT_STYLE_MAX; ++style) {
+		FT_Face face = fa->faces[style];
+		if (face == NULL) continue;
 
 		FT_UInt glyph_index = FT_Get_Char_Index(face, character);
 		// 0 is "missing glyph" and renders as a box/question mark/space...
 		if (glyph_index == 0) {
-			printf("no glyph for %c(0x%lX) and face %d\n", (char)character, character, face_index);
+			printf("no glyph for %c(0x%lX) and face %d\n", (char)character, character, style);
 			continue;
 		}
 
@@ -140,7 +196,7 @@ void fontatlas_add_glyph(fontatlas_t *fa, unsigned long character) {
 		fg->texture_rect.y = free_y;
 		fg->texture_rect.z = face->glyph->bitmap.width;
 		fg->texture_rect.w = face->glyph->bitmap.rows;
-		fg->face_index = face_index;
+		fg->style = style;
 		fg->bearing.x = face->glyph->bitmap_left;
 		fg->bearing.y = face->glyph->bitmap_top;
 
@@ -164,29 +220,46 @@ void fontatlas_add_ascii_glyphs(fontatlas_t *fa) {
 	}
 }
 
-fontatlas_glyph_t *fontatlas_get_glyph(fontatlas_t *fa, unsigned long glyph, unsigned char face_index) {
+fontatlas_glyph_t *fontatlas_get_glyph(fontatlas_t *fa, unsigned long glyph, enum fontatlas_font_style style) {
 	assert(fa != NULL);
-	assert(face_index < fa->num_faces);
+	assert(fa->faces[style] != NULL);
 
-	return fa_find_glyph(fa, glyph, face_index);
+	return fa_find_glyph(fa, glyph, style);
 }
 
-void fontatlas_write(fontatlas_t *fa, pipeline_t *pipeline, unsigned int str_len, char *str) {
+void fontatlas_write_ex(fontatlas_t *fa, pipeline_t *pipeline, enum fontatlas_write_config config, uint max_width, unsigned int str_len, char *str) {
 	assert(fa != NULL);
 	assert(str != NULL);
 	assert(str_len > 0);
 
+	if (max_width == FONTATLAS_UNLIMITED) {
+		max_width = (uint)-1;
+	}
+
 	pipeline_reset(pipeline);
 
-	unsigned char face_index = 0;
+	const float pixel_ratio = fa->pixel_ratio;
+	enum fontatlas_font_style style = FONTATLAS_REGULAR;
+
+	FT_Face face = fa->faces[style];
+	// TODO: Is this ok for High-DPI?
+	long line_height = (face->size->metrics.height >> 6) / pixel_ratio;
+	// TODO: Not all fonts define line_height, calculate it ourselves?
+	//       line_height = ((face->ascender - face->descender) + face->height) >> 6;
+	assert(line_height > 0);
 
 	// shaping
 	hb_buffer_t *hb_buffer = hb_buffer_create();
-	hb_font_t *hb_font = hb_ft_font_create_referenced(fa->faces[face_index]);
-	// TODO: remove control characters from buffer...
+	hb_font_t *hb_font = hb_ft_font_create_referenced(face);
+	// TODO: remove unprintable & control characters from buffer...
 	hb_buffer_add_utf8(hb_buffer, str, str_len, 0, str_len);
 	hb_buffer_guess_segment_properties(hb_buffer);
-	hb_shape(hb_font, hb_buffer, NULL, 0);
+	// TODO: disables ligatures, but we want those :(
+	hb_feature_t no_ligatures[] = {
+		{HB_TAG('l', 'i', 'g', 'a'), 0, 0, (unsigned int)-1},
+		{HB_TAG('c', 'l', 'i', 'g'), 0, 0, (unsigned int)-1}
+	};
+	hb_shape(hb_font, hb_buffer, no_ligatures, count_of(no_ligatures));
 	unsigned int shaped_len = hb_buffer_get_length(hb_buffer);
 	//hb_glyph_info_t *infos = hb_buffer_get_glyph_infos(hb_buffer, NULL);
 	hb_glyph_position_t *positions = hb_buffer_get_glyph_positions(hb_buffer, NULL);
@@ -194,65 +267,46 @@ void fontatlas_write(fontatlas_t *fa, pipeline_t *pipeline, unsigned int str_len
 	// control state
 	unsigned int last_character = 0;
 
-	vec2s cursor = {0};
+	vec2s cursor = { .x=0, .y=line_height };
 	drawcmd_t cmd = DRAWCMD_INIT;
-	for (unsigned int i = 0; i < shaped_len; ++i) {
-		unsigned int character = str[i]; // TODO: infos[i].codepoint?
+	for (uint i = 0; i < shaped_len; ++i) {
+		uint character = str[i]; // TODO: infos[i].codepoint?
 
 		// handle ccontrol characters
-		if (character == '$' && i < shaped_len - 1 && str[i + 1] != '$') {
-			goto loop_end;
-		}
-		if (last_character == '$') {
+		const int is_last_char = (i == shaped_len - 1);
+		if (character == '$' && !is_last_char && str[i + 1] != '$') {
+			goto next_iteration;
+		} else if (last_character == '$') {
 			int is_printable = 0;
-			switch (character) {
-				// 0-9 : Colors
-				case '0': // reset all
-					glm_vec4_zero(cmd.color_add);
-					face_index = 0;
-					break;
-				case '1': // red
-					glm_vec4_zero(cmd.color_add);
-					cmd.color_add[0] = 1.0f;
-					break;
-				case '2': // green
-					glm_vec4_zero(cmd.color_add);
-					cmd.color_add[1] = 1.0f;
-					break;
-				case '3': // blue
-					glm_vec4_zero(cmd.color_add);
-					cmd.color_add[2] = 1.0f;
-					break;
-				// B,I : Style
-				case 'B':
-					face_index = 1;
-					break;
-				case 'I':
-					face_index = 2;
-					break;
-
-				default: is_printable = 1; break;
-			};
-			if (!is_printable) goto loop_end;
+			apply_styling(character, &style, &cmd, &is_printable);
+			if (!is_printable) goto next_iteration;
+		} else if (character == '\n') {
+			cursor_newline(&cursor, line_height);
+			goto next_iteration;
 		}
 
-		fontatlas_glyph_t *glyph_info = fontatlas_get_glyph(fa, character, face_index);
+		fontatlas_glyph_t *glyph_info = fontatlas_get_glyph(fa, character, style);
 
 		// skip non-drawable characters
 		// TODO: differentiate between non-drawable and just not rasterized (yet?)
-		const float pr = fa->pixel_ratio;
 		if (glyph_info) {
-			cmd.position.x = cursor.x + (positions[i].x_offset + glyph_info->bearing.x) / pr;
-			cmd.position.y = cursor.y + (positions[i].y_offset - glyph_info->bearing.y) / pr;
-			cmd.size.x = glyph_info->texture_rect.z / pr;
-			cmd.size.y = glyph_info->texture_rect.w / pr;
+			cmd.position.x = cursor.x + (positions[i].x_offset + glyph_info->bearing.x) / pixel_ratio;
+			cmd.position.y = cursor.y + (positions[i].y_offset - glyph_info->bearing.y) / pixel_ratio;
+			cmd.size.x = glyph_info->texture_rect.z / pixel_ratio;
+			cmd.size.y = glyph_info->texture_rect.w / pixel_ratio;
+			if (cmd.position.x + cmd.size.x >= max_width) {
+				cursor_newline(&cursor, line_height);
+				cmd.position.x = cursor.x + (positions[i].x_offset + glyph_info->bearing.x) / pixel_ratio;
+				cmd.position.y = cursor.y + (positions[i].y_offset - glyph_info->bearing.y) / pixel_ratio;
+			}
+
 			drawcmd_set_texture_subrect(&cmd, pipeline->texture, glyph_info->texture_rect.x, glyph_info->texture_rect.y, glyph_info->texture_rect.z, glyph_info->texture_rect.w);
 			pipeline_emit(pipeline, &cmd);
 		}
 
-		cursor.x += (positions[i].x_advance / 64.0f) / pr;
-		cursor.y += (positions[i].y_advance / 64.0f) / pr;
-loop_end:
+		cursor.x += (positions[i].x_advance / 64.0f) / pixel_ratio;
+		cursor.y += (positions[i].y_advance / 64.0f) / pixel_ratio;
+next_iteration:
 		last_character = character;
 	}
 
@@ -260,7 +314,7 @@ loop_end:
 	hb_font_destroy(hb_font);
 }
 
-void fontatlas_writef(fontatlas_t *fa, pipeline_t *pipeline, char *fmt, ...) {
+void fontatlas_writef_ex(fontatlas_t *fa, pipeline_t *pipeline, enum fontatlas_write_config config, uint max_width, char *fmt, ...) {
 	va_list args;
 
 	// determine length of string
@@ -276,6 +330,6 @@ void fontatlas_writef(fontatlas_t *fa, pipeline_t *pipeline, char *fmt, ...) {
 	vsnprintf(output, output_len + 1, fmt, args);
 	va_end(args);
 
-	fontatlas_write(fa, pipeline, output_len, output);
+	fontatlas_write_ex(fa, pipeline, config, max_width, output_len, output);
 }
 

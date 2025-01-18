@@ -101,6 +101,7 @@ typedef struct {
 // general information about a card
 typedef struct {
 	char *name;
+	char *description;
 	int   image_id;
 	int   icon_ids[8];
 	int   icon_ids_count;
@@ -186,6 +187,7 @@ static struct hexmap         g_hexmap;
 static enum gamestate_battle g_gamestate;
 static enum gamestate_battle g_next_gamestate;
 static struct { float x, y, w, h; } g_button_end_turn;
+static struct { float x, y, w, h; } g_debug_rect;
 static struct hexcoord       g_move_goal;
 static usize                 g_player_movement_this_turn;
 
@@ -216,6 +218,11 @@ static void load(struct scene_battle_s *battle, struct engine *engine) {
 	g_button_end_turn.y = g_engine->window_height - 200.0f;
 	g_button_end_turn.w = 130.0f;
 	g_button_end_turn.h = 60.0f;
+	g_debug_rect.x = 100.0f;
+	g_debug_rect.y = 50.0f;
+	g_debug_rect.w = 100.0f;
+	g_debug_rect.h = 50.0f;
+
 
 	console_log(engine, "Starting battle scene!");
 	gbuffer_init(&g_gbuffer, engine);
@@ -479,6 +486,52 @@ static void draw(struct scene_battle_s *battle, struct engine *engine) {
 		model_draw(&g_player_model, &g_character_model_shader, &g_portrait_camera, model);
 		glDisable(GL_SCISSOR_TEST);
 		glDisable(GL_DEPTH_TEST);
+	}
+
+	{ // Debug Text
+		mat4 model = GLM_MAT4_IDENTITY_INIT;
+		glm_translate(model, (vec3){100, 50, 0});
+		pipeline_set_transform(&g_text_pipeline, model);
+		pipeline_reset(&g_text_pipeline);
+		fontatlas_writef_ex(&g_card_font, &g_text_pipeline, 0, g_debug_rect.w, "$1Test -> $BText $0$1$IText $BText.$0\nTest -> Text Text Text.");
+		pipeline_draw_ortho(&g_text_pipeline, g_engine->window_width, g_engine->window_height);
+
+		float corner_radius = 6.0f;
+		int mx, my;
+		SDL_GetMouseState(&mx, &my);
+		vec2 corner = { g_debug_rect.x + g_debug_rect.w, g_debug_rect.y + g_debug_rect.h };
+		vec2 mouse = { mx, my };
+		float dist_to_corner = glm_vec2_distance(corner, mouse);
+		int near_corner = (dist_to_corner <= corner_radius * 1.75f);
+		if (near_corner) {
+			corner_radius = 9.0f;
+		}
+		int dragging_corner = (dist_to_corner <= 20.0f && INPUT_DRAG_IS_DOWN(engine->input_drag));
+		if (dragging_corner) {
+			g_debug_rect.w = (engine->input_drag.x - g_debug_rect.x);
+			g_debug_rect.h = (engine->input_drag.y - g_debug_rect.y);
+		}
+
+		NVGcontext *vg = engine->vg;
+		nvgBeginPath(vg);
+		nvgStrokeWidth(vg, dragging_corner ? 2.0f : 1.0f);
+		nvgStrokeColor(vg, nvgRGB(255, 255, 255));
+		nvgRect(vg, g_debug_rect.x - 2.0f, g_debug_rect.y - 2.0f, g_debug_rect.w + 4.0f, g_debug_rect.h + 4.0f);
+		nvgStroke(vg);
+
+		nvgBeginPath(vg);
+		if (dragging_corner) {
+			nvgFillColor(vg, nvgRGB(255, 255, 255));
+		} else {
+			nvgFillColor(vg, nvgRGB(180, 170, 170));
+		}
+		nvgCircle(vg, g_debug_rect.x + g_debug_rect.w, g_debug_rect.y + g_debug_rect.h, corner_radius);
+		nvgFill(vg);
+
+		nvgBeginPath(vg);
+		nvgStrokeColor(vg, nvgRGB(255, 255, 255));
+		nvgCircle(vg, g_debug_rect.x + g_debug_rect.w, g_debug_rect.y + g_debug_rect.h, corner_radius);
+		nvgStroke(vg);
 	}
 }
 
@@ -873,6 +926,7 @@ static void on_game_event_play_card(event_info_t *info) {
 			// TODO: Deny placing card, better way?
 			handcard->can_be_placed = 0;
 			handcard->is_selected = CS_NOT_SELECTED;
+			handcard->hand_space = 1.0f;
 			ecs_modified(g_world, card_entity, c_handcard);
 			g_selected_card = 0;
 
@@ -999,19 +1053,44 @@ static void spawn_random_card(void) {
 
 	switch (n) {
 	case 0:
-		ecs_set(g_world, e, c_card, { .name="Fire Spell", .image_id=4, .icon_ids_count=1, .icon_ids={3} });
+		ecs_set(g_world, e, c_card, {
+				.name="Ignite Weapon",
+				.description="Meele Attacks inflict $1Burning$0 equal to the damage dealt.",
+				.image_id=4,
+				.icon_ids_count=1,
+				.icon_ids={3} });
 		break;
 	case 1:
-		ecs_set(g_world, e, c_card, { .name="Defend",     .image_id=2, .icon_ids_count=1, .icon_ids={2} });
+		ecs_set(g_world, e, c_card, {
+				.name="Defend",
+				.description="Gain $B3$0 Armor.",
+				.image_id=2,
+				.icon_ids_count=1,
+				.icon_ids={2} });
 		break;
 	case 2:
-		ecs_set(g_world, e, c_card, { .name="Meal",       .image_id=1, .icon_ids_count=1, .icon_ids={5} });
+		ecs_set(g_world, e, c_card, {
+				.name="Meal",
+				.description="Heal $B2$0 points.",
+				.image_id=1,
+				.icon_ids_count=1,
+				.icon_ids={5} });
 		break;
 	case 3:
-		ecs_set(g_world, e, c_card, { .name="Corruption", .image_id=5, .icon_ids_count=3, .icon_ids={3, 3, 4} });
+		ecs_set(g_world, e, c_card, {
+				.name="Corruption",
+				.description="$I$BTODO:$0 $Iinsert description here...$0",
+				.image_id=5,
+				.icon_ids_count=3,
+				.icon_ids={3, 3, 4} });
 		break;
 	case 4:
-		ecs_set(g_world, e, c_card, { .name="Attack", .image_id=0, .icon_ids_count=1, .icon_ids={1} });
+		ecs_set(g_world, e, c_card, {
+				.name="Random Weapon, go!",
+				.description="Your next $BMeele Attack$0 is $BRanged$0.",
+				.image_id=0,
+				.icon_ids_count=1,
+				.icon_ids={1} });
 		break;
 	};
 }
@@ -1154,10 +1233,15 @@ static void system_draw_cards(ecs_iter_t *it) {
 			},
 			cmd_card.angle, (vec3){0.0f, 0.0f, 1.0f}
 		);
-		glm_translate(model, (vec3){5, 64 * extra_scale + 11 + 5, 0});
+		// Card Title
+		glm_translate(model, (vec3){5, 64 * extra_scale, 0});
 		pipeline_set_transform(&g_text_pipeline, model);
 		pipeline_reset(&g_text_pipeline);
-		fontatlas_writef(&g_card_font, &g_text_pipeline, "%s $B$1%c$2%c$3%c$0", cards[i].name, 'a' + rand() % 26, 'a' + rand() % 26, 'a' + rand() % 26);
+		fontatlas_writef_ex(&g_card_font, &g_text_pipeline, 0, 0, "$B%s$0", cards[i].name);
+		pipeline_draw_ortho(&g_text_pipeline, g_engine->window_width, g_engine->window_height);
+		// Card Description
+		pipeline_reset(&g_text_pipeline);
+		fontatlas_writef_ex(&g_card_font, &g_text_pipeline, 0, cmd_card.size.x - 10.0f, "\n%s", cards[i].description);
 		pipeline_draw_ortho(&g_text_pipeline, g_engine->window_width, g_engine->window_height);
 	}
 }
