@@ -320,6 +320,8 @@ void hexmap_generate_flowfield(struct hexmap *map, struct hexcoord start_coord, 
 
 enum hexmap_path_result hexmap_path_find(struct hexmap *map, struct hexcoord start_coord, struct hexcoord goal_coord, struct hexmap_path *output_path) {
 	assert(map != NULL);
+	assert(output_path != NULL); // Maybe allow NULL, just to check if any path exists?
+
 	output_path->distance_in_tiles = 0;
 	output_path->start             = start_coord;
 	output_path->goal              = goal_coord;
@@ -391,7 +393,11 @@ enum hexmap_path_result hexmap_path_find(struct hexmap *map, struct hexcoord sta
 			assert(NUMBER_OF_ITERATIONS++ < map_size);
 		}
 		if (walk_back_iter == start) {
+			// We do not want to count the start tile as part of the resulting path,
+			// but it might be nice to have?
+			// TODO: Store the start in hexmap_find_path() result?
 			output_path->tiles[output_path->distance_in_tiles] = start;
+			//++output_path->distance_in_tiles;
 			assert(output_path->tiles[0] == goal);
 			assert(output_path->tiles[output_path->distance_in_tiles] == start);
 			output_path->result = HEXMAP_PATH_OK;

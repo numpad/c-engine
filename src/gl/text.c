@@ -11,6 +11,7 @@
 #include "engine.h"
 #include "gl/texture.h"
 
+static long DEFAULT_DPI = 96;
 
 // font atlas
 
@@ -131,8 +132,8 @@ unsigned int fontatlas_add_face(fontatlas_t *fa, const char *filename, int size)
 	assert(error == 0 && "Could not open or create face");
 
 	// TODO: This already improves High-DPI handling, but is this enough?
-	float hdpi = (96.0f * fa->pixel_ratio);
-	float vdpi = (96.0f * fa->pixel_ratio);
+	float hdpi = (DEFAULT_DPI * fa->pixel_ratio);
+	float vdpi = (DEFAULT_DPI * fa->pixel_ratio);
 	error = FT_Set_Char_Size(face, 0, size * 64.0f, hdpi, vdpi);
 	assert(!error);
 

@@ -12,7 +12,6 @@
 #include <stb_perlin.h>
 #include <cglm/cglm.h>
 #include <flecs.h>
-#include <cglm/cglm.h>
 #include "engine.h"
 #include "gl/opengles3.h"
 #include "gl/texture.h"
