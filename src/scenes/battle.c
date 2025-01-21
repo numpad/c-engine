@@ -291,7 +291,7 @@ static void load(struct scene_battle_s *battle, struct engine *engine) {
 	ECS_SYSTEM_DEFINE(g_world, system_draw_cards,          0, c_card, ?c_handcard, c_pos2d); _syntax_fix_label:
 	ECS_SYSTEM_DEFINE(g_world, system_draw_props,          0, c_pos3d, c_model);
 	ECS_SYSTEM_DEFINE(g_world, system_draw_board_entities, 0, c_position, c_model, ?c_tile_offset); _syntax_fix_label2:
-	ECS_SYSTEM_DEFINE(g_world, system_draw_healthbars,     0, c_position, c_health);
+	ECS_SYSTEM_DEFINE(g_world, system_draw_healthbars,     0, c_position, c_health, ?c_tile_offset); _syntax_fix_label3:
 	ECS_SYSTEM_DEFINE(g_world, system_enemy_turn,          0, c_position, c_npc);
 	ECS_SYSTEM_DEFINE(g_world, system_move_along_path,     0, c_position, c_tile_offset, c_move_along_path);
 
@@ -1351,16 +1351,23 @@ static void system_draw_board_entities(ecs_iter_t *it) {
 }
 
 static void system_draw_healthbars(ecs_iter_t *it) {
-	c_position *it_position = ecs_field(it, c_position, 1);
-	c_health   *it_health   = ecs_field(it, c_health,   2);
+	c_position *it_position   = ecs_field(it, c_position, 1);
+	c_health   *it_health     = ecs_field(it, c_health,   2);
+	c_tile_offset *it_offsets = (ecs_field_is_set(it,     3) ? ecs_field(it, c_tile_offset, 3) : NULL);
 	for (int i = 0; i < it->count; ++i) {
 		c_position pos = it_position[i];
 		c_health health = it_health[i];
+		c_tile_offset *tile_offset = (it_offsets == NULL ? NULL : &it_offsets[i]);
+
 		float health_pct = (float)health.hp / health.max_hp;
 
 		// Enemy healthbar
-		vec2s worldpos = hexmap_coord_to_world_position(&g_hexmap, pos);
-		vec2s screenpos = world_to_screen_camera(g_engine, &g_camera, GLM_MAT4_IDENTITY, (vec3s){{ worldpos.x, 0.0f, worldpos.y }});
+		vec2s worldpos_xz = hexmap_coord_to_world_position(&g_hexmap, pos);
+		vec3s worldpos = { .x=worldpos_xz.x, .y=0.0f, .z=worldpos_xz.y};
+		if (tile_offset != NULL) {
+			glm_vec3_add(worldpos.raw, tile_offset->raw, worldpos.raw);
+		}
+		vec2s screenpos = world_to_screen_camera(g_engine, &g_camera, GLM_MAT4_IDENTITY, worldpos);
 		drawcmd_t cmd = DRAWCMD_INIT;
 		cmd.size.x = 26 * 2;
 		cmd.size.y =  6 * 2;
