@@ -110,6 +110,7 @@ usize hexmap_flowfield_distance(struct hexmap *map, struct hexcoord goal, usize 
 // pathfinding
 enum hexmap_path_result hexmap_path_find(struct hexmap *, struct hexcoord start, struct hexcoord goal, struct hexmap_path *);
 void hexmap_path_destroy(struct hexmap_path *);
+usize hexmap_path_at(struct hexmap_path *, usize index);
 
 int hexmap_is_tile_obstacle(struct hexmap *, struct hexcoord);
 

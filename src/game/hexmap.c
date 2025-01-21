@@ -430,6 +430,13 @@ void hexmap_path_destroy(struct hexmap_path *path) {
 	path->start = path->goal = (struct hexcoord){ .x=-1, .y=-1 };
 }
 
+usize hexmap_path_at(struct hexmap_path *path, usize index) {
+	assert(path != NULL);
+	assert(index < path->distance_in_tiles);
+
+	return path->tiles[path->distance_in_tiles - index - 1];
+}
+
 // Calculate the distance from the `flowfield` origin to the `goal`.
 // Returns the distance in tiles in case of success.
 // On error, returns (usize)-1.
