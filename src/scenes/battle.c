@@ -390,6 +390,7 @@ static void destroy(struct scene_battle_s *battle, struct engine *engine) {
 	Mix_FreeChunk(g_slide_card_sfx);
 
 	background_destroy();
+	// TODO: Destroy remaining paths for all entities with a c_move_along_path component.
 	hexmap_destroy(&g_hexmap);
 
 	texture_destroy(&g_cards_texture);
@@ -663,12 +664,11 @@ static void update_gamestate(enum gamestate_battle state, float dt) {
 						highlight_reachable_tiles(g_move_goal, g_player_movement_this_turn);
 
 						ecs_set(g_world, g_player, c_tile_offset, { .x=0.0f, .y=0.0f, .z=0.0f });
-						ecs_set(g_world, g_player, c_move_along_path, { .path=path, .current_tile=0, .duration_per_tile=0.5f, .percentage_to_next_tile=0.0f });
+						ecs_set(g_world, g_player, c_move_along_path, { .path=path, .current_tile=0, .duration_per_tile=0.2f, .percentage_to_next_tile=0.0f });
+						// We don't hexmap_path_destroy(), this will get done by the animation system
 					} else {
 						hexmap_path_destroy(&path);
 					}
-				} else {
-					hexmap_path_destroy(&path);
 				}
 			}
 		}
@@ -1349,7 +1349,7 @@ static void system_draw_board_entities(ecs_iter_t *it) {
 			// content
 			nvgTextAlign(vg, NVG_ALIGN_TOP | NVG_ALIGN_LEFT);
 			nvgFillColor(vg, nvgRGB(255, 255, 255));
-			nvgTextBox(vg, win_pos.x, win_pos.y, win_bounds[2] - win_bounds[0], win_text, NULL);
+			nvgTextBox(vg, win_pos.x, win_pos.y, win_max_width, win_text, NULL);
 			// restore previous font face
 			nvgFontFaceId(vg, g_engine->font_default_bold);
 		}
@@ -1417,7 +1417,7 @@ static void system_enemy_turn(ecs_iter_t *it) {
 			enum hexmap_path_result result = hexmap_path_find(&g_hexmap, *pos, random_neighbor, &path);
 			assert(result == HEXMAP_PATH_OK);
 			ecs_set(g_world, e, c_tile_offset, { .x=0.0f, .y=0.0f, .z=0.0f });
-			ecs_set(g_world, e, c_move_along_path, { .path=path, .current_tile=0, .duration_per_tile=0.5f, .percentage_to_next_tile=0.0f });
+			ecs_set(g_world, e, c_move_along_path, { .path=path, .current_tile=0, .duration_per_tile=0.8f, .percentage_to_next_tile=0.0f });
 
 			hexmap_tile_at(&g_hexmap, random_neighbor)->movement_cost = HEXMAP_MOVEMENT_COST_MAX;
 			hexmap_tile_at(&g_hexmap, *pos)->movement_cost = 1;
