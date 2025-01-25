@@ -117,7 +117,7 @@ static void on_join_lobby(struct engine *);
 // scene callbacks
 //
 
-static void menu_load(struct scene_menu_s *menu, struct engine *engine) {
+static void load(struct scene_menu_s *menu, struct engine *engine) {
 	engine_set_clear_color(0.34f, 0.72f, 0.98f);
 
 	g_menu_camera = GLMS_VEC2_ZERO;
@@ -175,7 +175,7 @@ static void menu_load(struct scene_menu_s *menu, struct engine *engine) {
 	g_entities[2].tile[1] = 4;
 }
 
-static void menu_destroy(struct scene_menu_s *menu, struct engine *engine) {
+static void destroy(struct scene_menu_s *menu, struct engine *engine) {
 	pipeline_destroy(&g_pipeline_entities);
 	shader_destroy(&g_shader_entities);
 	isoterrain_destroy(&g_terrain);
@@ -189,14 +189,14 @@ static void menu_destroy(struct scene_menu_s *menu, struct engine *engine) {
 	texture_destroy(&g_entity_tex);
 }
 
-static void menu_update(struct scene_menu_s *menu, struct engine *engine, float dt) {
+static void update(struct scene_menu_s *menu, struct engine *engine, float dt) {
 	if (g_next_scene != NULL) {
 		engine_setscene(engine, g_next_scene);
 		g_next_scene = NULL;
 	}
 }
 
-static void menu_draw(struct scene_menu_s *menu, struct engine *engine) {
+static void draw(struct scene_menu_s *menu, struct engine *engine) {
 	NVGcontext *vg = engine->vg;
 	const float W2 = engine->window_width * 0.5f;
 	const float H2 = engine->window_height * 0.5f;
@@ -504,7 +504,22 @@ static void menu_draw(struct scene_menu_s *menu, struct engine *engine) {
 	pipeline_draw(&g_pipeline_entities, engine);
 }
 
-static void menu_on_message(struct scene_menu_s *menu, struct engine *engine, struct message_header *msg) {
+static void on_callback(struct scene_menu_s *menu, struct engine *engine, struct engine_event event) {
+	switch (event.type) {
+		case ENGINE_EVENT_CLOSE_SCENE:
+			g_menu_camera_target_y = 0.0f;
+			break;
+		case ENGINE_EVENT_WINDOW_RESIZED:
+			break;
+		case ENGINE_EVENT_KEY:
+			break;
+		default:
+		case ENGINE_EVENT_MAX:
+			break;
+	};
+}
+
+static void on_message(struct scene_menu_s *menu, struct engine *engine, struct message_header *msg) {
 	switch (msg->type) {
 		case WELCOME_RESPONSE: {
 			struct welcome_response *_response = (struct welcome_response *)msg;
@@ -583,11 +598,12 @@ void scene_menu_init(struct scene_menu_s *menu, struct engine *engine) {
 	scene_init((struct scene_s *)menu, engine);
 
 	// init function pointers
-	menu->base.load       = (scene_load_fn)menu_load;
-	menu->base.destroy    = (scene_destroy_fn)menu_destroy;
-	menu->base.update     = (scene_update_fn)menu_update;
-	menu->base.draw       = (scene_draw_fn)menu_draw;
-	menu->base.on_message = (scene_on_message_fn)menu_on_message;
+	menu->base.load        = (scene_load_fn)load;
+	menu->base.destroy     = (scene_destroy_fn)destroy;
+	menu->base.update      = (scene_update_fn)update;
+	menu->base.draw        = (scene_draw_fn)draw;
+	menu->base.on_callback = (scene_on_callback_fn)on_callback;
+	menu->base.on_message  = (scene_on_message_fn)on_message;
 }
 
 

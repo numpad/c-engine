@@ -40,8 +40,11 @@ void scene_on_message(struct scene_s *scene, struct engine *engine, struct messa
 	}
 }
 
-void scene_on_callback(struct scene_s *scene, struct engine *engine, struct engine_event event) {
+enum scene_call_result scene_on_callback(struct scene_s *scene, struct engine *engine, struct engine_event event) {
 	if (scene != NULL && scene->on_callback != NULL) {
 		scene->on_callback(scene, engine, event);
+		return SCENE_CALL_OK;
 	}
+
+	return SCENE_CALL_OK;
 }

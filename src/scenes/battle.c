@@ -53,7 +53,7 @@ enum gamestate_battle {
 };
 
 typedef struct event_info {
-	struct  {
+	struct {
 		ecs_entity_t card;
 		ecs_entity_t caused_by;
 	} play_card;
@@ -547,6 +547,12 @@ void on_callback(struct scene_battle_s *battle, struct engine *engine, struct en
 			shader_reload_source(&g_gbuffer.shader);
 		}
 		break;
+	case ENGINE_EVENT_CLOSE_SCENE: {
+		struct scene_menu_s *menu_scene = malloc(sizeof(struct scene_menu_s));
+		scene_menu_init(menu_scene, engine);
+		engine_setscene(engine, (struct scene_s *)menu_scene);
+		break;
+	}
 	case ENGINE_EVENT_MAX:
 	default:
 		assert(0 && "unhandled event!");

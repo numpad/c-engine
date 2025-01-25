@@ -530,8 +530,10 @@ static void engine_poll_events(struct engine *engine) {
 				scene_on_callback(engine->scene, engine, (struct engine_event){ .type = ENGINE_EVENT_KEY, .data.key = key_event });
 				// TODO: pop scene stack, or other data structure?
 				if (key_event.type == SDL_KEYUP && key_event.keysym.sym == SDLK_ESCAPE) {
-					// TODO: open menu first / send event to scene?
-					on_siggoback();
+					enum scene_call_result result = scene_on_callback(engine->scene, engine, (struct engine_event){ .type = ENGINE_EVENT_CLOSE_SCENE });
+					if (result == SCENE_CALL_NOT_IMPLEMENTED) {
+						on_siggoback();
+					}
 				}
 				break;
 			}
