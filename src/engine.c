@@ -172,11 +172,11 @@ struct engine *engine_new(int argc, char **argv) {
 	// scene
 	if (is_argv_set(argc, argv, "--scene=menu")) {
 		console_log(engine, "Skipping Splash-Screen");
-		struct scene_menu_s *menu = malloc(sizeof(struct scene_menu_s));
+		struct scene_menu *menu = malloc(sizeof(struct scene_menu));
 		scene_menu_init(menu, engine);
 		engine_setscene(engine, (struct scene_s *)menu);
 	} else if (is_argv_set(argc, argv, "--scene=battle")) {
-		struct scene_battle_s *battle = malloc(sizeof(struct scene_battle_s));
+		struct scene_battle *battle = malloc(sizeof(struct scene_battle));
 		scene_battle_init(battle, engine);
 		engine_setscene(engine, (struct scene_s *)battle);
 	} else {
@@ -282,8 +282,8 @@ void engine_setscene_dll(struct engine *engine, const char *filename) {
 
 	handle = dlopen(filename, RTLD_NOW | RTLD_GLOBAL | RTLD_DEEPBIND);
 
-#define SCENE_STRUCT scene_battle_s
-#define SCENE_INIT_FN "scene_battle_init"
+#define SCENE_STRUCT scene_menu
+#define SCENE_INIT_FN "scene_menu_init"
 	struct SCENE_STRUCT *modscene = malloc(sizeof(*modscene));
 	void(*init_fn)(struct SCENE_STRUCT *scene, struct engine *) = dlsym(handle, SCENE_INIT_FN);
 	init_fn(modscene, engine);
@@ -583,7 +583,7 @@ static void engine_poll_events(struct engine *engine) {
 
 			// TODO: only switch if we're not in menu? need to be able to check scene type
 			// TODO: notify current scene about this
-			struct scene_menu_s *menu_scene = malloc(sizeof(struct scene_menu_s));
+			struct scene_menu *menu_scene = malloc(sizeof(struct scene_menu));
 			scene_menu_init(menu_scene, engine);
 			engine_setscene(engine, (struct scene_s *)menu_scene);
 		}

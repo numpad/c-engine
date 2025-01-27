@@ -10,7 +10,7 @@
 #include "gui/console.h"
 
 static void switch_to_menu_scene(struct engine *engine) {
-	struct scene_menu_s *menu = malloc(sizeof(struct scene_menu_s));
+	struct scene_menu *menu = malloc(sizeof(struct scene_menu));
 	scene_menu_init(menu, engine);
 	engine_setscene(engine, (struct scene_s *)menu);
 }

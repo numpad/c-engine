@@ -219,7 +219,7 @@ static Mix_Chunk    *g_slide_card_sfx;
 // scene functions
 //
 
-static void load(struct scene_battle_s *battle, struct engine *engine) {
+static void load(struct scene_battle *battle, struct engine *engine) {
 	g_engine = engine;
 	rng_seed(time(NULL));
 
@@ -384,7 +384,7 @@ static void load(struct scene_battle_s *battle, struct engine *engine) {
 }
 
 
-static void destroy(struct scene_battle_s *battle, struct engine *engine) {
+static void destroy(struct scene_battle *battle, struct engine *engine) {
 	Mix_FreeChunk(g_place_card_sfx);
 	Mix_FreeChunk(g_pick_card_sfx);
 	Mix_FreeChunk(g_slide_card_sfx);
@@ -411,7 +411,7 @@ static void destroy(struct scene_battle_s *battle, struct engine *engine) {
 	gbuffer_destroy(&g_gbuffer);
 }
 
-static void update(struct scene_battle_s *battle, struct engine *engine, float dt) {
+static void update(struct scene_battle *battle, struct engine *engine, float dt) {
 	if (g_handcards_updated) {
 		g_handcards_updated = 0;
 		recalculate_handcards();
@@ -431,7 +431,7 @@ static void update(struct scene_battle_s *battle, struct engine *engine, float d
 }
 
 
-static void draw(struct scene_battle_s *battle, struct engine *engine) {
+static void draw(struct scene_battle *battle, struct engine *engine) {
 	// draw terrain
 	gbuffer_bind(g_gbuffer);
 	gbuffer_clear(g_gbuffer);
@@ -533,7 +533,7 @@ static void draw(struct scene_battle_s *battle, struct engine *engine) {
 	}
 }
 
-void on_callback(struct scene_battle_s *battle, struct engine *engine, struct engine_event event) {
+void on_callback(struct scene_battle *battle, struct engine *engine, struct engine_event event) {
 	switch (event.type) {
 	case ENGINE_EVENT_WINDOW_RESIZED:
 		gbuffer_resize(&g_gbuffer, engine->window_highdpi_width, engine->window_highdpi_height);
@@ -549,7 +549,7 @@ void on_callback(struct scene_battle_s *battle, struct engine *engine, struct en
 		}
 		break;
 	case ENGINE_EVENT_CLOSE_SCENE: {
-		struct scene_menu_s *menu_scene = malloc(sizeof(struct scene_menu_s));
+		struct scene_menu *menu_scene = malloc(sizeof(struct scene_menu));
 		scene_menu_init(menu_scene, engine);
 		engine_setscene(engine, (struct scene_s *)menu_scene);
 		break;
@@ -561,7 +561,7 @@ void on_callback(struct scene_battle_s *battle, struct engine *engine, struct en
 	};
 }
 
-void scene_battle_init(struct scene_battle_s *scene_battle, struct engine *engine) {
+void scene_battle_init(struct scene_battle *scene_battle, struct engine *engine) {
 	// init scene base
 	scene_init((struct scene_s *)scene_battle, engine);
 
@@ -664,7 +664,7 @@ static void update_gamestate(enum gamestate_battle state, float dt) {
 						highlight_reachable_tiles(g_move_goal, g_player_movement_this_turn);
 
 						ecs_set(g_world, g_player, c_tile_offset, { .x=0.0f, .y=0.0f, .z=0.0f });
-						ecs_set(g_world, g_player, c_move_along_path, { .path=path, .current_tile=0, .duration_per_tile=0.2f, .percentage_to_next_tile=0.0f });
+						ecs_set(g_world, g_player, c_move_along_path, { .path=path, .current_tile=0, .duration_per_tile=0.35f, .percentage_to_next_tile=0.0f });
 						// We don't hexmap_path_destroy(), this will get done by the animation system
 					} else {
 						hexmap_path_destroy(&path);
@@ -1417,7 +1417,7 @@ static void system_enemy_turn(ecs_iter_t *it) {
 			enum hexmap_path_result result = hexmap_path_find(&g_hexmap, *pos, random_neighbor, &path);
 			assert(result == HEXMAP_PATH_OK);
 			ecs_set(g_world, e, c_tile_offset, { .x=0.0f, .y=0.0f, .z=0.0f });
-			ecs_set(g_world, e, c_move_along_path, { .path=path, .current_tile=0, .duration_per_tile=0.8f, .percentage_to_next_tile=0.0f });
+			ecs_set(g_world, e, c_move_along_path, { .path=path, .current_tile=0, .duration_per_tile=0.5f, .percentage_to_next_tile=0.0f });
 
 			hexmap_tile_at(&g_hexmap, random_neighbor)->movement_cost = HEXMAP_MOVEMENT_COST_MAX;
 			hexmap_tile_at(&g_hexmap, *pos)->movement_cost = 1;

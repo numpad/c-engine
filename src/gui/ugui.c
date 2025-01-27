@@ -142,7 +142,7 @@ rendered_modal_t ugui_modal_begin(struct engine *engine) {
 
 	// Shade background darker
 	nvgBeginPath(vg);
-	nvgFillColor(vg, nvgRGBA(0, 0, 0, 60));
+	nvgFillColor(vg, nvgRGBA(0, 0, 0, 90));
 	nvgRect(vg, 0.0f, 0.0f, engine->window_width, engine->window_height);
 	nvgFill(vg);
 
@@ -163,7 +163,7 @@ rendered_modal_t ugui_modal_begin(struct engine *engine) {
 	nvgFill(vg);
 
 	// Prevent Overdraw
-	nvgScissor(vg, modal_x, modal_y, modal_w, modal_h);
+	//nvgScissor(vg, modal_x, modal_y, modal_w, modal_h);
 
 	// Restore state
 	nvgSave(vg);
@@ -171,6 +171,8 @@ rendered_modal_t ugui_modal_begin(struct engine *engine) {
 
 	return (rendered_modal_t) {
 		.vg = vg,
+		.x = modal_x,
+		.y = modal_y,
 		.width = modal_w,
 		.height = modal_h
 	};
@@ -178,7 +180,7 @@ rendered_modal_t ugui_modal_begin(struct engine *engine) {
 
 void ugui_modal_end(rendered_modal_t modal) {
 	NVGcontext *vg = modal.vg;
-	nvgResetScissor(vg);
+	//nvgResetScissor(vg);
 
 	// Outline
 	nvgBeginPath(vg);

@@ -46,5 +46,5 @@ enum scene_call_result scene_on_callback(struct scene_s *scene, struct engine *e
 		return SCENE_CALL_OK;
 	}
 
-	return SCENE_CALL_OK;
+	return SCENE_CALL_NOT_IMPLEMENTED;
 }

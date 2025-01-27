@@ -9,6 +9,7 @@
 #include <stb_ds.h>
 #include "engine.h"
 #include "gui/console.h"
+#include "scene.h"
 #include "scenes/battle.h"
 #include "scenes/experiments.h"
 #include "scenes/planes.h"
@@ -55,6 +56,7 @@ typedef struct {
 //
 
 // gui
+static struct engine *g_engine;
 static int g_font = -1;
 static int g_menuicon_play = -1;
 static int g_menuicon_cards = -1;
@@ -99,9 +101,13 @@ void reset_ids_of_lobbies(void) {
 // helper
 static float menuitem_active(float menu_x, float bookmark_x, float bookmark_tx);
 
+// ui
+static void draw_minigame_modal(void);
+
 // switch scenes
 static void switch_to_game_scene(struct engine *engine);
 static void switch_to_suika_scene(struct engine *engine);
+static void switch_to_planes_scene(struct engine *engine);
 static void switch_to_asteroid_scene(struct engine *engine);
 
 // button callbacks
@@ -117,7 +123,8 @@ static void on_join_lobby(struct engine *);
 // scene callbacks
 //
 
-static void load(struct scene_menu_s *menu, struct engine *engine) {
+static void load(struct scene_menu *menu, struct engine *engine) {
+	g_engine = engine;
 	engine_set_clear_color(0.34f, 0.72f, 0.98f);
 
 	g_menu_camera = GLMS_VEC2_ZERO;
@@ -175,7 +182,7 @@ static void load(struct scene_menu_s *menu, struct engine *engine) {
 	g_entities[2].tile[1] = 4;
 }
 
-static void destroy(struct scene_menu_s *menu, struct engine *engine) {
+static void destroy(struct scene_menu *menu, struct engine *engine) {
 	pipeline_destroy(&g_pipeline_entities);
 	shader_destroy(&g_shader_entities);
 	isoterrain_destroy(&g_terrain);
@@ -189,14 +196,14 @@ static void destroy(struct scene_menu_s *menu, struct engine *engine) {
 	texture_destroy(&g_entity_tex);
 }
 
-static void update(struct scene_menu_s *menu, struct engine *engine, float dt) {
+static void update(struct scene_menu *menu, struct engine *engine, float dt) {
 	if (g_next_scene != NULL) {
 		engine_setscene(engine, g_next_scene);
 		g_next_scene = NULL;
 	}
 }
 
-static void draw(struct scene_menu_s *menu, struct engine *engine) {
+static void draw(struct scene_menu *menu, struct engine *engine) {
 	NVGcontext *vg = engine->vg;
 	const float W2 = engine->window_width * 0.5f;
 	const float H2 = engine->window_height * 0.5f;
@@ -214,11 +221,8 @@ static void draw(struct scene_menu_s *menu, struct engine *engine) {
 	glm_scale(engine->u_view, (vec3){ t_scale, t_scale, t_scale });
 	isoterrain_draw(&g_terrain, engine);
 
-	//draw_menu(engine, engine->nk);
-
 	// draw menu
 	{
-		struct input_drag_s *drag = &engine->input_drag;
 		const float bar_height = 60.0f;
 
 		static float bookmark_x = -1.0f;
@@ -325,6 +329,8 @@ static void draw(struct scene_menu_s *menu, struct engine *engine) {
 		nvgSave(vg);
 		nvgTranslate(vg, g_menu_camera.x, g_menu_camera.y);
 
+		struct input_drag_s *drag = &engine->input_drag;
+
 		// "cards" menu
 		{
 			// nvgSave(vg);
@@ -336,7 +342,7 @@ static void draw(struct scene_menu_s *menu, struct engine *engine) {
 		// "play" menu
 		{
 			for (mainbutton_t *b = &buttons[0]; b->text1 != NULL; ++b) {
-				if (drag->state == INPUT_DRAG_BEGIN && point_in_rect(drag->begin_x - g_menu_camera.x, drag->begin_y - g_menu_camera.y, b->x, b->y, b->w, b->h)) {
+				if (!g_minigame_selection_visible && drag->state == INPUT_DRAG_BEGIN && point_in_rect(drag->begin_x - g_menu_camera.x, drag->begin_y - g_menu_camera.y, b->x, b->y, b->w, b->h)) {
 					Mix_PlayChannel(-1, g_sound_click, 0);
 					active_button_id = b->id;
 					active_button_progress = 0.0f;
@@ -367,78 +373,6 @@ static void draw(struct scene_menu_s *menu, struct engine *engine) {
 
 				ugui_mainmenu_button(engine, b->x, b->y, b->w, b->h, b->text1, b->text2, b->subtext, g_font, b->bg1, b->bg2, b->outline, (b->id == active_button_id) ? active_button_progress: 0.0f);
 			}
-
-			// Minigame Selection Modal Window
-			if (g_minigame_selection_visible) {
-				rendered_modal_t modal = ugui_modal_begin(engine);
-
-				// Title text
-				nvgFontFaceId(vg, g_font);
-				nvgTextAlign(vg, NVG_ALIGN_TOP | NVG_ALIGN_LEFT);
-				nvgFontSize(vg, 24.0f);
-				nvgFillColor(vg, nvgRGBf(0.4f, 0.41f, 0.24f));
-				nvgText(vg, 16.0f, 16.0f, "CHOOSE A GAME", NULL);
-
-				// Carousel Item
-				{
-					const NVGpaint image_paint = nvgImagePattern(vg,
-							75.0f, 60.0f, 512.0f, 256.0f,
-							0.0f, g_minigame_covers, 1.0f);
-					const NVGpaint shine_overlay = nvgRadialGradient(vg,
-							125.0f, 125.0f, 10.0f, 250.0f,
-							nvgRGBAf(1.0f, 1.0f, 1.0f, 0.03f), nvgRGBAf(1.0f, 1.0f, 1.0f, 0.0f));
-					// Cover Image
-					nvgBeginPath(vg);
-					nvgRoundedRect(vg, 75.0f, 60.0f, 150.0f, 256.0f, 8.0f);
-					nvgFillPaint(vg, image_paint);
-					nvgFill(vg);
-					// Shine Overlay
-					nvgBeginPath(vg);
-					nvgRoundedRect(vg, 75.0f, 60.0f, 150.0f, 256.0f, 8.0f);
-					nvgFillPaint(vg, shine_overlay);
-					nvgFill(vg);
-					// Outline
-					nvgBeginPath(vg);
-					nvgRoundedRect(vg, 75.0f, 60.0f, 150.0f, 256.0f, 8.0f);
-					nvgStrokeColor(vg, nvgRGBf(0.33f, 0.2f, 0.25f));
-					nvgStrokeWidth(vg, 2.5f);
-					nvgStroke(vg);
-
-					// Name Box
-					nvgBeginPath(vg);
-					nvgRoundedRect(vg, 75.0f, 60.0f + 256.0f + 13.0f, 150.0f, 36.0f, 8.0f);
-					nvgFillColor(vg, nvgRGBf(1.0f, 1.0f, 0.9f));
-					nvgFill(vg);
-
-					// Carousel Inner Shadows
-					{
-						NVGcolor inner = nvgRGBA(0, 0, 0, 100);
-						NVGcolor outer = nvgRGBA(0, 0, 0, 0);
-						// Body
-						NVGpaint gradient_shadow_left = nvgLinearGradient(vg, 0.0f, 0.0f, 20.0f, 0.0f, inner, outer);
-						nvgBeginPath(vg);
-						nvgRect(vg, 0.0f, 70.0f, 20.0f, modal.height - 2*70.0f);
-						nvgFillPaint(vg, gradient_shadow_left);
-						nvgFill(vg);
-
-						// Top Edge
-						NVGpaint gradient_shadow_topleft = nvgRadialGradient(vg, 0.0f, 50.0f + 20.0f, 0.0f, 20.0f, inner, outer);
-						nvgBeginPath(vg);
-						nvgRect(vg, 0.0f, 50.0f, 20.0f, 20.0f);
-						nvgFillPaint(vg, gradient_shadow_topleft);
-						nvgFill(vg);
-
-						// Bottom Edge
-						NVGpaint gradient_shadow_bottomleft = nvgRadialGradient(vg, 0.0f, modal.height - 70.0f, 0.0f, 20.0f, inner, outer);
-						nvgBeginPath(vg);
-						nvgRect(vg, 0.0f, modal.height - 70.0f, 20.0f, 20.0f);
-						nvgFillPaint(vg, gradient_shadow_bottomleft);
-						nvgFill(vg);
-					}
-				}
-
-				ugui_modal_end(modal);
-			}
 		}
 
 		// "social" menu
@@ -461,11 +395,16 @@ static void draw(struct scene_menu_s *menu, struct engine *engine) {
 			ugui_mainmenu_icon(engine, i->x, i->text, i->icon, g_font, menuitem_active(i->x, bookmark_x, navitems[active_navitem].x));
 		}
 
-		// logic
+		// Minigame Selection Modal Window
+		if (g_minigame_selection_visible) {
+			draw_minigame_modal();
+		}
+
+		// Update Navbar & input handling
 		if (fabsf(navitems[active_navitem].x - bookmark_x) > 0.001f) {
 			bookmark_x = glm_lerp(bookmark_x, navitems[active_navitem].x, engine->dt * 15.0f);
 		}
-		if (drag->state == INPUT_DRAG_END && drag->begin_y <= bar_height && drag->end_y <= bar_height) {
+		if (!g_minigame_selection_visible && drag->state == INPUT_DRAG_END && drag->begin_y <= bar_height && drag->end_y <= bar_height) {
 			size_t index = 0;
 			for (navitem_t *i = &navitems[0]; i->text != NULL; ++i) {
 				if (fabsf(drag->end_x - i->x) < 68.0f) {
@@ -504,10 +443,11 @@ static void draw(struct scene_menu_s *menu, struct engine *engine) {
 	pipeline_draw(&g_pipeline_entities, engine);
 }
 
-static void on_callback(struct scene_menu_s *menu, struct engine *engine, struct engine_event event) {
+static void on_callback(struct scene_menu *menu, struct engine *engine, struct engine_event event) {
 	switch (event.type) {
 		case ENGINE_EVENT_CLOSE_SCENE:
 			g_menu_camera_target_y = 0.0f;
+			g_minigame_selection_visible = 0;
 			break;
 		case ENGINE_EVENT_WINDOW_RESIZED:
 			break;
@@ -519,7 +459,7 @@ static void on_callback(struct scene_menu_s *menu, struct engine *engine, struct
 	};
 }
 
-static void on_message(struct scene_menu_s *menu, struct engine *engine, struct message_header *msg) {
+static void on_message(struct scene_menu *menu, struct engine *engine, struct message_header *msg) {
 	switch (msg->type) {
 		case WELCOME_RESPONSE: {
 			struct welcome_response *_response = (struct welcome_response *)msg;
@@ -593,7 +533,7 @@ static void on_message(struct scene_menu_s *menu, struct engine *engine, struct 
 	}
 }
 
-void scene_menu_init(struct scene_menu_s *menu, struct engine *engine) {
+void scene_menu_init(struct scene_menu *menu, struct engine *engine) {
 	// init scene base
 	scene_init((struct scene_s *)menu, engine);
 
@@ -613,7 +553,6 @@ void scene_menu_init(struct scene_menu_s *menu, struct engine *engine) {
 
 static void on_start_game(struct engine *engine) {
 	g_menu_camera_target_y = -1.0f;
-
 	platform_vibrate(PLATFORM_VIBRATE_TAP);
 }
 
@@ -622,10 +561,9 @@ static void on_click_minigame_button(struct engine *engine) {
 }
 
 static void switch_to_game_scene(struct engine *engine) {
-	struct scene_battle_s *game_scene_battle = malloc(sizeof(struct scene_battle_s));
+	struct scene_battle *game_scene_battle = malloc(sizeof(struct scene_battle));
 	scene_battle_init(game_scene_battle, engine);
 	g_next_scene = (struct scene_s *)game_scene_battle;
-
 	platform_vibrate(PLATFORM_VIBRATE_TAP);
 }
 
@@ -633,8 +571,13 @@ static void switch_to_suika_scene(struct engine *engine) {
 	struct scene_experiments_s *scene = malloc(sizeof(struct scene_experiments_s));
 	scene_experiments_init(scene, engine);
 	g_next_scene = (struct scene_s *)scene;
+	platform_vibrate(PLATFORM_VIBRATE_TAP);
+}
 
-
+static void switch_to_planes_scene(struct engine *engine) {
+	struct scene_planes_s *scene = malloc(sizeof(struct scene_planes_s));
+	scene_planes_init(scene, engine);
+	g_next_scene = (struct scene_s *)scene;
 	platform_vibrate(PLATFORM_VIBRATE_TAP);
 }
 
@@ -642,8 +585,6 @@ static void switch_to_asteroid_scene(struct engine *engine) {
 	struct scene_brickbreaker_s *scene = malloc(sizeof(struct scene_brickbreaker_s));
 	scene_brickbreaker_init(scene, engine);
 	g_next_scene = (struct scene_s *)scene;
-
-
 	platform_vibrate(PLATFORM_VIBRATE_TAP);
 }
 
@@ -652,6 +593,63 @@ static float menuitem_active(float menu_x, float bookmark_x, float bookmark_tx) 
 	const float max_d = 110.0f;
 	if (d > max_d || fabs(bookmark_tx - menu_x) > 4.0f) return 0.0f;
 	return 1.0f - (d / max_d);
+}
+
+//
+// ui
+//
+
+static void draw_minigame_modal(void) {
+	NVGcontext *vg = g_engine->vg;
+	rendered_modal_t modal = ugui_modal_begin(g_engine);
+
+	// Title text
+	nvgFontFaceId(vg, g_font);
+	nvgTextAlign(vg, NVG_ALIGN_TOP | NVG_ALIGN_LEFT);
+	nvgFontSize(vg, 24);
+	nvgFillColor(vg, nvgRGBf(0.4f, 0.41f, 0.24f));
+	nvgText(vg, 16, 27, "CHOOSE A GAME", NULL);
+
+	static const char *item_names[] = {
+		"Asteroids",
+		"Suika",
+		"Places"
+	};
+	static btn_callback_fn switch_to_scene[] = {
+		&switch_to_asteroid_scene,
+		&switch_to_suika_scene,
+		&switch_to_planes_scene,
+	};
+
+	for (usize i = 0; i < count_of(item_names); ++i) {
+		float w = modal.width - 2*16;
+		float h = 64;
+		float x = 16;
+		float y = 70 + (h + 8) * i;
+
+		if (g_engine->input_drag.state == INPUT_DRAG_END
+			&& point_in_rect(
+				g_engine->input_drag.end_x - modal.x,
+				g_engine->input_drag.end_y - modal.y,
+				x, y, w, h))
+		{
+			switch_to_scene[i](g_engine);
+		}
+		
+		nvgBeginPath(vg);
+		nvgRoundedRect(vg, x, y, w, h, 8);
+		nvgFillColor(vg, nvgRGBf(1, 1, 0.9f));
+		nvgFill(vg);
+		// Item Text
+		nvgFillColor(vg, nvgRGBA(0, 0, 0, 210));
+		nvgTextAlign(vg, NVG_ALIGN_BOTTOM | NVG_ALIGN_LEFT);
+		nvgFontSize(vg, 24);
+		nvgTextLetterSpacing(vg, 0.0f);
+		nvgFontFaceId(vg, g_font);
+		nvgText(vg, x + 8, y + h + 2, item_names[i], NULL);
+	}
+
+	ugui_modal_end(modal);
 }
 
 static void on_begin_search_friends(struct engine *engine) {

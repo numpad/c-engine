@@ -4,11 +4,11 @@
 #include <flecs.h>
 #include "scene.h"
 
-struct scene_battle_s {
+struct scene_battle {
 	struct scene_s base;
 };
 
-void scene_battle_init(struct scene_battle_s *, struct engine *);
+void scene_battle_init(struct scene_battle *, struct engine *);
 
 #endif
 

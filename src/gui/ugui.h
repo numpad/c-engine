@@ -12,6 +12,8 @@ void ugui_mainmenu_icon(struct engine *, float x, const char *label, int icon, i
 // Windows & Modals
 typedef struct rendered_modal {
 	NVGcontext *vg;
+	float x;
+	float y;
 	float width;
 	float height;
 } rendered_modal_t;
