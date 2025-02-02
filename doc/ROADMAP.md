@@ -12,6 +12,7 @@ update hexmap obstacle tiles
 heal card heals for a few hp
 fix text rendering on mobile/highdpi
 character (position) linear tile movement along tile positions path
+load cards from file
 
 
 plan pile:
@@ -50,6 +51,11 @@ simple dialogue screen (just text and button, animated/each letter fades in)
 map fade-off transition at edges:
  - draw +1 tile, lower than base tile/sloped, decoration on it?
  - draw +1 tile & stencil test with particles?
+
+card effects/player enchantments/...:
+> ideally store a completely reproducible game state history which can be queried.
+ - moving in the same direction without turning, for "Speed/Haste/FreeRunning/..." status effect.
+ - waiting (not moving OR/AND not playing any card) for 1 turn, do a charged strike.
 
 fixme field:
 ------------

@@ -11,6 +11,7 @@
 #include <stb_image.h>
 #include <stb_perlin.h>
 #include <cglm/cglm.h>
+#include <cJSON.h>
 #include <flecs.h>
 #include "engine.h"
 #include "gl/opengles3.h"
@@ -25,16 +26,13 @@
 #include "game/hexmap.h"
 #include "gui/console.h"
 #include "scenes/menu.h"
+#include "util/fs.h"
 #include "util/util.h"
+#include "util/str.h"
 
 //
 // structs & enums
 //
-
-enum event_type {
-	EVENT_PLAY_CARD,
-	EVENT_TYPE_MAX,
-};
 
 enum card_selection {
 	CS_NOT_SELECTED = 0,
@@ -52,34 +50,28 @@ enum gamestate_battle {
 	GS_BATTLE_END             ,
 };
 
-typedef struct event_info {
+enum event_type {
+	EVENT_PLAY_CARD,
+	EVENT_MOVE_ENTITY,
+	EVENT_TYPE_MAX,
+};
+
+union event_info {
 	struct {
 		ecs_entity_t card;
 		ecs_entity_t caused_by;
 	} play_card;
-} event_info_t;
+	struct {
+		ecs_entity_t entity;
+		struct hexcoord goal;
+	} move_entity;
+};
 
-//
-// private functions
-//
-
-static void         recalculate_handcards(void);
-static ecs_entity_t find_closest_handcard(float x, float y, float max_distance);
-static int          order_handcards(ecs_entity_t e1, const void *data1, ecs_entity_t e2, const void *data2);
-static void         draw_hud(pipeline_t *pipeline);
-static void         on_game_event(enum event_type, event_info_t *);
-static void         on_game_event_play_card(event_info_t *info);
-static int          count_handcards(void);
-static void         interact_with_handcards(struct input_drag_s *drag);
-static int          add_cards_to_hand(float dt);
-static void         spawn_random_card(void);
-static int          gamestate_changed(enum gamestate_battle old_state, enum gamestate_battle new_state);
-static void         update_gamestate(enum gamestate_battle state, float dt);
-static void         highlight_reachable_tiles(struct hexcoord origin, usize distance);
-
-//
-// ecs
-//
+enum effect_trigger {
+	TRIGGER_DRAW_CARD,
+	TRIGGER_PLAY_CARD,
+	TRIGGER_DISCARD_CARD,
+};
 
 // components
 
@@ -147,9 +139,25 @@ ECS_COMPONENT_DECLARE(c_health);
 ECS_COMPONENT_DECLARE(c_npc);
 ECS_COMPONENT_DECLARE(c_move_along_path);
 
-// queries
-static ecs_query_t *g_ordered_handcards;
-static int g_handcards_updated;
+
+//
+// private functions
+//
+
+static void         recalculate_handcards(void);
+static ecs_entity_t find_closest_handcard(float x, float y, float max_distance);
+static int          order_handcards(ecs_entity_t e1, const void *data1, ecs_entity_t e2, const void *data2);
+static void         draw_hud(pipeline_t *pipeline);
+static void         on_game_event(enum event_type, union event_info *);
+static void         on_game_event_play_card(union event_info *info);
+static int          count_handcards(void);
+static void         interact_with_handcards(struct input_drag_s *drag);
+static int          add_cards_to_hand(float dt);
+static ecs_entity_t spawn_random_card(void);
+static int          gamestate_changed(enum gamestate_battle old_state, enum gamestate_battle new_state);
+static void         update_gamestate(enum gamestate_battle state, float dt);
+static void         highlight_reachable_tiles(struct hexcoord origin, usize distance);
+static void         trigger_card_effect(c_card *, enum effect_trigger);
 
 // systems
 static void system_move_cards           (ecs_iter_t *);
@@ -179,6 +187,8 @@ static struct engine *g_engine;
 static struct gbuffer g_gbuffer;
 
 // game state
+static ecs_query_t          *g_ordered_handcards;
+static int                   g_handcards_updated;
 static texture_t             g_cards_texture;
 static texture_t             g_ui_texture;
 static shader_t              g_sprite_shader;
@@ -201,9 +211,10 @@ static struct hexmap         g_hexmap;
 static enum gamestate_battle g_gamestate;
 static enum gamestate_battle g_next_gamestate;
 static struct { float x, y, w, h; } g_button_end_turn;
-static struct hexcoord       g_move_goal;
 static usize                 g_player_movement_this_turn;
 static usize                 g_turn_count;
+static usize                 g_base_cards_len;
+static c_card               *g_base_cards;
 
 // debug
 static struct { float x, y, w, h; } g_debug_rect;
@@ -338,6 +349,35 @@ static void load(struct scene_battle *battle, struct engine *engine) {
 	// Character Shader
 	shader_init_from_dir(&g_character_model_shader, "res/shader/model/gbuffer_pass/");
 
+	// Load base cards
+	{
+		char *output;
+		isize output_len;
+		assert(FS_OK == fs_readfile("res/data/cards/base.json", &output, &output_len));
+		cJSON *json = cJSON_ParseWithLength(output, output_len);
+		free(output);
+
+		int number_of_cards = cJSON_GetArraySize(json);
+		g_base_cards_len = number_of_cards;
+		g_base_cards = malloc(number_of_cards * sizeof(*g_base_cards));
+		for (int i = 0; i < g_base_cards_len; ++i) {
+			const cJSON *card             = cJSON_GetArrayItem(json, i);
+			const cJSON *card_name        = cJSON_GetObjectItem(card, "name");
+			const cJSON *card_description = cJSON_GetObjectItem(card, "description");
+			const cJSON *card_face_id     = cJSON_GetObjectItem(card, "face_id");
+			assert(card->type             == cJSON_Object);
+			assert(card_name->type        == cJSON_String);
+			assert(card_description->type == cJSON_String);
+			assert(card_face_id->type     == cJSON_Number);
+			g_base_cards[i].name           = str_copy(card_name->valuestring);
+			g_base_cards[i].description    = str_copy(card_description->valuestring);
+			g_base_cards[i].image_id       = card_face_id->valueint;
+			g_base_cards[i].icon_ids_count = 0;
+		}
+
+		cJSON_free(json);
+	}
+
 	// card renderer
 	{
 		struct texture_settings_s settings = TEXTURE_SETTINGS_INIT;
@@ -392,6 +432,13 @@ static void destroy(struct scene_battle *battle, struct engine *engine) {
 	background_destroy();
 	// TODO: Destroy remaining paths for all entities with a c_move_along_path component.
 	hexmap_destroy(&g_hexmap);
+	for (usize i = 0; i < g_base_cards_len; ++i) {
+		const c_card card = g_base_cards[i];
+		str_free(card.name);
+		str_free(card.description);
+	}
+	free(g_base_cards);
+	g_base_cards_len = 0;
 
 	texture_destroy(&g_cards_texture);
 	texture_destroy(&g_ui_texture);
@@ -484,6 +531,13 @@ static void draw(struct scene_battle *battle, struct engine *engine) {
 		model_draw(&g_player_model, &g_character_model_shader, &g_portrait_camera, model);
 		glDisable(GL_SCISSOR_TEST);
 		glDisable(GL_DEPTH_TEST);
+
+		glm_mat4_identity(model);
+		glm_translate(model, (vec3){12, 90, 0});
+		pipeline_set_transform(&g_text_pipeline, model);
+		pipeline_reset(&g_text_pipeline);
+		fontatlas_writef_ex(&g_card_font, &g_text_pipeline, 0, 0, "$1Movement: $B%d", g_player_movement_this_turn);
+		pipeline_draw_ortho(&g_text_pipeline, g_engine->window_width, g_engine->window_height);
 	}
 
 	{ // Debug Text
@@ -644,32 +698,8 @@ static void update_gamestate(enum gamestate_battle state, float dt) {
 			vec3s p_end = screen_to_world(g_engine->window_width, g_engine->window_height, g_camera.projection, g_camera.view, g_engine->input_drag.end_x, g_engine->input_drag.end_y);
 			struct hexcoord begin_coord = hexmap_world_position_to_coord(&g_hexmap, (vec2s){ .x=p_begin.x, .y=p_begin.z });
 			struct hexcoord new_move_goal = hexmap_world_position_to_coord(&g_hexmap, (vec2s){ .x=p_end.x, .y=p_end.z });
-
 			if (hexmap_is_valid_coord(&g_hexmap, begin_coord) && hexmap_is_valid_coord(&g_hexmap, new_move_goal) && hexcoord_equal(begin_coord, new_move_goal)) {
-				struct hexmap_path path;
-				hexmap_path_find(&g_hexmap, *player_coord, new_move_goal, &path);
-				if (path.result == HEXMAP_PATH_OK) {
-					g_move_goal = new_move_goal;
-					// Update character position
-					if (path.distance_in_tiles >= 1 && path.distance_in_tiles <= g_player_movement_this_turn) {
-						hexmap_tile_at(&g_hexmap, g_move_goal)->movement_cost = HEXMAP_MOVEMENT_COST_MAX;
-						hexmap_tile_at(&g_hexmap, *player_coord)->movement_cost = 1;
-						hexmap_update_edges(&g_hexmap);
-						g_player_movement_this_turn -= path.distance_in_tiles;
-						/*
-						*player_coord = g_move_goal;
-						ecs_modified(g_world, g_player, c_position);
-						highlight_reachable_tiles(*player_coord, g_player_movement_this_turn);
-						*/
-						highlight_reachable_tiles(g_move_goal, g_player_movement_this_turn);
-
-						ecs_set(g_world, g_player, c_tile_offset, { .x=0.0f, .y=0.0f, .z=0.0f });
-						ecs_set(g_world, g_player, c_move_along_path, { .path=path, .current_tile=0, .duration_per_tile=0.35f, .percentage_to_next_tile=0.0f });
-						// We don't hexmap_path_destroy(), this will get done by the animation system
-					} else {
-						hexmap_path_destroy(&path);
-					}
-				}
+				on_game_event(EVENT_MOVE_ENTITY, &(union event_info){ .move_entity={ .entity=g_player, .goal=new_move_goal } });
 			}
 		}
 
@@ -685,11 +715,10 @@ static void update_gamestate(enum gamestate_battle state, float dt) {
 		if (g_debug_draw_pathfinder > 0) {
 			--g_debug_draw_pathfinder;
 		}
-		if (hexmap_is_valid_coord(&g_hexmap, g_move_goal)) {
-			hexmap_set_tile_effect(&g_hexmap, g_move_goal, HEXMAP_TILE_EFFECT_NONE);
+		if (hexmap_is_valid_coord(&g_hexmap, *player_coord)) {
+			hexmap_set_tile_effect(&g_hexmap, *player_coord, HEXMAP_TILE_EFFECT_NONE);
 		}
 		hexmap_clear_tile_effect(&g_hexmap, HEXMAP_TILE_EFFECT_MOVEABLE_AREA);
-		g_move_goal.x = -1;
 		g_next_gamestate = GS_TURN_ENTITY_BEGIN;
 		break;
 	case GS_TURN_ENTITY_BEGIN:
@@ -725,6 +754,31 @@ static void highlight_reachable_tiles(struct hexcoord origin, usize distance) {
 			hexmap_set_tile_effect(&g_hexmap, coord, HEXMAP_TILE_EFFECT_MOVEABLE_AREA);
 		}
 	}
+}
+
+static void trigger_card_effect(c_card *card, enum effect_trigger trigger) {
+	switch (trigger) {
+		case TRIGGER_DRAW_CARD:
+			console_log(g_engine, "Draw Card %s", card->name);
+			break;
+		case TRIGGER_PLAY_CARD: {
+			if (card->image_id == 1) {
+				c_health *health = ecs_get_mut(g_world, g_player, c_health);
+				int heal_until_max = health->max_hp - health->hp;
+				int heal_for = (heal_until_max > 2 ? 2 : heal_until_max);
+				if (heal_for <= 0) {
+					console_log_ex(g_engine, CONSOLE_MSG_ERROR, 1.0f, "Already at full HP");
+				}
+				health->hp += heal_for;
+				ecs_modified(g_world, g_player, c_health);
+				console_log_ex(g_engine, CONSOLE_MSG_SUCCESS, 1.0f, "Healed for %d HP", heal_for);
+			}
+			break;
+		}
+		case TRIGGER_DISCARD_CARD:
+			console_log(g_engine, "Discarded Card %s", card->name);
+			break;
+	};
 }
 
 static void recalculate_handcards(void) {
@@ -913,29 +967,50 @@ static void draw_hud(pipeline_t *pipeline) {
 }
 
 
-static void on_game_event(enum event_type type, event_info_t *info) {
+static void on_game_event(enum event_type type, union event_info *info) {
 	switch (type) {
 	case EVENT_PLAY_CARD:
 		on_game_event_play_card(info);
 		break;
-	case EVENT_TYPE_MAX:
-		assert(type != EVENT_TYPE_MAX);
+	case EVENT_MOVE_ENTITY: {
+		const c_position start = *ecs_get(g_world, info->move_entity.entity, c_position);
+		struct hexmap_path path;
+		if (HEXMAP_PATH_OK == hexmap_path_find(&g_hexmap, start, info->move_entity.goal, &path)) {
+			if (path.distance_in_tiles >= 1 && path.distance_in_tiles <= g_player_movement_this_turn) {
+				hexmap_tile_at(&g_hexmap, info->move_entity.goal)->movement_cost = HEXMAP_MOVEMENT_COST_MAX;
+				hexmap_tile_at(&g_hexmap, start)->movement_cost = 1;
+				hexmap_update_edges(&g_hexmap);
+				g_player_movement_this_turn -= path.distance_in_tiles;
+				highlight_reachable_tiles(info->move_entity.goal, g_player_movement_this_turn);
+
+				ecs_set(g_world, g_player, c_tile_offset, { .x=0.0f, .y=0.0f, .z=0.0f });
+				ecs_set(g_world, g_player, c_move_along_path, { .path=path, .current_tile=0, .duration_per_tile=0.35f, .percentage_to_next_tile=0.0f });
+				// We don't hexmap_path_destroy(), this is now managed by the animation system
+			} else {
+				hexmap_path_destroy(&path);
+			}
+		}
 		break;
+	}
+	case EVENT_TYPE_MAX: break;
 	};
 }
 
 
-static void on_game_event_play_card(event_info_t *info) {
+static void on_game_event_play_card(union event_info *info) {
 	assert(info != NULL);
 	assert(info->play_card.card != 0);
 	assert(ecs_is_valid(g_world, info->play_card.card));
 
 	ecs_entity_t card_entity = info->play_card.card;
-	const c_card *card = ecs_get(g_world, card_entity, c_card);
-	c_handcard *handcard = ecs_get_mut(g_world, card_entity, c_handcard);
+	c_card *card = ecs_get_mut(g_world, card_entity, c_card);
 
 	// TODO: Do something with card
-	// TODO: Unique card id
+	trigger_card_effect(card, TRIGGER_PLAY_CARD);
+
+	// Old code, prevent placing card.
+	/*
+	c_handcard *handcard = ecs_get_mut(g_world, card_entity, c_handcard);
 	if (card->image_id == 1) {
 		c_health *health = ecs_get_mut(g_world, g_player, c_health);
 		int heal_until_max = health->max_hp - health->hp;
@@ -955,6 +1030,7 @@ static void on_game_event_play_card(event_info_t *info) {
 		ecs_modified(g_world, g_player, c_health);
 		console_log_ex(g_engine, CONSOLE_MSG_SUCCESS, 1.0f, "Healed for %d HP", heal_for);
 	}
+	*/
 
 	// remove card
 	ecs_delete(g_world, g_selected_card);
@@ -1000,7 +1076,7 @@ static void interact_with_handcards(struct input_drag_s *drag) {
 			c_handcard *hc = ecs_get_mut(g_world, g_selected_card, c_handcard);
 
 			if (hc->can_be_placed) {
-				on_game_event(EVENT_PLAY_CARD, &(event_info_t){ .play_card={ .caused_by=g_player, .card=g_selected_card } });
+				on_game_event(EVENT_PLAY_CARD, &(union event_info){ .play_card={ .caused_by=g_player, .card=g_selected_card } });
 			} else {
 				hc->hand_space = HANDCARD_SPACE_DEFAULT;
 				hc->is_selected = CS_NOT_SELECTED;
@@ -1052,6 +1128,7 @@ int add_cards_to_hand(float dt) {
 				ecs_set(g_world, e, c_handcard, { .hand_space = HANDCARD_SPACE_DEFAULT, .hand_target_pos = {0}, .is_selected = CS_NOT_SELECTED, .added_at_time=g_engine->time_elapsed });
 				ecs_set(g_world, e, c_pos2d, { .x = g_engine->window_width, .y = g_engine->window_height * 0.9f });
 				Mix_PlayChannel(-1, g_place_card_sfx, 0);
+				trigger_card_effect(ecs_get_mut(g_world, e, c_card), TRIGGER_DRAW_CARD);
 			}
 		}
 		if (!has_entity) {
@@ -1064,53 +1141,18 @@ int add_cards_to_hand(float dt) {
 	return done;
 }
 
-static void spawn_random_card(void) {
-	int n = rng_i() % 5;
-	
+static ecs_entity_t spawn_random_card(void) {
+	int n = rng_i() % g_base_cards_len;
 	ecs_entity_t e = ecs_new_id(g_world);
-
-	switch (n) {
-	case 0:
-		ecs_set(g_world, e, c_card, {
-				.name="Ignite Weapon",
-				.description="Meele Attacks inflict $1Burning$0 equal to the damage dealt.",
-				.image_id=4,
-				.icon_ids_count=1,
-				.icon_ids={3} });
-		break;
-	case 1:
-		ecs_set(g_world, e, c_card, {
-				.name="Defend",
-				.description="Gain $B3$0 Armor.",
-				.image_id=2,
-				.icon_ids_count=1,
-				.icon_ids={2} });
-		break;
-	case 2:
-		ecs_set(g_world, e, c_card, {
-				.name="Meal",
-				.description="Heal $B2$0 points.",
-				.image_id=1,
-				.icon_ids_count=1,
-				.icon_ids={5} });
-		break;
-	case 3:
-		ecs_set(g_world, e, c_card, {
-				.name="Corruption",
-				.description="$I$BTODO:$0 $Iinsert description here...$0",
-				.image_id=5,
-				.icon_ids_count=3,
-				.icon_ids={3, 3, 4} });
-		break;
-	case 4:
-		ecs_set(g_world, e, c_card, {
-				.name="Random Weapon, go!",
-				.description="Your next $BMeele Attack$0 is $BRanged$0.",
-				.image_id=0,
-				.icon_ids_count=1,
-				.icon_ids={1} });
-		break;
-	};
+	c_card random_card = g_base_cards[n];
+	ecs_set(g_world, e, c_card, {
+			.name=random_card.name,
+			.description=random_card.description,
+			.image_id=random_card.image_id,
+			.icon_ids_count=random_card.icon_ids_count,
+			.icon_ids={0}
+			});
+	return e;
 }
 
 //
@@ -1227,7 +1269,7 @@ static void system_draw_cards(ecs_iter_t *it) {
 			cmd_icon.position.x = cmd_card.position.x + 7 + 12 * extra_scale * icon_i;
 			cmd_icon.position.y = cmd_card.position.y - 6 * extra_scale;
 			cmd_icon.position.z = cmd_card.position.z;
-			cmd_icon.size.x = cmd_icon.size.y = 20 * extra_scale;
+			cmd_icon.size.x = cmd_icon.size.y = 16 * extra_scale;
 			cmd_icon.origin.x = cmd_icon.origin.y = 0.0f;
 			cmd_icon.origin.z = 45 - 7 - 12 * icon_i;
 			cmd_icon.origin.w = 64 + 6;
@@ -1312,8 +1354,8 @@ static void system_draw_board_entities(ecs_iter_t *it) {
 			const ecs_type_t *type = ecs_get_type(g_world, e);
 			if (type == NULL) continue;
 			sprintf(win_text, "#%d components:\n", type->count);
-			for (int i = 0; i < type->count; ++i) {
-				ecs_id_t id = type->array[i];
+			for (int j = 0; j < type->count; ++j) {
+				ecs_id_t id = type->array[j];
 				const char *name = ecs_get_name(g_world, id);
 				sprintf(win_text + strlen(win_text), " - %s\n", name);
 			}

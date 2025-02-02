@@ -1,60 +1,28 @@
 [
 	{
-		"id": null,
-		"name": "Move Forward",
-		"description": "Not all those who wander are lost.",
-		"effects": [
-			"Move 1 tile"
-		],
-		"tile_id": 40,
-		"cost": 0,
-		"tags": ["movement"],
+		"name": "Basic Attack",
+		"description": "Deal $B3$0 Melee damage.",
+		"face_id": 0
 	},
 	{
-		"id": null,
-		"name": "Meal - Fried Egg",
-		"description": "\"At last, a proper meal!\"",
-		"effects": [
-			"Restore 1 HP",
-			"Apply {ENTITY_STATUS:Healing 2}"
-		],
-		"tile_id": 41,
-		"cost": 1,
-		"tags": ["health"],
+		"name": "Ration of Food",
+		"description": "Heal $B2$0 points.",
+		"face_id": 1
 	},
 	{
-		"id": null,
-		"name": "Sword Slash",
-		"description": "A simple strike with a plain sword.",
-		"effects": [
-			"Deal {2 Damage} to any adjacent target."
-		],
-		"tile_id": 42,
-		"cost": 1,
-		"tags": ["attack", "melee"],
+		"name": "Shield",
+		"description": "Gain $B3$0 Armor.",
+		"face_id": 2
 	},
 	{
-		"id": null,
-		"name": "Piercing Strike",
-		"description": "Collect all power for a finishing strike.",
-		"effects": [
-			"Deal [X*2] Damage to target.",
-			"{CARD_STATUS:Fragile 1}"
-		],
-		"tile_id": 42,
-		"cost": "X",
-		"tags": ["attack", "melee"],
+		"name": "Fire Spell",
+		"description": "Melee Attacks inflict $1Burning$0 equal to the damage dealt.",
+		"face_id": 4
 	},
 	{
-		"id": null,
-		"name": "Blocking Stance",
-		"description": "Sturdy Shield - prepare for yet another strike.",
-		"effects": [
-			"Gain {ENTITY_STATUS:4 Block}"
-		],
-		"tile_id": 43,
-		"cost": 1,
-		"tags": ["defense"],
+		"name": "Corrupted Genie",
+		"description": "Draw $B3$0 cards.\n$BOn Draw$0: $IThis turn$0, take $B1$0 damage when drawing a card.",
+		"face_id": 5
 	}
 ]
 
