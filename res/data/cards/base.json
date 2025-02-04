@@ -20,9 +20,19 @@
 		"face_id": 4
 	},
 	{
-		"name": "Corrupted Genie",
+		"name": "Cursed Lamp",
 		"description": "Draw $B3$0 cards.\n$BOn Draw$0: $IThis turn$0, take $B1$0 damage when drawing a card.",
 		"face_id": 5
+	},
+	{
+		"name": "Teleport",
+		"description": "Instantly teleport up to $B4$0 tiles away.",
+		"face_id": 3
+	},
+	{
+		"name": "Enchanted Longbow",
+		"description": "Transform the next Basic Attack you play into a $BConjured Arrow$0 with equal damage.",
+		"face_id": 3
 	}
 ]
 

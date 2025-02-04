@@ -43,6 +43,7 @@ void hexmap_init(struct hexmap *map, struct engine *engine) {
 	map->tiles = calloc(map->w * map->h, sizeof(*map->tiles));
 	for (usize i = 0; i < (usize)map->w * map->h; ++i) {
 		map->tiles[i].movement_cost = 1;
+		map->tiles[i].occupied_by = 0;
 	}
 	shader_init_from_dir(&map->tile_shader, "res/shader/model/hexmap_tile/");
 	shader_set_uniform_buffer(&map->tile_shader, "Global", &engine->shader_global_ubo);
@@ -89,7 +90,7 @@ void hexmap_init(struct hexmap *map, struct engine *engine) {
 	load_hextile_models(map);
 
 	// Generate pathfinding data
-	hexmap_update_edges(map);
+	hexmap_generate_edges(map);
 }
 
 void hexmap_destroy(struct hexmap *map) {
@@ -252,7 +253,7 @@ void hexmap_clear_tile_effect(struct hexmap *map, enum hexmap_tile_effect effect
 	}
 }
 
-void hexmap_update_edges(struct hexmap *map) {
+void hexmap_generate_edges(struct hexmap *map) {
 	for (usize i = 0; i < (usize)map->w * map->h * HEXMAP_MAX_EDGES; ++i) {
 		map->edges[i] = NO_EDGE;
 	}
@@ -266,15 +267,11 @@ void hexmap_update_edges(struct hexmap *map) {
 			//if (map->tiles[current].movement_cost >= HEXMAP_MOVEMENT_COST_MAX) {
 			//	continue;
 			//}
-
 			uint edges_generated = 0;
 			for (enum hexmap_neighbor i = HEXMAP_N_FIRST; i <= HEXMAP_N_LAST; ++i) {
 				struct hexcoord neighbor_coord = hexmap_get_neighbor_coord(map, current_coord, i);
 				if (hexmap_is_valid_coord(map, neighbor_coord)) {
-					usize neighbor = hexmap_coord_to_index(map, neighbor_coord);
-					if (map->tiles[neighbor].movement_cost < HEXMAP_MOVEMENT_COST_MAX) {
-						map->edges[current + edges_generated++ * n_tiles] = hexmap_coord_to_index(map, neighbor_coord);
-					}
+					map->edges[current + edges_generated++ * n_tiles] = hexmap_coord_to_index(map, neighbor_coord);
 				}
 			}
 		}
@@ -308,19 +305,27 @@ void hexmap_generate_flowfield(struct hexmap *map, struct hexcoord start_coord, 
 		usize edge_i = 0;
 		while (map->edges[current_node_i + edge_i * map_size] < map_size && edge_i < HEXMAP_MAX_EDGES) {
 			usize next_i = map->edges[current_node_i + edge_i * map_size];
+			++edge_i;
+			if (hexmap_is_tile_obstacle(map, hexmap_index_to_coord(map, next_i))) {
+				continue;
+			}
 			if (came_from[next_i] == NODE_NOT_VISITED) {
 				RINGBUFFER_APPEND(frontier, next_i);
 				came_from[next_i] = current_node_i;
 			}
-			++edge_i;
 		}
 		assert(NUMBER_OF_ITERATIONS++ < map_size);
 	}
 }
 
 enum hexmap_path_result hexmap_path_find(struct hexmap *map, struct hexcoord start_coord, struct hexcoord goal_coord, struct hexmap_path *output_path) {
+	return hexmap_path_find_ex(map, start_coord, goal_coord, output_path, PATH_FLAGS_NONE);
+}
+
+enum hexmap_path_result hexmap_path_find_ex(struct hexmap *map, struct hexcoord start_coord, struct hexcoord goal_coord, struct hexmap_path *output_path, enum path_find_flags flags) {
 	assert(map != NULL);
 	assert(output_path != NULL); // Maybe allow NULL, just to check if any path exists?
+	assert((flags == PATH_FLAGS_NONE || flags == PATH_FLAGS_FIND_NEIGHBOR) && "flag not implemented?");
 
 	output_path->distance_in_tiles = 0;
 	output_path->start             = start_coord;
@@ -343,7 +348,7 @@ enum hexmap_path_result hexmap_path_find(struct hexmap *map, struct hexcoord sta
 	}
 
 	const usize start    = hexmap_coord_to_index(map, start_coord);
-	const usize goal     = hexmap_coord_to_index(map, goal_coord);
+	usize goal           = hexmap_coord_to_index(map, goal_coord);
 	const usize map_size = (usize)map->w * map->h;
 	RINGBUFFER(usize, frontier, map_size);
 	RINGBUFFER_APPEND(frontier, start);
@@ -365,16 +370,26 @@ enum hexmap_path_result hexmap_path_find(struct hexmap *map, struct hexcoord sta
 			usize edge_i = 0;
 			while (map->edges[current_node_i + edge_i * map_size] < map_size && edge_i < HEXMAP_MAX_EDGES) {
 				usize next_i = map->edges[current_node_i + edge_i * map_size];
+				++edge_i;
+				// If goal is a neighbor of the current tile, we update
+				// the output path goal to it. No need to search further.
+				if ((flags & PATH_FLAGS_FIND_NEIGHBOR) && next_i == goal) {
+					goal = current_node_i;
+					output_path->goal = hexmap_index_to_coord(map, current_node_i);
+					goto goal_reached;
+				}
+				if (hexmap_is_tile_obstacle(map, hexmap_index_to_coord(map, next_i))) {
+					continue;
+				}
 				if (came_from[next_i] == NODE_NOT_VISITED) {
 					RINGBUFFER_APPEND(frontier, next_i);
 					came_from[next_i] = current_node_i;
 				}
-				++edge_i;
 			}
-
 			assert(NUMBER_OF_ITERATIONS++ < map_size);
 		}
 	}
+goal_reached:
 
 	// allocate enough memory to store the longest possible path (visits each node once)
 	output_path->tiles = malloc(map_size * sizeof(*output_path->tiles));
@@ -481,7 +496,8 @@ int hexmap_is_tile_obstacle(struct hexmap *map, struct hexcoord coord) {
 	assert(map != NULL);
 	assert(hexmap_is_valid_coord(map, coord));
 	usize i = hexmap_coord_to_index(map, coord);
-	return map->tiles[i].movement_cost >= HEXMAP_MOVEMENT_COST_MAX;
+	return map->tiles[i].movement_cost >= HEXMAP_MOVEMENT_COST_MAX
+		|| map->tiles[i].occupied_by != 0;
 }
 
 ////////////

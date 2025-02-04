@@ -53,6 +53,7 @@ enum gamestate_battle {
 enum event_type {
 	EVENT_PLAY_CARD,
 	EVENT_MOVE_ENTITY,
+	EVENT_ATTACK_ENTITY,
 	EVENT_TYPE_MAX,
 };
 
@@ -65,6 +66,11 @@ union event_info {
 		ecs_entity_t entity;
 		struct hexcoord goal;
 	} move_entity;
+	struct {
+		ecs_entity_t attacker;
+		ecs_entity_t victim;
+		int damage;
+	} attack_entity;
 };
 
 enum effect_trigger {
@@ -332,18 +338,16 @@ static void load(struct scene_battle *battle, struct engine *engine) {
 		e = ecs_new_id(g_world);
 		ecs_set(g_world, e, c_position,  { .x=enemy_pos.x, .y=enemy_pos.y });
 		ecs_set(g_world, e, c_model,     { .model=&g_enemy_model, .scale=80.0f });
-		ecs_set(g_world, e, c_health,    { .hp=19, .max_hp=19 });
+		ecs_set(g_world, e, c_health,    { .hp=3, .max_hp=3 });
 		ecs_set(g_world, e, c_npc, { ._dummy=1 });
-		hexmap_tile_at(&g_hexmap, enemy_pos)->movement_cost = HEXMAP_MOVEMENT_COST_MAX;
+		hexmap_tile_at(&g_hexmap, enemy_pos)->occupied_by = e;
 		// player
 		struct hexcoord player_pos = { .x=2, .y=5 };
 		g_player = ecs_new_id(g_world);
 		ecs_set(g_world, g_player, c_position,  { .x=player_pos.x, .y=player_pos.y });
 		ecs_set(g_world, g_player, c_model,     { .model=&g_player_model, .scale=80.0f });
 		ecs_set(g_world, g_player, c_health,    { .hp=7, .max_hp=10 });
-		hexmap_tile_at(&g_hexmap, player_pos)->movement_cost = HEXMAP_MOVEMENT_COST_MAX;
-
-		hexmap_update_edges(&g_hexmap);
+		hexmap_tile_at(&g_hexmap, player_pos)->occupied_by = g_player;
 	}
 
 	// Character Shader
@@ -696,10 +700,31 @@ static void update_gamestate(enum gamestate_battle state, float dt) {
 			// Highlight & pathfind
 			vec3s p_begin = screen_to_world(g_engine->window_width, g_engine->window_height, g_camera.projection, g_camera.view, g_engine->input_drag.begin_x, g_engine->input_drag.begin_y);
 			vec3s p_end = screen_to_world(g_engine->window_width, g_engine->window_height, g_camera.projection, g_camera.view, g_engine->input_drag.end_x, g_engine->input_drag.end_y);
-			struct hexcoord begin_coord = hexmap_world_position_to_coord(&g_hexmap, (vec2s){ .x=p_begin.x, .y=p_begin.z });
-			struct hexcoord new_move_goal = hexmap_world_position_to_coord(&g_hexmap, (vec2s){ .x=p_end.x, .y=p_end.z });
-			if (hexmap_is_valid_coord(&g_hexmap, begin_coord) && hexmap_is_valid_coord(&g_hexmap, new_move_goal) && hexcoord_equal(begin_coord, new_move_goal)) {
-				on_game_event(EVENT_MOVE_ENTITY, &(union event_info){ .move_entity={ .entity=g_player, .goal=new_move_goal } });
+			struct hexcoord click_begin_coord = hexmap_world_position_to_coord(&g_hexmap, (vec2s){ .x=p_begin.x, .y=p_begin.z });
+			struct hexcoord click_end_coord = hexmap_world_position_to_coord(&g_hexmap, (vec2s){ .x=p_end.x, .y=p_end.z });
+			if (hexmap_is_valid_coord(&g_hexmap, click_begin_coord) && hexmap_is_valid_coord(&g_hexmap, click_end_coord) && hexcoord_equal(click_begin_coord, click_end_coord)) {
+				ecs_entity_t occupied_by = hexmap_tile_at(&g_hexmap, click_begin_coord)->occupied_by;
+				if (occupied_by != 0 && ecs_is_valid(g_world, occupied_by)) {
+					struct hexmap_path path_to_neighbor;
+					enum hexmap_path_result path_found =
+						hexmap_path_find_ex(&g_hexmap, *ecs_get(g_world, g_player, c_position), click_begin_coord, &path_to_neighbor, PATH_FLAGS_FIND_NEIGHBOR);
+
+					if (path_found == HEXMAP_PATH_OK) {
+						if (path_to_neighbor.distance_in_tiles == 0) {
+							console_log_ex(g_engine, CONSOLE_MSG_SUCCESS, 2.0f, "Attacking for 1 damage");
+							on_game_event(EVENT_ATTACK_ENTITY, &(union event_info){ .attack_entity={
+								.attacker=g_player, .victim=occupied_by, .damage=1 } });
+						} else if (path_to_neighbor.distance_in_tiles <= g_player_movement_this_turn) {
+							console_log_ex(g_engine, CONSOLE_MSG_INFO, 2.0f, "Moving into attack range");
+							on_game_event(EVENT_MOVE_ENTITY, &(union event_info){ .move_entity={ .entity=g_player, .goal=path_to_neighbor.goal } });
+						} else {
+							console_log_ex(g_engine, CONSOLE_MSG_ERROR, 2.0f, "Not enough movement.");
+						}
+					}
+					hexmap_path_destroy(&path_to_neighbor);
+				} else {
+					on_game_event(EVENT_MOVE_ENTITY, &(union event_info){ .move_entity={ .entity=g_player, .goal=click_end_coord } });
+				}
 			}
 		}
 
@@ -759,7 +784,6 @@ static void highlight_reachable_tiles(struct hexcoord origin, usize distance) {
 static void trigger_card_effect(c_card *card, enum effect_trigger trigger) {
 	switch (trigger) {
 		case TRIGGER_DRAW_CARD:
-			console_log(g_engine, "Draw Card %s", card->name);
 			break;
 		case TRIGGER_PLAY_CARD: {
 			if (card->image_id == 1) {
@@ -934,7 +958,8 @@ static void draw_hud(pipeline_t *pipeline) {
 			nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
 			nvgFontSize(vg, 12.0f);
 			char movecost_text[32];
-			if (g_hexmap.tiles[i].movement_cost >= HEXMAP_MOVEMENT_COST_MAX) {
+			if (hexmap_is_tile_obstacle(&g_hexmap, hexmap_index_to_coord(&g_hexmap, i))) {
+				nvgFillColor(vg, nvgRGB(255, 0, 0));
 				sprintf(movecost_text, "#");
 			} else {
 				sprintf(movecost_text, "%d", g_hexmap.tiles[i].movement_cost);
@@ -977,9 +1002,8 @@ static void on_game_event(enum event_type type, union event_info *info) {
 		struct hexmap_path path;
 		if (HEXMAP_PATH_OK == hexmap_path_find(&g_hexmap, start, info->move_entity.goal, &path)) {
 			if (path.distance_in_tiles >= 1 && path.distance_in_tiles <= g_player_movement_this_turn) {
-				hexmap_tile_at(&g_hexmap, info->move_entity.goal)->movement_cost = HEXMAP_MOVEMENT_COST_MAX;
-				hexmap_tile_at(&g_hexmap, start)->movement_cost = 1;
-				hexmap_update_edges(&g_hexmap);
+				hexmap_tile_at(&g_hexmap, info->move_entity.goal)->occupied_by = g_player;
+				hexmap_tile_at(&g_hexmap, start)->occupied_by = 0;
 				g_player_movement_this_turn -= path.distance_in_tiles;
 				highlight_reachable_tiles(info->move_entity.goal, g_player_movement_this_turn);
 
@@ -990,6 +1014,19 @@ static void on_game_event(enum event_type type, union event_info *info) {
 				hexmap_path_destroy(&path);
 			}
 		}
+		break;
+	}
+	case EVENT_ATTACK_ENTITY: {
+		const int damage = info->attack_entity.damage;
+		ecs_entity_t victim = info->attack_entity.victim;
+		c_health *victim_health = ecs_get_mut(g_world, victim, c_health);
+		int new_hp = (int)victim_health->hp - damage;
+		if (new_hp < 0) {
+			new_hp = 0;
+		}
+		victim_health->hp = new_hp;
+		ecs_modified(g_world, victim, c_health);
+		console_log_ex(g_engine, CONSOLE_MSG_ERROR, 1.0f, "Dealt %d damage.", damage);
 		break;
 	}
 	case EVENT_TYPE_MAX: break;
@@ -1426,12 +1463,14 @@ static void system_draw_healthbars(ecs_iter_t *it) {
 		drawcmd_set_texture_subrect(&cmd, g_ui_pipeline.texture, 16, 32, 26, 6);
 		pipeline_emit(&g_ui_pipeline, &cmd);
 		// health
-		cmd.position.x += 4;
-		cmd.position.y += 4;
-		cmd.size.x = (22 * 2) * health_pct;
-		cmd.size.y =   2 * 2;
-		drawcmd_set_texture_subrect(&cmd, g_ui_pipeline.texture, 16, 48, 22 * health_pct, 2);
-		pipeline_emit(&g_ui_pipeline, &cmd);
+		if (health_pct > 0.0f) {
+			cmd.position.x += 4;
+			cmd.position.y += 4;
+			cmd.size.x = (22 * 2) * health_pct;
+			cmd.size.y =   2 * 2;
+			drawcmd_set_texture_subrect(&cmd, g_ui_pipeline.texture, 16, 48, 22 * health_pct, 2);
+			pipeline_emit(&g_ui_pipeline, &cmd);
+		}
 	}
 }
 
@@ -1461,9 +1500,8 @@ static void system_enemy_turn(ecs_iter_t *it) {
 			ecs_set(g_world, e, c_tile_offset, { .x=0.0f, .y=0.0f, .z=0.0f });
 			ecs_set(g_world, e, c_move_along_path, { .path=path, .current_tile=0, .duration_per_tile=0.5f, .percentage_to_next_tile=0.0f });
 
-			hexmap_tile_at(&g_hexmap, random_neighbor)->movement_cost = HEXMAP_MOVEMENT_COST_MAX;
-			hexmap_tile_at(&g_hexmap, *pos)->movement_cost = 1;
-			hexmap_update_edges(&g_hexmap);
+			hexmap_tile_at(&g_hexmap, random_neighbor)->occupied_by = e;
+			hexmap_tile_at(&g_hexmap, *pos)->occupied_by = 0;
 			hexmap_set_tile_effect(&g_hexmap, random_neighbor, HEXMAP_TILE_EFFECT_ATTACKABLE);
 			hexmap_set_tile_effect(&g_hexmap, *pos, HEXMAP_TILE_EFFECT_NONE);
 		} else {

@@ -1,6 +1,7 @@
 #ifndef HEXMAP_H
 #define HEXMAP_H
 
+#include <flecs.h>
 #include <cglm/vec2.h>
 #include <cglm/vec3.h>
 #include "util/util.h"
@@ -29,6 +30,11 @@ enum hexmap_path_result {
 	HEXMAP_PATH_INCOMPLETE_FLOWFIELD
 };
 
+enum path_find_flags {
+	PATH_FLAGS_NONE          = 0,
+	PATH_FLAGS_FIND_NEIGHBOR = 1 << 0,
+};
+
 enum hexmap_neighbor {
 	HEXMAP_E,
 	HEXMAP_SE,
@@ -46,6 +52,7 @@ struct hextile {
 	i16 rotation;
 	u8 highlight;
 	u8 movement_cost;
+	ecs_entity_t occupied_by;
 };
 
 struct hexcoord {
@@ -104,11 +111,12 @@ void hexmap_clear_tile_effect(struct hexmap *, enum hexmap_tile_effect);
 
 
 // flowfield
-void hexmap_update_edges(struct hexmap *map);
+void hexmap_generate_edges(struct hexmap *map);
 void hexmap_generate_flowfield(struct hexmap *map, struct hexcoord start_coord, usize flowfield_len, usize *flowfield);
 usize hexmap_flowfield_distance(struct hexmap *map, struct hexcoord goal, usize flowfield_len, usize flowfield[flowfield_len]);
 // pathfinding
 enum hexmap_path_result hexmap_path_find(struct hexmap *, struct hexcoord start, struct hexcoord goal, struct hexmap_path *);
+enum hexmap_path_result hexmap_path_find_ex(struct hexmap *, struct hexcoord start, struct hexcoord goal, struct hexmap_path *, enum path_find_flags);
 void hexmap_path_destroy(struct hexmap_path *);
 usize hexmap_path_at(struct hexmap_path *, usize index);
 

@@ -33,6 +33,7 @@ static void print_debug_info(cgltf_data *data);
 
 int model_init_from_file(model_t *model, const char *path) {
 	// TODO: This needs an error return value, and handle error cases...
+	// TODO: lets maybe free the cgltf_data here?
 	assert(model != NULL);
 	assert(path != NULL);
 

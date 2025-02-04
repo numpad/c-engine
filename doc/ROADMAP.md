@@ -13,14 +13,24 @@ heal card heals for a few hp
 fix text rendering on mobile/highdpi
 character (position) linear tile movement along tile positions path
 load cards from file
-
+player makes a basic attack by clicking on a enemy
+move into attack range when clicking on enemy
+can only attack entity in range (direct neighbor for now, ranged attacks later)
 
 plan pile:
 ----------
-player makes a basic attack by clicking on a neighboring enemy
+player can only attack if has at least one "Basic Attack" card in hand:
+ - if none: cannot attack.
+ - if one : automatically play it.
+ - if more: user selects card, valid cards get highlighted
+
+entities die if hp <= 0
 hexmap highlight for enemy (only those in reach?) for basic attacks
 
 characters (position & angle) tile movement along spline path, catmullrom?
+
+optimize model loading, concurrent loading?
+asset cache
 
 font
  - horizontal alignment
