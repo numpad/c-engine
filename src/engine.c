@@ -530,10 +530,7 @@ static void engine_poll_events(struct engine *engine) {
 				scene_on_callback(engine->scene, engine, (struct engine_event){ .type = ENGINE_EVENT_KEY, .data.key = key_event });
 				// TODO: pop scene stack, or other data structure?
 				if (key_event.type == SDL_KEYUP && key_event.keysym.sym == SDLK_ESCAPE) {
-					enum scene_call_result result = scene_on_callback(engine->scene, engine, (struct engine_event){ .type = ENGINE_EVENT_CLOSE_SCENE });
-					if (result == SCENE_CALL_NOT_IMPLEMENTED) {
-						on_siggoback();
-					}
+					on_siggoback();
 				}
 				break;
 			}
@@ -580,12 +577,12 @@ static void engine_poll_events(struct engine *engine) {
 			}
 		} else if (event.type == USR_EVENT_GOBACK) {
 			console_log(engine, "← Back");
-
-			// TODO: only switch if we're not in menu? need to be able to check scene type
-			// TODO: notify current scene about this
-			struct scene_menu *menu_scene = malloc(sizeof(struct scene_menu));
-			scene_menu_init(menu_scene, engine);
-			engine_setscene(engine, (struct scene_s *)menu_scene);
+			enum scene_call_result result = scene_on_callback(engine->scene, engine, (struct engine_event){ .type = ENGINE_EVENT_CLOSE_SCENE });
+			if (result == SCENE_CALL_NOT_IMPLEMENTED) {
+				struct scene_menu *menu_scene = malloc(sizeof(struct scene_menu));
+				scene_menu_init(menu_scene, engine);
+				engine_setscene(engine, (struct scene_s *)menu_scene);
+			}
 		}
 	}
 }

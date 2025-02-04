@@ -50,27 +50,30 @@ enum gamestate_battle {
 	GS_BATTLE_END             ,
 };
 
-enum event_type {
+enum game_event_type {
 	EVENT_PLAY_CARD,
 	EVENT_MOVE_ENTITY,
 	EVENT_ATTACK_ENTITY,
 	EVENT_TYPE_MAX,
 };
 
-union event_info {
-	struct {
-		ecs_entity_t card;
-		ecs_entity_t caused_by;
-	} play_card;
-	struct {
-		ecs_entity_t entity;
-		struct hexcoord goal;
-	} move_entity;
-	struct {
-		ecs_entity_t attacker;
-		ecs_entity_t victim;
-		int damage;
-	} attack_entity;
+struct game_event {
+	enum game_event_type type;
+	union {
+		struct {
+			ecs_entity_t card;
+			ecs_entity_t caused_by;
+		} play_card;
+		struct {
+			ecs_entity_t entity;
+			struct hexcoord goal;
+		} move_entity;
+		struct {
+			ecs_entity_t attacker;
+			ecs_entity_t victim;
+			int damage;
+		} attack_entity;
+	};
 };
 
 enum effect_trigger {
@@ -154,8 +157,8 @@ static void         recalculate_handcards(void);
 static ecs_entity_t find_closest_handcard(float x, float y, float max_distance);
 static int          order_handcards(ecs_entity_t e1, const void *data1, ecs_entity_t e2, const void *data2);
 static void         draw_hud(pipeline_t *pipeline);
-static void         on_game_event(enum event_type, union event_info *);
-static void         on_game_event_play_card(union event_info *info);
+static void         on_game_event(struct game_event);
+static void         on_game_event_play_card(struct game_event);
 static int          count_handcards(void);
 static void         interact_with_handcards(struct input_drag_s *drag);
 static int          add_cards_to_hand(float dt);
@@ -707,23 +710,23 @@ static void update_gamestate(enum gamestate_battle state, float dt) {
 				if (occupied_by != 0 && ecs_is_valid(g_world, occupied_by)) {
 					struct hexmap_path path_to_neighbor;
 					enum hexmap_path_result path_found =
-						hexmap_path_find_ex(&g_hexmap, *ecs_get(g_world, g_player, c_position), click_begin_coord, &path_to_neighbor, PATH_FLAGS_FIND_NEIGHBOR);
+						hexmap_path_find_ex(&g_hexmap, *ecs_get(g_world, g_player, c_position), click_begin_coord, PATH_FLAGS_FIND_NEIGHBOR, &path_to_neighbor);
 
 					if (path_found == HEXMAP_PATH_OK) {
 						if (path_to_neighbor.distance_in_tiles == 0) {
 							console_log_ex(g_engine, CONSOLE_MSG_SUCCESS, 2.0f, "Attacking for 1 damage");
-							on_game_event(EVENT_ATTACK_ENTITY, &(union event_info){ .attack_entity={
+							on_game_event((struct game_event){ .type=EVENT_ATTACK_ENTITY, .attack_entity={
 								.attacker=g_player, .victim=occupied_by, .damage=1 } });
 						} else if (path_to_neighbor.distance_in_tiles <= g_player_movement_this_turn) {
 							console_log_ex(g_engine, CONSOLE_MSG_INFO, 2.0f, "Moving into attack range");
-							on_game_event(EVENT_MOVE_ENTITY, &(union event_info){ .move_entity={ .entity=g_player, .goal=path_to_neighbor.goal } });
+							on_game_event((struct game_event){ .type=EVENT_MOVE_ENTITY, .move_entity={ .entity=g_player, .goal=path_to_neighbor.goal } });
 						} else {
 							console_log_ex(g_engine, CONSOLE_MSG_ERROR, 2.0f, "Not enough movement.");
 						}
 					}
 					hexmap_path_destroy(&path_to_neighbor);
 				} else {
-					on_game_event(EVENT_MOVE_ENTITY, &(union event_info){ .move_entity={ .entity=g_player, .goal=click_end_coord } });
+					on_game_event((struct game_event){ .type=EVENT_MOVE_ENTITY, .move_entity={ .entity=g_player, .goal=click_end_coord } });
 				}
 			}
 		}
@@ -987,25 +990,25 @@ static void draw_hud(pipeline_t *pipeline) {
 			nvgStrokeWidth(vg, 3.0f);
 			nvgStrokeColor(vg, nvgRGB(128, 0, 128));
 		}
-	} // :g_debug_draw_pathfinder
+	}
 
 }
 
 
-static void on_game_event(enum event_type type, union event_info *info) {
-	switch (type) {
+static void on_game_event(struct game_event event) {
+	switch (event.type) {
 	case EVENT_PLAY_CARD:
-		on_game_event_play_card(info);
+		on_game_event_play_card(event);
 		break;
 	case EVENT_MOVE_ENTITY: {
-		const c_position start = *ecs_get(g_world, info->move_entity.entity, c_position);
+		const c_position start = *ecs_get(g_world, event.move_entity.entity, c_position);
 		struct hexmap_path path;
-		if (HEXMAP_PATH_OK == hexmap_path_find(&g_hexmap, start, info->move_entity.goal, &path)) {
+		if (HEXMAP_PATH_OK == hexmap_path_find(&g_hexmap, start, event.move_entity.goal, &path)) {
 			if (path.distance_in_tiles >= 1 && path.distance_in_tiles <= g_player_movement_this_turn) {
-				hexmap_tile_at(&g_hexmap, info->move_entity.goal)->occupied_by = g_player;
+				hexmap_tile_at(&g_hexmap, event.move_entity.goal)->occupied_by = g_player;
 				hexmap_tile_at(&g_hexmap, start)->occupied_by = 0;
 				g_player_movement_this_turn -= path.distance_in_tiles;
-				highlight_reachable_tiles(info->move_entity.goal, g_player_movement_this_turn);
+				highlight_reachable_tiles(event.move_entity.goal, g_player_movement_this_turn);
 
 				ecs_set(g_world, g_player, c_tile_offset, { .x=0.0f, .y=0.0f, .z=0.0f });
 				ecs_set(g_world, g_player, c_move_along_path, { .path=path, .current_tile=0, .duration_per_tile=0.35f, .percentage_to_next_tile=0.0f });
@@ -1017,8 +1020,8 @@ static void on_game_event(enum event_type type, union event_info *info) {
 		break;
 	}
 	case EVENT_ATTACK_ENTITY: {
-		const int damage = info->attack_entity.damage;
-		ecs_entity_t victim = info->attack_entity.victim;
+		const int damage = event.attack_entity.damage;
+		ecs_entity_t victim = event.attack_entity.victim;
 		c_health *victim_health = ecs_get_mut(g_world, victim, c_health);
 		int new_hp = (int)victim_health->hp - damage;
 		if (new_hp < 0) {
@@ -1034,12 +1037,12 @@ static void on_game_event(enum event_type type, union event_info *info) {
 }
 
 
-static void on_game_event_play_card(union event_info *info) {
-	assert(info != NULL);
-	assert(info->play_card.card != 0);
-	assert(ecs_is_valid(g_world, info->play_card.card));
+static void on_game_event_play_card(struct game_event event) {
+	assert(event.type == EVENT_PLAY_CARD);
+	assert(event.play_card.card != 0);
+	assert(ecs_is_valid(g_world, event.play_card.card));
 
-	ecs_entity_t card_entity = info->play_card.card;
+	ecs_entity_t card_entity = event.play_card.card;
 	c_card *card = ecs_get_mut(g_world, card_entity, c_card);
 
 	// TODO: Do something with card
@@ -1113,7 +1116,7 @@ static void interact_with_handcards(struct input_drag_s *drag) {
 			c_handcard *hc = ecs_get_mut(g_world, g_selected_card, c_handcard);
 
 			if (hc->can_be_placed) {
-				on_game_event(EVENT_PLAY_CARD, &(union event_info){ .play_card={ .caused_by=g_player, .card=g_selected_card } });
+				on_game_event((struct game_event){ .type=EVENT_PLAY_CARD, .play_card={ .caused_by=g_player, .card=g_selected_card } });
 			} else {
 				hc->hand_space = HANDCARD_SPACE_DEFAULT;
 				hc->is_selected = CS_NOT_SELECTED;

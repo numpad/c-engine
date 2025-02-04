@@ -116,7 +116,7 @@ void hexmap_generate_flowfield(struct hexmap *map, struct hexcoord start_coord, 
 usize hexmap_flowfield_distance(struct hexmap *map, struct hexcoord goal, usize flowfield_len, usize flowfield[flowfield_len]);
 // pathfinding
 enum hexmap_path_result hexmap_path_find(struct hexmap *, struct hexcoord start, struct hexcoord goal, struct hexmap_path *);
-enum hexmap_path_result hexmap_path_find_ex(struct hexmap *, struct hexcoord start, struct hexcoord goal, struct hexmap_path *, enum path_find_flags);
+enum hexmap_path_result hexmap_path_find_ex(struct hexmap *, struct hexcoord start, struct hexcoord goal, enum path_find_flags, struct hexmap_path *);
 void hexmap_path_destroy(struct hexmap_path *);
 usize hexmap_path_at(struct hexmap_path *, usize index);
 

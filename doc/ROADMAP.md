@@ -69,6 +69,7 @@ card effects/player enchantments/...:
 
 fixme field:
 ------------
+add credits/license information for all assets
 draw enemy health bars at their Z coordinate (correctly handle depth with other characters)
 replace raw djikstra with A* in hexmap
 visualize pathfinder/flowfield with arrows

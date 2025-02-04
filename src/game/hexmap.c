@@ -319,10 +319,10 @@ void hexmap_generate_flowfield(struct hexmap *map, struct hexcoord start_coord, 
 }
 
 enum hexmap_path_result hexmap_path_find(struct hexmap *map, struct hexcoord start_coord, struct hexcoord goal_coord, struct hexmap_path *output_path) {
-	return hexmap_path_find_ex(map, start_coord, goal_coord, output_path, PATH_FLAGS_NONE);
+	return hexmap_path_find_ex(map, start_coord, goal_coord, PATH_FLAGS_NONE, output_path);
 }
 
-enum hexmap_path_result hexmap_path_find_ex(struct hexmap *map, struct hexcoord start_coord, struct hexcoord goal_coord, struct hexmap_path *output_path, enum path_find_flags flags) {
+enum hexmap_path_result hexmap_path_find_ex(struct hexmap *map, struct hexcoord start_coord, struct hexcoord goal_coord, enum path_find_flags flags, struct hexmap_path *output_path) {
 	assert(map != NULL);
 	assert(output_path != NULL); // Maybe allow NULL, just to check if any path exists?
 	assert((flags == PATH_FLAGS_NONE || flags == PATH_FLAGS_FIND_NEIGHBOR) && "flag not implemented?");
