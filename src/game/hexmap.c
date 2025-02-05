@@ -200,6 +200,7 @@ void hexmap_draw(struct hexmap *map, struct camera *camera, vec3 player_pos) {
 	for (usize i = 0; i < n_tiles; ++i) {
 		vec2s pos = hexmap_index_to_world_position(map, i);
 		
+		// TODO: model matrices wont change often: lets cache them...
 		mat4 model = GLM_MAT4_IDENTITY_INIT;
 		//glm_translate(model, (vec3){ -map->tile_offsets.x * 3.f, 0.0f, map->tile_offsets.y * -2.0f });
 		glm_translate(model, (vec3){ pos.x, 0.0f, pos.y });

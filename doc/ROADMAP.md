@@ -16,13 +16,13 @@ load cards from file
 player makes a basic attack by clicking on a enemy
 move into attack range when clicking on enemy
 can only attack entity in range (direct neighbor for now, ranged attacks later)
+player can only attack if has at least one "Basic Attack" card in hand
 
 plan pile:
 ----------
-player can only attack if has at least one "Basic Attack" card in hand:
- - if none: cannot attack.
- - if one : automatically play it.
- - if more: user selects card, valid cards get highlighted
+when player attacks with multiple basic attacks, let them select the card. valid cards get highlighted.
+
+add status effects icons to ui
 
 entities die if hp <= 0
 hexmap highlight for enemy (only those in reach?) for basic attacks
@@ -74,4 +74,5 @@ draw enemy health bars at their Z coordinate (correctly handle depth with other 
 replace raw djikstra with A* in hexmap
 visualize pathfinder/flowfield with arrows
 end turn only after animations finished? skippable?
+fix UBO, causes mobile to crash after a handful of calls to `shader_set_uniform_buffer()`
 

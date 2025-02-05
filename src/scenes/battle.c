@@ -71,7 +71,7 @@ struct game_event {
 		struct {
 			ecs_entity_t attacker;
 			ecs_entity_t victim;
-			int damage;
+			ecs_entity_t initiated_by_card;
 		} attack_entity;
 	};
 };
@@ -100,12 +100,17 @@ typedef struct {
 } c_velocity;
 
 // general information about a card
+enum card_kind {
+	CARD_KIND_BASIC_ATTACK,
+	CARD_KIND_ACTION,
+};
 typedef struct {
-	char *name;
-	char *description;
-	int   image_id;
-	int   icon_ids[8];
-	int   icon_ids_count;
+	char          *name;
+	char          *description;
+	int            image_id;
+	int            icon_ids[8];
+	int            icon_ids_count;
+	enum card_kind kind;
 } c_card;
 
 // a cards state when held in hand
@@ -156,10 +161,13 @@ ECS_COMPONENT_DECLARE(c_move_along_path);
 static void         recalculate_handcards(void);
 static ecs_entity_t find_closest_handcard(float x, float y, float max_distance);
 static int          order_handcards(ecs_entity_t e1, const void *data1, ecs_entity_t e2, const void *data2);
+static void         draw_ui(pipeline_t *pipeline);
 static void         draw_hud(pipeline_t *pipeline);
 static void         on_game_event(struct game_event);
 static void         on_game_event_play_card(struct game_event);
-static int          count_handcards(void);
+static int          count_cards(void);
+static int          count_handcards_of_kind(enum card_kind);
+static ecs_entity_t find_any_handcard_of_kind(enum card_kind);
 static void         interact_with_handcards(struct input_drag_s *drag);
 static int          add_cards_to_hand(float dt);
 static ecs_entity_t spawn_random_card(void);
@@ -255,7 +263,7 @@ static void load(struct scene_battle *battle, struct engine *engine) {
 	g_button_end_turn.w = 130.0f;
 	g_button_end_turn.h = 60.0f;
 	g_debug_rect.x = 100.0f;
-	g_debug_rect.y = 50.0f;
+	g_debug_rect.y = 90.0f;
 	g_debug_rect.w = 100.0f;
 	g_debug_rect.h = 50.0f;
 
@@ -341,7 +349,7 @@ static void load(struct scene_battle *battle, struct engine *engine) {
 		e = ecs_new_id(g_world);
 		ecs_set(g_world, e, c_position,  { .x=enemy_pos.x, .y=enemy_pos.y });
 		ecs_set(g_world, e, c_model,     { .model=&g_enemy_model, .scale=80.0f });
-		ecs_set(g_world, e, c_health,    { .hp=3, .max_hp=3 });
+		ecs_set(g_world, e, c_health,    { .hp=8, .max_hp=8 });
 		ecs_set(g_world, e, c_npc, { ._dummy=1 });
 		hexmap_tile_at(&g_hexmap, enemy_pos)->occupied_by = e;
 		// player
@@ -367,19 +375,29 @@ static void load(struct scene_battle *battle, struct engine *engine) {
 		int number_of_cards = cJSON_GetArraySize(json);
 		g_base_cards_len = number_of_cards;
 		g_base_cards = malloc(number_of_cards * sizeof(*g_base_cards));
-		for (int i = 0; i < g_base_cards_len; ++i) {
+		for (usize i = 0; i < g_base_cards_len; ++i) {
 			const cJSON *card             = cJSON_GetArrayItem(json, i);
 			const cJSON *card_name        = cJSON_GetObjectItem(card, "name");
 			const cJSON *card_description = cJSON_GetObjectItem(card, "description");
 			const cJSON *card_face_id     = cJSON_GetObjectItem(card, "face_id");
+			const cJSON *card_kind        = cJSON_GetObjectItem(card, "kind");
 			assert(card->type             == cJSON_Object);
 			assert(card_name->type        == cJSON_String);
 			assert(card_description->type == cJSON_String);
 			assert(card_face_id->type     == cJSON_Number);
+			assert(card_kind->type        == cJSON_String);
+			assert(strcmp(card_kind->valuestring, "basic_attack") == 0 || strcmp(card_kind->valuestring, "action") == 0);
 			g_base_cards[i].name           = str_copy(card_name->valuestring);
 			g_base_cards[i].description    = str_copy(card_description->valuestring);
 			g_base_cards[i].image_id       = card_face_id->valueint;
 			g_base_cards[i].icon_ids_count = 0;
+			if (strcmp(card_kind->valuestring, "basic_attack") == 0) {
+				g_base_cards[i].kind = CARD_KIND_BASIC_ATTACK;
+			} else if (strcmp(card_kind->valuestring, "action") == 0) {
+				g_base_cards[i].kind = CARD_KIND_ACTION;
+			} else {
+				assert(0 && "unknown card kind encountered!");
+			}
 		}
 
 		cJSON_free(json);
@@ -486,7 +504,7 @@ static void update(struct scene_battle *battle, struct engine *engine, float dt)
 
 
 static void draw(struct scene_battle *battle, struct engine *engine) {
-	// draw terrain
+	// Draw Scene (Map & Entites)
 	gbuffer_bind(g_gbuffer);
 	gbuffer_clear(g_gbuffer);
 
@@ -509,89 +527,8 @@ static void draw(struct scene_battle *battle, struct engine *engine) {
 	background_draw(engine);
 	gbuffer_display(g_gbuffer, engine);
 
-	// drawing systems
-	pipeline_reset(&g_ui_pipeline);
-	pipeline_reset(&g_cards_pipeline);
-	g_cards_pipeline.texture = &g_cards_texture;
-
-	ecs_run(g_world, ecs_id(system_draw_healthbars), engine->dt, NULL);
-
-	// Draw UI - borders & elements
-	draw_hud(&g_ui_pipeline);
-
-	glDisable(GL_DEPTH_TEST);
-	pipeline_draw_ortho(&g_ui_pipeline, g_engine->window_width, g_engine->window_height);
-	ecs_run(g_world, ecs_id(system_draw_cards), engine->dt, NULL);
-
-
-	{ // Draw UI - Portrait
-		// TODO: this doesn't write to gbuffer, but rather renders with no lighting.
-		glEnable(GL_DEPTH_TEST);
-		mat4 model = GLM_MAT4_IDENTITY_INIT;
-		glm_translate(model, (vec3){ -g_engine->window_width + 100.0f, g_engine->window_height - 240.0f, -300.0f });
-		glm_rotate_x(model, glm_rad(10.0f + cosf(g_engine->time_elapsed) * 10.0f), model);
-		glm_rotate_y(model, glm_rad(sinf(g_engine->time_elapsed) * 40.0f), model);
-		glm_scale(model, (vec3){ 75.0f, 75.0f, 75.0f});
-		const float pr = g_engine->window_pixel_ratio;
-		glEnable(GL_SCISSOR_TEST);
-		glScissor(15.0f * pr, g_engine->window_height * pr - 81.0f * pr, 66 * pr, 66 * pr);
-		model_draw(&g_player_model, &g_character_model_shader, &g_portrait_camera, model);
-		glDisable(GL_SCISSOR_TEST);
-		glDisable(GL_DEPTH_TEST);
-
-		glm_mat4_identity(model);
-		glm_translate(model, (vec3){12, 90, 0});
-		pipeline_set_transform(&g_text_pipeline, model);
-		pipeline_reset(&g_text_pipeline);
-		fontatlas_writef_ex(&g_card_font, &g_text_pipeline, 0, 0, "$1Movement: $B%d", g_player_movement_this_turn);
-		pipeline_draw_ortho(&g_text_pipeline, g_engine->window_width, g_engine->window_height);
-	}
-
-	{ // Debug Text
-		mat4 model = GLM_MAT4_IDENTITY_INIT;
-		glm_translate(model, (vec3){100, 50, 0});
-		pipeline_set_transform(&g_text_pipeline, model);
-		pipeline_reset(&g_text_pipeline);
-		fontatlas_writef_ex(&g_card_font, &g_text_pipeline, 0, g_debug_rect.w, "$1Test -> $BText $0$1$IText $BText.$0\nTest -> Text Text Text.");
-		pipeline_draw_ortho(&g_text_pipeline, g_engine->window_width, g_engine->window_height);
-
-		float corner_radius = 6.0f;
-		int mx, my;
-		SDL_GetMouseState(&mx, &my);
-		vec2 corner = { g_debug_rect.x + g_debug_rect.w, g_debug_rect.y + g_debug_rect.h };
-		vec2 mouse = { mx, my };
-		float dist_to_corner = glm_vec2_distance(corner, mouse);
-		int near_corner = (dist_to_corner <= corner_radius * 1.75f);
-		if (near_corner) {
-			corner_radius = 9.0f;
-		}
-		int dragging_corner = (dist_to_corner <= 20.0f && INPUT_DRAG_IS_DOWN(engine->input_drag));
-		if (dragging_corner) {
-			g_debug_rect.w = (engine->input_drag.x - g_debug_rect.x);
-			g_debug_rect.h = (engine->input_drag.y - g_debug_rect.y);
-		}
-
-		NVGcontext *vg = engine->vg;
-		nvgBeginPath(vg);
-		nvgStrokeWidth(vg, dragging_corner ? 2.0f : 1.0f);
-		nvgStrokeColor(vg, nvgRGB(255, 255, 255));
-		nvgRect(vg, g_debug_rect.x - 2.0f, g_debug_rect.y - 2.0f, g_debug_rect.w + 4.0f, g_debug_rect.h + 4.0f);
-		nvgStroke(vg);
-
-		nvgBeginPath(vg);
-		if (dragging_corner) {
-			nvgFillColor(vg, nvgRGB(255, 255, 255));
-		} else {
-			nvgFillColor(vg, nvgRGB(180, 170, 170));
-		}
-		nvgCircle(vg, g_debug_rect.x + g_debug_rect.w, g_debug_rect.y + g_debug_rect.h, corner_radius);
-		nvgFill(vg);
-
-		nvgBeginPath(vg);
-		nvgStrokeColor(vg, nvgRGB(255, 255, 255));
-		nvgCircle(vg, g_debug_rect.x + g_debug_rect.w, g_debug_rect.y + g_debug_rect.h, corner_radius);
-		nvgStroke(vg);
-	}
+	// Draw ui
+	draw_ui(&g_ui_pipeline);
 }
 
 void on_callback(struct scene_battle *battle, struct engine *engine, struct engine_event event) {
@@ -677,7 +614,7 @@ static void update_gamestate(enum gamestate_battle state, float dt) {
 		g_next_gamestate = GS_ROUND_BEGIN;
 		break;
 	case GS_ROUND_BEGIN: {
-		const int number_of_cards = count_handcards();
+		const int number_of_cards = count_cards();
 		const int max_cards_to_draw_at_turn_start = 5;
 		for (int i = number_of_cards; i < max_cards_to_draw_at_turn_start; ++i) {
 			spawn_random_card();
@@ -695,6 +632,7 @@ static void update_gamestate(enum gamestate_battle state, float dt) {
 		break;
 	}
 	case GS_TURN_PLAYER_IN_PROGRESS: {
+		(void)add_cards_to_hand(dt); // TODO: we are doing this here and in TURN_PLAYER_BEGIN...
 		struct input_drag_s *drag = &g_engine->input_drag;
 		int is_on_button_end_turn = drag_in_rect(drag, g_button_end_turn.x, g_button_end_turn.y, g_button_end_turn.w, g_button_end_turn.h);
 		int is_dragging_card = (g_selected_card != 0 && ecs_is_valid(g_world, g_selected_card));
@@ -714,12 +652,21 @@ static void update_gamestate(enum gamestate_battle state, float dt) {
 
 					if (path_found == HEXMAP_PATH_OK) {
 						if (path_to_neighbor.distance_in_tiles == 0) {
-							console_log_ex(g_engine, CONSOLE_MSG_SUCCESS, 2.0f, "Attacking for 1 damage");
-							on_game_event((struct game_event){ .type=EVENT_ATTACK_ENTITY, .attack_entity={
-								.attacker=g_player, .victim=occupied_by, .damage=1 } });
+							const int basic_attacks_in_hand = count_handcards_of_kind(CARD_KIND_BASIC_ATTACK);
+							if (basic_attacks_in_hand == 0) {
+								console_log_ex(g_engine, CONSOLE_MSG_ERROR, 2.0f, "No Basic Attacks in Hand!");
+							} else if (basic_attacks_in_hand >= 1) {
+								// TODO: let the player choose a card if multiple basic attacks in hand!
+								console_log_ex(g_engine, CONSOLE_MSG_SUCCESS, 2.0f, "Attacking");
+								ecs_entity_t card = find_any_handcard_of_kind(CARD_KIND_BASIC_ATTACK);
+								assert(card != 0 && ecs_is_valid(g_world, card));
+								on_game_event((struct game_event){ .type=EVENT_ATTACK_ENTITY, .attack_entity={
+									.attacker=g_player, .victim=occupied_by, .initiated_by_card=card } });
+							}
 						} else if (path_to_neighbor.distance_in_tiles <= g_player_movement_this_turn) {
 							console_log_ex(g_engine, CONSOLE_MSG_INFO, 2.0f, "Moving into attack range");
 							on_game_event((struct game_event){ .type=EVENT_MOVE_ENTITY, .move_entity={ .entity=g_player, .goal=path_to_neighbor.goal } });
+							// TODO: Also attack, after moving completed.
 						} else {
 							console_log_ex(g_engine, CONSOLE_MSG_ERROR, 2.0f, "Not enough movement.");
 						}
@@ -789,6 +736,7 @@ static void trigger_card_effect(c_card *card, enum effect_trigger trigger) {
 		case TRIGGER_DRAW_CARD:
 			break;
 		case TRIGGER_PLAY_CARD: {
+			// TODO: Find a better way to identify cards, image_id is obviously not the answer...
 			if (card->image_id == 1) {
 				c_health *health = ecs_get_mut(g_world, g_player, c_health);
 				int heal_until_max = health->max_hp - health->hp;
@@ -799,6 +747,9 @@ static void trigger_card_effect(c_card *card, enum effect_trigger trigger) {
 				health->hp += heal_for;
 				ecs_modified(g_world, g_player, c_health);
 				console_log_ex(g_engine, CONSOLE_MSG_SUCCESS, 1.0f, "Healed for %d HP", heal_for);
+			} else if (card->image_id == 5) {
+				spawn_random_card();
+				spawn_random_card();
 			}
 			break;
 		}
@@ -888,6 +839,91 @@ static int order_handcards(ecs_entity_t e1, const void *data1, ecs_entity_t e2, 
 	const c_handcard *c2 = data2;
 
 	return (c1->added_at_time > c2->added_at_time) - (c1->added_at_time < c2->added_at_time);
+}
+
+static void draw_ui(pipeline_t *pipeline) {
+	pipeline_reset(&g_ui_pipeline);
+	pipeline_reset(&g_cards_pipeline);
+	g_cards_pipeline.texture = &g_cards_texture;
+
+	ecs_run(g_world, ecs_id(system_draw_healthbars), g_engine->dt, NULL);
+
+	// Draw UI - borders & elements
+	draw_hud(pipeline);
+
+	glDisable(GL_DEPTH_TEST);
+	pipeline_draw_ortho(pipeline, g_engine->window_width, g_engine->window_height);
+	ecs_run(g_world, ecs_id(system_draw_cards), g_engine->dt, NULL);
+
+
+	{ // Draw UI - Portrait
+		// TODO: this doesn't write to gbuffer, but rather renders with no lighting.
+		glEnable(GL_DEPTH_TEST);
+		mat4 model = GLM_MAT4_IDENTITY_INIT;
+		glm_translate(model, (vec3){ -g_engine->window_width + 100.0f, g_engine->window_height - 240.0f, -300.0f });
+		glm_rotate_x(model, glm_rad(10.0f + cosf(g_engine->time_elapsed) * 10.0f), model);
+		glm_rotate_y(model, glm_rad(sinf(g_engine->time_elapsed) * 40.0f), model);
+		glm_scale(model, (vec3){ 75.0f, 75.0f, 75.0f});
+		const float pr = g_engine->window_pixel_ratio;
+		glEnable(GL_SCISSOR_TEST);
+		glScissor(15.0f * pr, g_engine->window_height * pr - 81.0f * pr, 66 * pr, 66 * pr);
+		model_draw(&g_player_model, &g_character_model_shader, &g_portrait_camera, model);
+		glDisable(GL_SCISSOR_TEST);
+		glDisable(GL_DEPTH_TEST);
+
+		glm_mat4_identity(model);
+		glm_translate(model, (vec3){12, 90, 0});
+		pipeline_set_transform(&g_text_pipeline, model);
+		pipeline_reset(&g_text_pipeline);
+		fontatlas_writef_ex(&g_card_font, &g_text_pipeline, 0, 0, "$1Movement: $B%d", g_player_movement_this_turn);
+		pipeline_draw_ortho(&g_text_pipeline, g_engine->window_width, g_engine->window_height);
+	}
+
+	{ // Debug Text
+		mat4 model = GLM_MAT4_IDENTITY_INIT;
+		glm_translate(model, (vec3){g_debug_rect.x, g_debug_rect.y, 0.0f});
+		pipeline_set_transform(&g_text_pipeline, model);
+		pipeline_reset(&g_text_pipeline);
+		fontatlas_writef_ex(&g_card_font, &g_text_pipeline, 0, g_debug_rect.w, "$1Test -> $BText $0$1$IText $BText.$0\nTest -> Text Text Text.");
+		pipeline_draw_ortho(&g_text_pipeline, g_engine->window_width, g_engine->window_height);
+
+		float corner_radius = 6.0f;
+		int mx, my;
+		SDL_GetMouseState(&mx, &my);
+		vec2 corner = { g_debug_rect.x + g_debug_rect.w, g_debug_rect.y + g_debug_rect.h };
+		vec2 mouse = { mx, my };
+		float dist_to_corner = glm_vec2_distance(corner, mouse);
+		int near_corner = (dist_to_corner <= corner_radius * 1.75f);
+		if (near_corner) {
+			corner_radius = 9.0f;
+		}
+		int dragging_corner = (dist_to_corner <= 20.0f && INPUT_DRAG_IS_DOWN(g_engine->input_drag));
+		if (dragging_corner) {
+			g_debug_rect.w = (g_engine->input_drag.x - g_debug_rect.x);
+			g_debug_rect.h = (g_engine->input_drag.y - g_debug_rect.y);
+		}
+
+		NVGcontext *vg = g_engine->vg;
+		nvgBeginPath(vg);
+		nvgStrokeWidth(vg, dragging_corner ? 2.0f : 1.0f);
+		nvgStrokeColor(vg, nvgRGB(255, 255, 255));
+		nvgRect(vg, g_debug_rect.x - 2.0f, g_debug_rect.y - 2.0f, g_debug_rect.w + 4.0f, g_debug_rect.h + 4.0f);
+		nvgStroke(vg);
+
+		nvgBeginPath(vg);
+		if (dragging_corner) {
+			nvgFillColor(vg, nvgRGB(255, 255, 255));
+		} else {
+			nvgFillColor(vg, nvgRGB(180, 170, 170));
+		}
+		nvgCircle(vg, g_debug_rect.x + g_debug_rect.w, g_debug_rect.y + g_debug_rect.h, corner_radius);
+		nvgFill(vg);
+
+		nvgBeginPath(vg);
+		nvgStrokeColor(vg, nvgRGB(255, 255, 255));
+		nvgCircle(vg, g_debug_rect.x + g_debug_rect.w, g_debug_rect.y + g_debug_rect.h, corner_radius);
+		nvgStroke(vg);
+	}
 }
 
 static void draw_hud(pipeline_t *pipeline) {
@@ -1020,16 +1056,19 @@ static void on_game_event(struct game_event event) {
 		break;
 	}
 	case EVENT_ATTACK_ENTITY: {
-		const int damage = event.attack_entity.damage;
+		assert(event.attack_entity.initiated_by_card != 0 && ecs_is_valid(g_world, event.attack_entity.initiated_by_card));
+		const c_card *card = ecs_get(g_world, event.attack_entity.initiated_by_card, c_card);
+		on_game_event((struct game_event){ .type=EVENT_PLAY_CARD, .play_card={ .caused_by=g_player, .card=event.attack_entity.initiated_by_card } });
 		ecs_entity_t victim = event.attack_entity.victim;
 		c_health *victim_health = ecs_get_mut(g_world, victim, c_health);
-		int new_hp = (int)victim_health->hp - damage;
-		if (new_hp < 0) {
-			new_hp = 0;
-		}
-		victim_health->hp = new_hp;
+		// Determine attack damage
+		const int victim_hp = (int)victim_health->hp;
+		const int deals_damage = 3; // TODO: Store damage in card.
+		const int damage_dealt = GLM_MIN(victim_hp, deals_damage);
+		//const int damage_overkill = deals_damage - damage_dealt;
+		victim_health->hp -= damage_dealt;
 		ecs_modified(g_world, victim, c_health);
-		console_log_ex(g_engine, CONSOLE_MSG_ERROR, 1.0f, "Dealt %d damage.", damage);
+		console_log_ex(g_engine, CONSOLE_MSG_ERROR, 1.0f, "Dealt %d damage.", damage_dealt);
 		break;
 	}
 	case EVENT_TYPE_MAX: break;
@@ -1073,26 +1112,53 @@ static void on_game_event_play_card(struct game_event event) {
 	*/
 
 	// remove card
-	ecs_delete(g_world, g_selected_card);
+	ecs_delete(g_world, event.play_card.card);
 	g_selected_card = 0;
 }
 
-static int count_handcards(void) {
-	int count = 0;
-
+static int count_cards(void) {
 	ecs_filter_t *filter = ecs_filter_init(g_world, &(ecs_filter_desc_t){
 		.terms = {
 			{ .id = ecs_id(c_card) },
 		},
 	});
-
 	ecs_iter_t it = ecs_filter_iter(g_world, filter);
+	int count = 0;
 	while (ecs_filter_next(&it)) {
 		count += it.count;
 	}
 	ecs_filter_fini(filter);
-
 	return count;
+}
+
+static int count_handcards_of_kind(enum card_kind kind) {
+	int count = 0;
+	ecs_iter_t it = ecs_query_iter(g_world, g_ordered_handcards);
+	while (ecs_query_next(&it)) {
+		c_card *cards = ecs_field(&it, c_card, 1);
+		// c_handcard *handcards = ecs_field(&it, c_handcard, 2);
+		for (int i = 0; i < it.count; ++i) {
+			if (cards[i].kind == kind) {
+				++count;
+			}
+		}
+	}
+	return count;
+}
+
+static ecs_entity_t find_any_handcard_of_kind(enum card_kind kind) {
+	ecs_iter_t it = ecs_query_iter(g_world, g_ordered_handcards);
+	while (ecs_query_next(&it)) {
+		c_card *cards = ecs_field(&it, c_card, 1);
+		// c_handcard *handcards = ecs_field(&it, c_handcard, 2);
+		for (int i = 0; i < it.count; ++i) {
+			if (cards[i].kind == kind) {
+				while (ecs_query_next(&it)) { /* Exhaust iterator */ };
+				return it.entities[i];
+			}
+		}
+	}
+	return 0;
 }
 
 static void interact_with_handcards(struct input_drag_s *drag) {
@@ -1175,8 +1241,8 @@ int add_cards_to_hand(float dt) {
 			done = 1;
 		}
 		while (ecs_filter_next(&it)); // exhaust iterator. TODO: better way?
-		ecs_filter_fini(filter);
 	}
+	ecs_filter_fini(filter);
 
 	return done;
 }
@@ -1185,13 +1251,7 @@ static ecs_entity_t spawn_random_card(void) {
 	int n = rng_i() % g_base_cards_len;
 	ecs_entity_t e = ecs_new_id(g_world);
 	c_card random_card = g_base_cards[n];
-	ecs_set(g_world, e, c_card, {
-			.name=random_card.name,
-			.description=random_card.description,
-			.image_id=random_card.image_id,
-			.icon_ids_count=random_card.icon_ids_count,
-			.icon_ids={0}
-			});
+	ecs_set_ptr(g_world, e, c_card, &random_card);
 	return e;
 }
 

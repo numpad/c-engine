@@ -2,36 +2,43 @@
 	{
 		"name": "Basic Attack",
 		"description": "Deal $B3$0 Melee damage.",
+		"kind": "basic_attack",
 		"face_id": 0
 	},
 	{
 		"name": "Ration of Food",
 		"description": "Heal $B2$0 points.",
+		"kind": "action",
 		"face_id": 1
 	},
 	{
 		"name": "Shield",
 		"description": "Gain $B3$0 Armor.",
+		"kind": "action",
 		"face_id": 2
 	},
 	{
 		"name": "Fire Spell",
 		"description": "Melee Attacks inflict $1Burning$0 equal to the damage dealt.",
+		"kind": "action",
 		"face_id": 4
 	},
 	{
 		"name": "Cursed Lamp",
-		"description": "Draw $B3$0 cards.\n$BOn Draw$0: $IThis turn$0, take $B1$0 damage when drawing a card.",
+		"description": "Draw $B2$0 cards.\n$BOn Draw$0: $IThis turn$0, take $B1$0 damage when drawing a card.",
+		"kind": "action",
 		"face_id": 5
 	},
 	{
 		"name": "Teleport",
 		"description": "Instantly teleport up to $B4$0 tiles away.",
+		"kind": "action",
 		"face_id": 3
 	},
 	{
 		"name": "Enchanted Longbow",
 		"description": "Transform the next Basic Attack you play into a $BConjured Arrow$0 with equal damage.",
+		"kind": "action",
 		"face_id": 3
 	}
 ]
