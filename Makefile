@@ -148,5 +148,5 @@ scenes: CFLAGS += -DDEBUG -ggdb -O0
 scenes: LIBS += -ldl
 scenes:
 	$(CC) $(CFLAGS) -shared -o hotreload.so $(INCLUDES) $(LIBS) \
-		src/scenes/battle.c src/game/hexmap.c
+		src/scenes/battle.c src/gl/gbuffer.c
 

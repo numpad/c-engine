@@ -5,6 +5,7 @@ precision mediump float;
 
 layout(std140) uniform Global {
 	float periodic_time;
+	vec4  display_resolution;
 };
 
 uniform sampler2D u_diffuse;

@@ -64,6 +64,7 @@ struct engine {
 	struct {
 		float periodic_time;
 		float _padding[3]; // TODO: is this really required for std140?
+		float display_resolution[4];
 	} shader_global_data;
 	struct shader_ubo shader_global_ubo;
 

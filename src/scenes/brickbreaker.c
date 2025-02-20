@@ -89,6 +89,7 @@ typedef struct {
 typedef struct {
 	vec2s pos;
 	vec2s vel;
+	vec2s acc;
 } player_t;
 
 
@@ -97,6 +98,7 @@ typedef struct {
 static NVGcontext *vg;
 static struct engine *g_engine;
 static vec2s wsize;
+static vec2s stick_origin;
 
 static double g_time_elapsed;
 
@@ -265,6 +267,7 @@ static inline vec2s relative_to_ship(float x, float y) {
 }
 
 void update_gs_flying(float dt) {
+	/*
 	// Ship Controls
 	int mouse_down = g_engine->input_drag.state == INPUT_DRAG_BEGIN || g_engine->input_drag.state == INPUT_DRAG_IN_PROGRESS;
 	int fly_left = g_engine->input_drag.x <= wsize.x * 0.5f;
@@ -292,12 +295,38 @@ void update_gs_flying(float dt) {
 		G.ship.acc.x += cosf(G.ship.angle) * 0.04f;
 		G.ship.acc.y += sinf(G.ship.angle) * 0.04f;
 	}
+	*/
 
+	// Player Controls
+	if (g_engine->input_drag.state == INPUT_DRAG_BEGIN) {
+		stick_origin.x = g_engine->input_drag.begin_x;
+		stick_origin.y = g_engine->input_drag.begin_y;
+	}
+	int mouse_down = INPUT_DRAG_IS_DOWN(g_engine->input_drag);
+	vec2s drag = {
+		.x=g_engine->input_drag.x - stick_origin.x,
+		.y=g_engine->input_drag.y - stick_origin.y
+	};
+
+	G.player.acc = GLMS_VEC2_ZERO;
+	const float MAX_ACCELERATION = 0.04f;
+	if (mouse_down && glm_vec2_norm2(drag.raw) >= glm_pow2(24.0f)) {
+		//
+		vec2s overdrag = glms_vec2_scale_as(drag, glm_vec2_norm(drag.raw) - 24.0f);
+		overdrag = glms_vec2_scale(overdrag, 0.2);
+		glm_vec2_add(stick_origin.raw, overdrag.raw, stick_origin.raw);
+		// set player acc
+		glm_vec2_scale_as(drag.raw, MAX_ACCELERATION, drag.raw);
+		glm_vec2_add(G.player.acc.raw, drag.raw, G.player.acc.raw);
+	}
+	glm_vec2_add(G.player.pos.raw, G.player.vel.raw, G.player.pos.raw);
+	glm_vec2_add(G.player.vel.raw, G.player.acc.raw, G.player.vel.raw);
+	G.player.acc = GLMS_VEC2_ZERO;
+	
 	// Ship Physics
 	glm_vec2_add(G.ship.pos.raw, G.ship.vel.raw, G.ship.pos.raw);
 	glm_vec2_add(G.ship.vel.raw, G.ship.acc.raw, G.ship.vel.raw);
 	G.ship.acc = GLMS_VEC2_ZERO;
-
 	// Asteroid Physics
 	for (int i = 0; i < G.asteroids_count; ++i) {
 		asteroid_t *as = &G.asteroids[i];
@@ -335,6 +364,29 @@ void draw_gs_flying(void) {
 	nvgStrokeColor(vg, nvgRGB(200, 0, 0));
 	nvgStroke(vg);
 	nvgResetTransform(vg);
+
+	// Draw Input
+	int mouse_down = INPUT_DRAG_IS_DOWN(g_engine->input_drag);
+	if (mouse_down) {
+		vec2s drag = {
+			.x=g_engine->input_drag.x - stick_origin.x,
+			.y=g_engine->input_drag.y - stick_origin.y
+		};
+		nvgStrokeColor(vg, nvgRGBf(1, 1, 1));
+		nvgStrokeWidth(vg, 1.0f);
+		// Mouse Direction
+		if (glm_vec2_norm2(drag.raw) >= glm_pow2(24.0f)) {
+			nvgStrokeColor(vg, nvgRGBf(1, 0, 0));
+		}
+		nvgBeginPath(vg);
+		nvgMoveTo(vg, stick_origin.x, stick_origin.y);
+		nvgLineTo(vg, g_engine->input_drag.x, g_engine->input_drag.y);
+		nvgStroke(vg);
+		// Stick Origin
+		nvgBeginPath(vg);
+		nvgCircle(vg, stick_origin.x, stick_origin.y, 24.0f);
+		nvgStroke(vg);
+	}
 }
 
 
@@ -344,6 +396,7 @@ static void load(struct scene_brickbreaker_s *scene, struct engine *engine) {
 	vg = engine->vg;
 	g_engine = engine;
 	wsize = (vec2s){ .x = engine->window_width, .y = engine->window_height };
+	stick_origin = GLMS_VEC2_ZERO;
 
 	G = (struct Globals) {
 		.state = GS_FLYING,

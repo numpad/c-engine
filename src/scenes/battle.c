@@ -111,6 +111,9 @@ typedef struct {
 	int            icon_ids[8];
 	int            icon_ids_count;
 	enum card_kind kind;
+	struct {
+		int basic;
+	} damage;
 } c_card;
 
 // a cards state when held in hand
@@ -140,6 +143,10 @@ typedef struct {
 	float percentage_to_next_tile;
 } c_move_along_path;
 
+typedef struct {
+	int armor;
+} c_statuseffect_armor;
+
 
 ECS_COMPONENT_DECLARE(c_pos2d);
 ECS_COMPONENT_DECLARE(c_pos3d);
@@ -152,6 +159,7 @@ ECS_COMPONENT_DECLARE(c_velocity);
 ECS_COMPONENT_DECLARE(c_health);
 ECS_COMPONENT_DECLARE(c_npc);
 ECS_COMPONENT_DECLARE(c_move_along_path);
+ECS_COMPONENT_DECLARE(c_statuseffect_armor);
 
 
 //
@@ -314,6 +322,7 @@ static void load(struct scene_battle *battle, struct engine *engine) {
 	ECS_COMPONENT_DEFINE(g_world, c_health);
 	ECS_COMPONENT_DEFINE(g_world, c_npc);
 	ECS_COMPONENT_DEFINE(g_world, c_move_along_path);
+	ECS_COMPONENT_DEFINE(g_world, c_statuseffect_armor);
 	ECS_SYSTEM_DEFINE(g_world, system_move_cards,          0, c_pos2d, c_handcard);
 	ECS_SYSTEM_DEFINE(g_world, system_move_models,         0, c_pos3d, c_model, c_velocity);
 	ECS_SYSTEM_DEFINE(g_world, system_draw_cards,          0, c_card, ?c_handcard, c_pos2d); _syntax_fix_label:
@@ -372,6 +381,7 @@ static void load(struct scene_battle *battle, struct engine *engine) {
 		cJSON *json = cJSON_ParseWithLength(output, output_len);
 		free(output);
 
+		assert(cJSON_IsArray(json));
 		int number_of_cards = cJSON_GetArraySize(json);
 		g_base_cards_len = number_of_cards;
 		g_base_cards = malloc(number_of_cards * sizeof(*g_base_cards));
@@ -381,12 +391,15 @@ static void load(struct scene_battle *battle, struct engine *engine) {
 			const cJSON *card_description = cJSON_GetObjectItem(card, "description");
 			const cJSON *card_face_id     = cJSON_GetObjectItem(card, "face_id");
 			const cJSON *card_kind        = cJSON_GetObjectItem(card, "kind");
-			assert(card->type             == cJSON_Object);
-			assert(card_name->type        == cJSON_String);
-			assert(card_description->type == cJSON_String);
-			assert(card_face_id->type     == cJSON_Number);
-			assert(card_kind->type        == cJSON_String);
+			const cJSON *card_damage      = cJSON_GetObjectItem(card, "damage");
+
+			assert(cJSON_IsObject(card));
+			assert(cJSON_IsString(card_name));
+			assert(cJSON_IsString(card_description));
+			assert(cJSON_IsNumber(card_face_id));
+			assert(cJSON_IsString(card_kind));
 			assert(strcmp(card_kind->valuestring, "basic_attack") == 0 || strcmp(card_kind->valuestring, "action") == 0);
+			assert(cJSON_IsObject(card_damage) || cJSON_IsNull(card_damage));
 			g_base_cards[i].name           = str_copy(card_name->valuestring);
 			g_base_cards[i].description    = str_copy(card_description->valuestring);
 			g_base_cards[i].image_id       = card_face_id->valueint;
@@ -397,6 +410,12 @@ static void load(struct scene_battle *battle, struct engine *engine) {
 				g_base_cards[i].kind = CARD_KIND_ACTION;
 			} else {
 				assert(0 && "unknown card kind encountered!");
+			}
+			g_base_cards[i].damage.basic = 0;
+			if (cJSON_IsObject(card_damage)) {
+				const cJSON *damage_basic = cJSON_GetObjectItem(card_damage, "basic");
+				assert(cJSON_IsNumber(damage_basic));
+				g_base_cards[i].damage.basic = cJSON_GetNumberValue(damage_basic);
 			}
 		}
 
@@ -413,6 +432,7 @@ static void load(struct scene_battle *battle, struct engine *engine) {
 
 		pipeline_init(&g_cards_pipeline, &g_sprite_shader, 128);
 		g_cards_pipeline.z_sorting_enabled = 1;
+		g_cards_pipeline.texture = &g_cards_texture;
 	}
 
 	// ui
@@ -677,9 +697,7 @@ static void update_gamestate(enum gamestate_battle state, float dt) {
 				}
 			}
 		}
-
 		interact_with_handcards(&g_engine->input_drag);
-
 		int clicked_on_button_end_turn = drag_clicked_in_rect(drag, g_button_end_turn.x, g_button_end_turn.y, g_button_end_turn.w, g_button_end_turn.h);
 		if (clicked_on_button_end_turn) {
 			g_next_gamestate = GS_TURN_PLAYER_END;
@@ -842,9 +860,8 @@ static int order_handcards(ecs_entity_t e1, const void *data1, ecs_entity_t e2, 
 }
 
 static void draw_ui(pipeline_t *pipeline) {
-	pipeline_reset(&g_ui_pipeline);
+	pipeline_reset(pipeline);
 	pipeline_reset(&g_cards_pipeline);
-	g_cards_pipeline.texture = &g_cards_texture;
 
 	ecs_run(g_world, ecs_id(system_draw_healthbars), g_engine->dt, NULL);
 
@@ -854,7 +871,6 @@ static void draw_ui(pipeline_t *pipeline) {
 	glDisable(GL_DEPTH_TEST);
 	pipeline_draw_ortho(pipeline, g_engine->window_width, g_engine->window_height);
 	ecs_run(g_world, ecs_id(system_draw_cards), g_engine->dt, NULL);
-
 
 	{ // Draw UI - Portrait
 		// TODO: this doesn't write to gbuffer, but rather renders with no lighting.
@@ -947,6 +963,15 @@ static void draw_hud(pipeline_t *pipeline) {
 	cmd.position.y = 3 + 12;
 	cmd.position.z = -0.9f;
 	drawcmd_set_texture_subrect(&cmd, pipeline->texture, 80, 32, 36 * player_health_pct, 2);
+	pipeline_emit(pipeline, &cmd);
+
+	// status effects
+	cmd = DRAWCMD_INIT;
+	cmd.size.x = 32;
+	cmd.size.y = 32;
+	cmd.position.x = 92;
+	cmd.position.y = 32;
+	drawcmd_set_texture_subrect(&cmd, pipeline->texture, 1, 118, 32, 32);
 	pipeline_emit(pipeline, &cmd);
 
 	// Draw "End turn" button
@@ -1058,12 +1083,13 @@ static void on_game_event(struct game_event event) {
 	case EVENT_ATTACK_ENTITY: {
 		assert(event.attack_entity.initiated_by_card != 0 && ecs_is_valid(g_world, event.attack_entity.initiated_by_card));
 		const c_card *card = ecs_get(g_world, event.attack_entity.initiated_by_card, c_card);
+		const int deals_damage = card->damage.basic;
 		on_game_event((struct game_event){ .type=EVENT_PLAY_CARD, .play_card={ .caused_by=g_player, .card=event.attack_entity.initiated_by_card } });
+		card = NULL; // gets removed by on_game_event()
 		ecs_entity_t victim = event.attack_entity.victim;
 		c_health *victim_health = ecs_get_mut(g_world, victim, c_health);
 		// Determine attack damage
 		const int victim_hp = (int)victim_health->hp;
-		const int deals_damage = 3; // TODO: Store damage in card.
 		const int damage_dealt = GLM_MIN(victim_hp, deals_damage);
 		//const int damage_overkill = deals_damage - damage_dealt;
 		victim_health->hp -= damage_dealt;

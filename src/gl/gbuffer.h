@@ -4,6 +4,7 @@
 #include <SDL_opengles2.h>
 #include "engine.h"
 #include "gl/shader.h"
+#include "gl/texture.h"
 
 enum gbuffer_texture {
 	GBUFFER_TEXTURE_ALBEDO,
@@ -21,6 +22,8 @@ struct gbuffer {
 	GLuint textures_internalformats[GBUFFER_TEXTURE_MAX];
 	GLenum textures_type[GBUFFER_TEXTURE_MAX];
 	GLuint fullscreen_vbo;
+
+	texture_t color_lut;
 };
 
 void gbuffer_init(struct gbuffer *, struct engine *);

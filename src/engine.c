@@ -166,6 +166,7 @@ struct engine *engine_new(int argc, char **argv) {
 	on_window_resized(engine, engine->window_width, engine->window_height);
 	// Shader global data
 	engine->shader_global_data.periodic_time = 0.0f;
+	engine->shader_global_ubo.buffer = 0;
 	shader_ubo_init(&engine->shader_global_ubo, sizeof(engine->shader_global_data),
 			(const void *)&engine->shader_global_data);
 
@@ -179,6 +180,10 @@ struct engine *engine_new(int argc, char **argv) {
 		struct scene_battle *battle = malloc(sizeof(struct scene_battle));
 		scene_battle_init(battle, engine);
 		engine_setscene(engine, (struct scene_s *)battle);
+	} else if (is_argv_set(argc, argv, "--scene=asteroids")) {
+		struct scene_brickbreaker_s *brickbreaker = malloc(sizeof(struct scene_brickbreaker_s));
+		scene_brickbreaker_init(brickbreaker, engine);
+		engine_setscene(engine, (struct scene_s *)brickbreaker);
 	} else {
 		struct scene_intro_s *intro = malloc(sizeof(struct scene_intro_s));
 		scene_intro_init(intro, engine);
@@ -246,6 +251,17 @@ static void on_window_resized(struct engine *engine, int w, int h) {
 	glm_ortho(0.0f, w, h, 0.0f, -1.0f, 1.0f, engine->u_projection);
 	//glm_ortho(-1.0f, 1.0f, -1.0f * engine->window_aspect, 1.0f * engine->window_aspect, -1.0f, 1.0f, engine->u_projection);
 	
+	// update shader data
+	engine->shader_global_data.display_resolution[0] = engine->window_highdpi_width;
+	engine->shader_global_data.display_resolution[1] = engine->window_highdpi_height;
+	engine->shader_global_data.display_resolution[2] = engine->window_width;
+	engine->shader_global_data.display_resolution[3] = engine->window_height;
+	// TODO: this is not good
+	if (engine->shader_global_ubo.buffer_size != 0) {
+		shader_ubo_update(&engine->shader_global_ubo, sizeof(engine->shader_global_data),
+				(const void *)&engine->shader_global_data);
+	}
+
 	scene_on_callback(engine->scene, engine, (struct engine_event){ .type = ENGINE_EVENT_WINDOW_RESIZED });
 }
 
@@ -282,8 +298,8 @@ void engine_setscene_dll(struct engine *engine, const char *filename) {
 
 	handle = dlopen(filename, RTLD_NOW | RTLD_GLOBAL | RTLD_DEEPBIND);
 
-#define SCENE_STRUCT scene_menu
-#define SCENE_INIT_FN "scene_menu_init"
+#define SCENE_STRUCT scene_battle
+#define SCENE_INIT_FN "scene_battle_init"
 	struct SCENE_STRUCT *modscene = malloc(sizeof(*modscene));
 	void(*init_fn)(struct SCENE_STRUCT *scene, struct engine *) = dlsym(handle, SCENE_INIT_FN);
 	init_fn(modscene, engine);

@@ -50,8 +50,18 @@ void gbuffer_init(struct gbuffer *gbuffer, struct engine *engine) {
 	glDrawBuffers(3, (GLuint[]){ GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1, GL_COLOR_ATTACHMENT2 });
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
+	// color lut
+	struct texture_settings_s lut_settings = TEXTURE_SETTINGS_INIT;
+	lut_settings.filter_min = GL_NEAREST;
+	lut_settings.filter_mag = GL_NEAREST;
+	lut_settings.wrap_s = GL_CLAMP_TO_EDGE;
+	lut_settings.wrap_t = GL_CLAMP_TO_EDGE;
+	lut_settings.flip_y = 1;
+	texture_init_from_image(&gbuffer->color_lut, "res/image/lut16_night.png", &lut_settings);
+
 	// Setup shader
 	shader_init_from_dir(&gbuffer->shader, "res/shader/lighting_pass/");
+	shader_set_uniform_buffer(&gbuffer->shader, "Global", &engine->shader_global_ubo);
 }
 
 void gbuffer_destroy(struct gbuffer *gbuffer) {
@@ -60,6 +70,7 @@ void gbuffer_destroy(struct gbuffer *gbuffer) {
 	glDeleteFramebuffers(1, &gbuffer->framebuffer);
 	shader_destroy(&gbuffer->shader);
 	glDeleteBuffers(1, &gbuffer->fullscreen_vbo);
+	texture_destroy(&gbuffer->color_lut);
 }
 
 void gbuffer_resize(struct gbuffer *gbuffer, int new_width, int new_height) {
@@ -99,6 +110,7 @@ void gbuffer_clear(struct gbuffer gbuffer) {
 
 void gbuffer_display(struct gbuffer gbuffer, struct engine *engine) {
 	shader_use(&gbuffer.shader);
+	// gbuffer inputs
 	shader_set_uniform_int(&gbuffer.shader, "u_albedo", 0);
 	shader_set_uniform_int(&gbuffer.shader, "u_position", 1);
 	shader_set_uniform_int(&gbuffer.shader, "u_normal", 2);
@@ -108,6 +120,10 @@ void gbuffer_display(struct gbuffer gbuffer, struct engine *engine) {
 	glBindTexture(GL_TEXTURE_2D, gbuffer.textures[GBUFFER_TEXTURE_POSITION]);
 	glActiveTexture(GL_TEXTURE2);
 	glBindTexture(GL_TEXTURE_2D, gbuffer.textures[GBUFFER_TEXTURE_NORMAL]);
+	// color lut
+	shader_set_uniform_int(&gbuffer.shader, "u_color_lut", 3);
+	glActiveTexture(GL_TEXTURE3);
+	glBindTexture(GL_TEXTURE_2D, gbuffer.color_lut.texture);
 
 	shader_set_uniform_vec2(&gbuffer.shader, "u_screen_resolution", (float[2]){engine->window_highdpi_width, engine->window_highdpi_height});
 	shader_set_uniform_float(&gbuffer.shader, "u_time", engine->time_elapsed);
