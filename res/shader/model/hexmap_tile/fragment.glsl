@@ -16,6 +16,7 @@ in vec2 v_texcoord0;
 in vec3 v_normal;
 in vec3 v_local_position;
 in vec3 v_world_position;
+in vec3 v_view_position;
 
 layout(location=0) out vec4 Albedo;
 layout(location=1) out vec4 Position;
@@ -40,7 +41,7 @@ vec3 sdgHexagon(vec2 p, float r) {
 
 vec3 highlight_enemy_tile(vec3 diffuse, vec2 p) {
 	p = vec2(-p.y, p.x); // rotate by 90° because pointy-top hexagons.
-	vec3 highlight_color = vec3(0.82, 0.14, 0.12);
+	vec3 highlight_color = vec3(0.65, 0.0, 0.0);
 	float hex = sdgHexagon(p, 0.5).x;
 	float border = smoothstep(0.1, 0.8, hex);
 	float alpha = min(step(0.4, border), 0.15) + clamp(smoothstep(0.2, 0.6, hex), 0.1, 0.5);
@@ -64,6 +65,7 @@ vec3 highlight_walkable_area(vec3 diffuse, vec2 p) {
 
 void main() {
 	vec4 diffuse = texture(u_diffuse, v_texcoord0);
+	diffuse.rgb = pow(diffuse.rgb, vec3(2.2));
 	if (int(u_highlight) == 1) {
 		vec3 effect = highlight_enemy_tile(diffuse.rgb, v_local_position.xz);
 		Albedo = vec4(effect, diffuse.a);
@@ -75,7 +77,7 @@ void main() {
 	} else {
 		Albedo = diffuse.rgba;
 	}
-	Position = vec4(v_world_position.xyz, 1.0);
+	Position = vec4(v_view_position.xyz, 1.0);
 	Normal = vec4(v_normal.xyz, 1.0);
 }
 

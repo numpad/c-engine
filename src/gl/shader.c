@@ -132,6 +132,7 @@ void shader_set_uniform_buffer(shader_t *shader, const char *uniform_block_name,
 	assert(uniform_block_name != NULL);
 	assert(ubo != NULL);
 
+	// TODO: This is a problem when called a few times on mobile.
 	GLuint ubo_index = glGetUniformBlockIndex(shader->program, uniform_block_name);
 	GL_CHECK_ERROR();
 	glUniformBlockBinding(shader->program, ubo_index, ubo->binding_point);

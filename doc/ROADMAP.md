@@ -18,14 +18,13 @@ move into attack range when clicking on enemy
 can only attack entity in range (direct neighbor for now, ranged attacks later)
 player can only attack if has at least one "Basic Attack" card in hand
 color grading with LUT
+handle 16x16x16 and 32x32x32 LUT
+gamma correction / sRGB
+add menu button
 
 plan pile:
 ----------
-fix color grading to handle 16x16x16 and 32x32x32 LUT
-gamma correction / sRGB
-
 when player attacks with multiple basic attacks, let them select the card. valid cards get highlighted.
-
 add status effects icons to ui
 
 entities die if hp <= 0

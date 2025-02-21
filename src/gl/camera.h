@@ -6,6 +6,8 @@
 struct camera {
 	mat4 projection;
 	mat4 view;
+	float z_near;
+	float z_far;
 };
 
 void camera_init_default(struct camera *, int width, int height);

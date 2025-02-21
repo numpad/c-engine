@@ -5,6 +5,7 @@
 #include "gl/opengles3.h"
 #include "engine.h"
 #include "gl/shader.h"
+#include "gl/camera.h"
 
 static void init_gbuffer_texture(
 	struct gbuffer *gbuffer,
@@ -37,10 +38,10 @@ void gbuffer_init(struct gbuffer *gbuffer, struct engine *engine) {
 			GL_RGBA, GL_UNSIGNED_BYTE, width, height);
 	init_gbuffer_texture(gbuffer,
 			GBUFFER_TEXTURE_POSITION, GL_COLOR_ATTACHMENT1,
-			GL_RGBA16F_EXT, GL_FLOAT, width, height);
+			GL_RGBA16F, GL_FLOAT, width, height);
 	init_gbuffer_texture(gbuffer,
 			GBUFFER_TEXTURE_NORMAL, GL_COLOR_ATTACHMENT2,
-			GL_RGBA16F_EXT, GL_FLOAT, width, height);
+			GL_RGBA16F, GL_FLOAT, width, height);
 	// Depth-stencil attachment
 	glGenRenderbuffers(1, &gbuffer->renderbuffer);
 	glBindRenderbuffer(GL_RENDERBUFFER, gbuffer->renderbuffer);
@@ -50,6 +51,10 @@ void gbuffer_init(struct gbuffer *gbuffer, struct engine *engine) {
 	glDrawBuffers(3, (GLuint[]){ GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1, GL_COLOR_ATTACHMENT2 });
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
+	// Setup shader
+	shader_init_from_dir(&gbuffer->shader, "res/shader/lighting_pass/");
+	shader_set_uniform_buffer(&gbuffer->shader, "Global", &engine->shader_global_ubo);
+
 	// color lut
 	struct texture_settings_s lut_settings = TEXTURE_SETTINGS_INIT;
 	lut_settings.filter_min = GL_NEAREST;
@@ -57,11 +62,7 @@ void gbuffer_init(struct gbuffer *gbuffer, struct engine *engine) {
 	lut_settings.wrap_s = GL_CLAMP_TO_EDGE;
 	lut_settings.wrap_t = GL_CLAMP_TO_EDGE;
 	lut_settings.flip_y = 1;
-	texture_init_from_image(&gbuffer->color_lut, "res/image/lut16_night.png", &lut_settings);
-
-	// Setup shader
-	shader_init_from_dir(&gbuffer->shader, "res/shader/lighting_pass/");
-	shader_set_uniform_buffer(&gbuffer->shader, "Global", &engine->shader_global_ubo);
+	texture_init_from_image(&gbuffer->color_lut, "res/image/lut32_night.png", &lut_settings);
 }
 
 void gbuffer_destroy(struct gbuffer *gbuffer) {
@@ -108,7 +109,7 @@ void gbuffer_clear(struct gbuffer gbuffer) {
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 }
 
-void gbuffer_display(struct gbuffer gbuffer, struct engine *engine) {
+void gbuffer_display(struct gbuffer gbuffer, struct camera *camera, struct engine *engine) {
 	shader_use(&gbuffer.shader);
 	// gbuffer inputs
 	shader_set_uniform_int(&gbuffer.shader, "u_albedo", 0);
@@ -121,10 +122,14 @@ void gbuffer_display(struct gbuffer gbuffer, struct engine *engine) {
 	glActiveTexture(GL_TEXTURE2);
 	glBindTexture(GL_TEXTURE_2D, gbuffer.textures[GBUFFER_TEXTURE_NORMAL]);
 	// color lut
+	shader_set_uniform_float(&gbuffer.shader, "u_lut_size", 32.0f);
 	shader_set_uniform_int(&gbuffer.shader, "u_color_lut", 3);
 	glActiveTexture(GL_TEXTURE3);
 	glBindTexture(GL_TEXTURE_2D, gbuffer.color_lut.texture);
 
+	shader_set_uniform_float(&gbuffer.shader, "u_z_near", camera->z_near);
+	shader_set_uniform_float(&gbuffer.shader, "u_z_far",  camera->z_far);
+	// TODO: Remove these:
 	shader_set_uniform_vec2(&gbuffer.shader, "u_screen_resolution", (float[2]){engine->window_highdpi_width, engine->window_highdpi_height});
 	shader_set_uniform_float(&gbuffer.shader, "u_time", engine->time_elapsed);
 	

@@ -19,7 +19,8 @@ in vec4 WEIGHTS_0;
 
 out vec2 v_texcoord0;
 out vec3 v_normal;
-out vec3 v_position;
+out vec3 v_world_position;
+out vec3 v_view_position;
 
 void main() {
 	vec4 total_position = vec4(0.0);
@@ -35,7 +36,9 @@ void main() {
 	v_texcoord0 = TEXCOORD_0;
 	v_normal = normalize(u_normalMatrix * NORMAL);
 
-	v_position = (u_model * vec4(POSITION, 1.0)).xyz;
+	v_world_position = (u_model * vec4(POSITION, 1.0)).xyz;
+	v_view_position = (u_view * u_model * vec4(POSITION, 1.0)).xyz;
+	
 	if (int(u_is_rigged) == 1) {
 		gl_Position = u_projection * u_view * u_model * total_position;
 	} else {

@@ -263,7 +263,7 @@ static void load(struct scene_battle *battle, struct engine *engine) {
 	g_selected_card = 0;
 	g_pickup_next_card = 0.0f;
 	g_gamestate = g_next_gamestate = GS_BATTLE_BEGIN;
-	g_debug_draw_pathfinder = 2;
+	g_debug_draw_pathfinder = 0;
 	g_turn_count = 0;
 
 	g_button_end_turn.x = g_engine->window_width - 150.0f;
@@ -545,7 +545,7 @@ static void draw(struct scene_battle *battle, struct engine *engine) {
 	engine_set_clear_color(0.34f, 0.72f, 0.98f);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 	background_draw(engine);
-	gbuffer_display(g_gbuffer, engine);
+	gbuffer_display(g_gbuffer, &g_camera, engine);
 
 	// Draw ui
 	draw_ui(&g_ui_pipeline);
@@ -561,8 +561,9 @@ void on_callback(struct scene_battle *battle, struct engine *engine, struct engi
 		break;
 	case ENGINE_EVENT_KEY:
 		if (event.data.key.type == SDL_KEYDOWN && event.data.key.repeat == 0 && event.data.key.keysym.sym == SDLK_r) {
-			console_log_ex(engine, CONSOLE_MSG_SUCCESS, 0.5f, "2 shaders reloaded.");
+			console_log_ex(engine, CONSOLE_MSG_SUCCESS, 0.5f, "3 shaders reloaded.");
 			shader_reload_source(&g_hexmap.tile_shader);
+			shader_reload_source(&g_character_model_shader);
 			shader_reload_source(&g_gbuffer.shader);
 		}
 		break;
@@ -705,9 +706,6 @@ static void update_gamestate(enum gamestate_battle state, float dt) {
 		break;
 	}
 	case GS_TURN_PLAYER_END:
-		if (g_debug_draw_pathfinder > 0) {
-			--g_debug_draw_pathfinder;
-		}
 		if (hexmap_is_valid_coord(&g_hexmap, *player_coord)) {
 			hexmap_set_tile_effect(&g_hexmap, *player_coord, HEXMAP_TILE_EFFECT_NONE);
 		}
@@ -972,6 +970,15 @@ static void draw_hud(pipeline_t *pipeline) {
 	cmd.position.x = 92;
 	cmd.position.y = 32;
 	drawcmd_set_texture_subrect(&cmd, pipeline->texture, 1, 118, 32, 32);
+	pipeline_emit(pipeline, &cmd);
+
+	// menu button
+	cmd = DRAWCMD_INIT;
+	cmd.size.x = 48;
+	cmd.size.y = 48;
+	cmd.position.x = g_engine->window_width  - 48 - 6;
+	cmd.position.y = 6;
+	drawcmd_set_texture_subrect(&cmd, pipeline->texture, 64, 48, 16, 16);
 	pipeline_emit(pipeline, &cmd);
 
 	// Draw "End turn" button

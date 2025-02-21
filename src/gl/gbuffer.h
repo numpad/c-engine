@@ -4,6 +4,7 @@
 #include <SDL_opengles2.h>
 #include "engine.h"
 #include "gl/shader.h"
+#include "gl/camera.h"
 #include "gl/texture.h"
 
 enum gbuffer_texture {
@@ -34,7 +35,7 @@ void gbuffer_bind(struct gbuffer);
 void gbuffer_unbind(struct gbuffer);
 
 void gbuffer_clear(struct gbuffer);
-void gbuffer_display(struct gbuffer, struct engine *);
+void gbuffer_display(struct gbuffer, struct camera *, struct engine *);
 
 #endif
 
