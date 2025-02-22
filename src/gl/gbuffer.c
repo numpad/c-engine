@@ -62,7 +62,7 @@ void gbuffer_init(struct gbuffer *gbuffer, struct engine *engine) {
 	lut_settings.wrap_s = GL_CLAMP_TO_EDGE;
 	lut_settings.wrap_t = GL_CLAMP_TO_EDGE;
 	lut_settings.flip_y = 1;
-	texture_init_from_image(&gbuffer->color_lut, "res/image/lut32_night.png", &lut_settings);
+	texture_init_from_image(&gbuffer->color_lut, "res/image/lut32_pop.png", &lut_settings);
 }
 
 void gbuffer_destroy(struct gbuffer *gbuffer) {

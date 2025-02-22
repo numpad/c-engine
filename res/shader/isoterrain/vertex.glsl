@@ -1,15 +1,15 @@
-
+#version 300 es
 precision highp float;
 
 uniform mat4 u_projection;
 uniform mat4 u_view;
 
-attribute vec3 a_pos;
-attribute vec2 a_texcoord;
-attribute vec4 a_color_mult;
-attribute vec4 a_color_add;
+in vec3 a_pos;
+in vec2 a_texcoord;
+in vec4 a_color_mult;
+in vec4 a_color_add;
 
-varying vec2 v_texcoord;
+out vec2 v_texcoord;
 
 void main() {
 	v_texcoord = a_texcoord;

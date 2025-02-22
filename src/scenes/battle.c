@@ -359,7 +359,7 @@ static void load(struct scene_battle *battle, struct engine *engine) {
 		ecs_set(g_world, e, c_position,  { .x=enemy_pos.x, .y=enemy_pos.y });
 		ecs_set(g_world, e, c_model,     { .model=&g_enemy_model, .scale=80.0f });
 		ecs_set(g_world, e, c_health,    { .hp=8, .max_hp=8 });
-		ecs_set(g_world, e, c_npc, { ._dummy=1 });
+		ecs_set(g_world, e, c_npc,       { ._dummy=1 });
 		hexmap_tile_at(&g_hexmap, enemy_pos)->occupied_by = e;
 		// player
 		struct hexcoord player_pos = { .x=2, .y=5 };
@@ -527,6 +527,7 @@ static void draw(struct scene_battle *battle, struct engine *engine) {
 	// Draw Scene (Map & Entites)
 	gbuffer_bind(g_gbuffer);
 	gbuffer_clear(g_gbuffer);
+	background_draw(engine);
 
 	glEnable(GL_DEPTH_TEST);
 
@@ -544,7 +545,6 @@ static void draw(struct scene_battle *battle, struct engine *engine) {
 	// Combine scene with gbuffer
 	engine_set_clear_color(0.34f, 0.72f, 0.98f);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-	background_draw(engine);
 	gbuffer_display(g_gbuffer, &g_camera, engine);
 
 	// Draw ui
@@ -1476,7 +1476,7 @@ static void system_draw_board_entities(ecs_iter_t *it) {
 		glm_mat4_identity(model_matrix);
 		glm_translate(model_matrix, world_pos.raw);
 		// rotation
-		versor rot_around_y = GLM_QUAT_IDENTITY_INIT;
+		versor rot_around_y;
 		glm_quat(rot_around_y, g_engine->time_elapsed, 0.0f, 1.0f, 0.0f);
 		glm_quat_rotate(model_matrix, rot_around_y, model_matrix);
 		glm_scale_uni(model_matrix, model->scale);

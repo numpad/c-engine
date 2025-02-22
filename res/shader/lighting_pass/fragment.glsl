@@ -43,11 +43,12 @@ vec3 linear_to_srgb(vec3 linear) { return pow(linear, vec3(1.0 / 2.2)); }
 
 vec4 with_outline(vec4 color) {
 	// TODO: size needs to be higher on high-dpi devices...
+	//       However, pixel_step using the resolution works for now.
 	int   size           = 1;
 	vec3  outline_color  = vec3(0.0);
 	float min_distance   = 0.015;
 
-	vec2  pixel_step = 1.0 / vec2(u_screen_resolution.x, u_screen_resolution.y);
+	vec2  pixel_step = 1.0 / vec2(display_resolution.zw);
 	vec4  position   = texture(u_position, v_texcoord);
 	float depth      = (-position.z - u_z_near) / (u_z_far - u_z_near);
 
@@ -68,34 +69,33 @@ vec4 with_colorgrading(vec4 color) {
 	if (gl_FragCoord.x + abs(sin(gl_FragCoord.y * 0.25)) + sin(gl_FragCoord.y * 0.25 + u_time * 5.0) * 2.0 < u_screen_resolution.x * 0.5)
 		return color;
 
+	color.rgb = linear_to_srgb(color.rgb);
+
 	float grid_size = u_lut_size - 1.0;
-	float lut_image_width = u_lut_size * u_lut_size;
+	float lut_image_width = pow(u_lut_size, 2.0) - 1.0;
 
 	float u = floor(color.b * grid_size) / grid_size * (lut_image_width - grid_size);
-	u = (floor(color.r * grid_size) / grid_size * grid_size) + u;
+	u += (floor(color.r * grid_size) / grid_size * grid_size);
 	u /= lut_image_width;
-	float v = ceil(color.g * grid_size);
-	v /= grid_size;
-	v = 1.0 - v;
-
+	float v = 1.0 - (ceil(color.g * grid_size) / grid_size);
 	vec3 left = texture(u_color_lut, vec2(u, v)).rgb;
 
 	u = ceil(color.b * grid_size) / grid_size * (lut_image_width - grid_size);
-	u = (ceil(color.r * grid_size) / grid_size *  grid_size) + u;
+	u += (ceil(color.r * grid_size) / grid_size * grid_size);
 	u /= lut_image_width;
 	v  = 1.0 - (ceil(color.g * grid_size) / grid_size);
-
 	vec3 right = texture(u_color_lut, vec2(u, v)).rgb;
 
 	color.r = mix(left.r, right.r, fract(color.r * grid_size));
 	color.g = mix(left.g, right.g, fract(color.g * grid_size));
 	color.b = mix(left.b, right.b, fract(color.b * grid_size));
 
+	color.rgb = srgb_to_linear(color.rgb);
 	return color;
 }
 
 vec4 with_filmgrain(vec4 color) {
-	float strength = 0.02;
+	float strength = 0.015;
 	float to_radians = 3.14159 / 180.0;
 	float random_intensity = fract(10000.0 * sin(gl_FragCoord.x + gl_FragCoord.y * periodic_time) * to_radians);
 	float amount = strength * random_intensity - (strength * 0.5);
