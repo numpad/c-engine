@@ -1313,11 +1313,10 @@ static void system_move_models(ecs_iter_t *it) {
 
 	for (int i = 0; i < it->count; ++i) {
 		c_pos3d *pos = &pos_it[i];
-		c_model *_model = &model_it[i];
+		c_model *model = &model_it[i];
 		c_velocity *velocity = &velocity_it[i];
 
 		glm_vec3_add(pos->raw, velocity->vel.raw, pos->raw);
-
 		vec3 drag = {0.96f, 1.0f, 0.92f};
 		glm_vec3_mul(velocity->vel.raw, drag, velocity->vel.raw);
 		velocity->vel.y -= 0.8f;
@@ -1476,6 +1475,10 @@ static void system_draw_board_entities(ecs_iter_t *it) {
 		shader_set_uniform_mat3(&g_character_model_shader, "u_normalMatrix", (float*)model_matrix);
 		glm_mat4_identity(model_matrix);
 		glm_translate(model_matrix, world_pos.raw);
+		// rotation
+		versor rot_around_y = GLM_QUAT_IDENTITY_INIT;
+		glm_quat(rot_around_y, g_engine->time_elapsed, 0.0f, 1.0f, 0.0f);
+		glm_quat_rotate(model_matrix, rot_around_y, model_matrix);
 		glm_scale_uni(model_matrix, model->scale);
 		// TODO: either only draw characters here, or specify which shader to use?
 		model_draw(model->model, &g_character_model_shader, &g_camera, model_matrix);

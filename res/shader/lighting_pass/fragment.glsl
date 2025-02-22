@@ -39,13 +39,13 @@ float map_steps_soft(float num, int steps) {
 }
 
 vec3 srgb_to_linear(vec3 srgb)   { return pow(srgb,   vec3(      2.2)); }
-vec4 srgb_to_linear(vec4 srgb)   { return pow(srgb,   vec4(      2.2)); }
 vec3 linear_to_srgb(vec3 linear) { return pow(linear, vec3(1.0 / 2.2)); }
-vec4 linear_to_srgb(vec4 linear) { return pow(linear, vec4(1.0 / 2.2)); }
 
 vec4 with_outline(vec4 color) {
-	int   size           = 2;
-	vec3  outline_color  = 0.75 * vec3(0.14, 0.031, 0.059);
+	// TODO: size needs to be higher on high-dpi devices...
+	int   size           = 1;
+	vec3  outline_color  = vec3(0.0);
+	float min_distance   = 0.015;
 
 	vec2  pixel_step = 1.0 / vec2(u_screen_resolution.x, u_screen_resolution.y);
 	vec4  position   = texture(u_position, v_texcoord);
@@ -54,14 +54,12 @@ vec4 with_outline(vec4 color) {
 	float mx = 0.0;
 	for (int y = -size; y <= size; ++y) {
 		for (int x = -size; x <= size; ++x) {
-			vec4 pos = texture(u_position, v_texcoord +  vec2(x, y) * pixel_step);
+			vec4 pos = texture(u_position, v_texcoord + vec2(x, y) * pixel_step);
 			float tempDepth = (-pos.z - u_z_near) / (u_z_far - u_z_near);
-			mx = max(mx, (depth - tempDepth));
+			mx = max(mx, abs(depth - tempDepth));
 		}
 	}
-	if (mx > 0.02) {
-		color.rbg *= outline_color;
-	}
+	color.rgb = mix(color.rgb, outline_color, (mx > min_distance) ? 0.9 : 0.0);
 	return color;
 }
 
@@ -96,20 +94,34 @@ vec4 with_colorgrading(vec4 color) {
 	return color;
 }
 
+vec4 with_filmgrain(vec4 color) {
+	float strength = 0.02;
+	float to_radians = 3.14159 / 180.0;
+	float random_intensity = fract(10000.0 * sin(gl_FragCoord.x + gl_FragCoord.y * periodic_time) * to_radians);
+	float amount = strength * random_intensity - (strength * 0.5);
+	color.rgb += amount;
+	return color;
+}
+
 void main() {
 	vec4 albedo   = texture(u_albedo,   v_texcoord);
 	vec4 position = texture(u_position, v_texcoord);
 	vec3 normal   = texture(u_normal,   v_texcoord).xyz;
 
-	albedo = with_colorgrading(with_outline(albedo));
+	albedo = with_filmgrain(with_colorgrading(with_outline(albedo)));
 	albedo.rgb = linear_to_srgb(albedo.rgb);
+
+	// Draw final color
+	Color = albedo;
+
+	// For debugging:
 
 	// Draw Depth
 	//float depth = -position.z;
 	//float normalized_depth = (depth - u_z_near) / (u_z_far - u_z_near);
 	//Color = vec4(vec3(normalized_depth), albedo.a);
 
-	// Draw final color
-	Color = albedo;
+	// Draw Normals
+	//Color = vec4(normal.xyz, albedo.a);
 }
 
