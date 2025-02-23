@@ -1,11 +1,13 @@
 #ifndef CAMERA_H
 #define CAMERA_H
 
-#include <cglm/mat4.h>
+#include <cglm/cglm.h>
+#include <cglm/types-struct.h>
 
 struct camera {
 	mat4 projection;
 	mat4 view;
+	vec3s position;
 	float z_near;
 	float z_far;
 };

@@ -1,12 +1,13 @@
 #include "gl/camera.h"
 
-#include <cglm/cglm.h>
-
 void camera_init_default(struct camera *camera, int width, int height) {
 	camera->z_near = 1.0f;
-	camera->z_far  = 2000.0f;
+	camera->z_far  = 50.0f;
+	camera->position.x = 0.0f;
+	camera->position.y = 0.0f;
+	camera->position.z = -25.0f;
 	glm_mat4_identity(camera->view);
-	glm_translate(camera->view, (vec3){ 0.0f, 0.0f, -1000.0f });
+	glm_translate(camera->view, camera->position.raw);
 	glm_rotate_x(camera->view, glm_rad(35.0f), camera->view);
 
 	camera_resize_projection(camera, width, height);
@@ -14,7 +15,8 @@ void camera_init_default(struct camera *camera, int width, int height) {
 
 void camera_resize_projection(struct camera *camera, int width, int height) {
 	float aspect = (float)height / width;
-	glm_ortho(-width, width, -width * aspect, width * aspect, camera->z_near, camera->z_far, camera->projection);
+	float size = width / 40.0f;
+	glm_ortho(-size, size, -size * aspect, size * aspect, camera->z_near, camera->z_far, camera->projection);
 }
 
 // Perspective camera experiment:

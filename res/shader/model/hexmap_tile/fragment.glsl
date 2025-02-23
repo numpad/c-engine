@@ -49,17 +49,17 @@ vec3 highlight_enemy_tile(vec3 diffuse, vec2 p) {
 }
 vec3 highlight_walkable_area(vec3 diffuse, vec2 p) {
 	p = vec2(-p.y, p.x); // rotate by 90° because pointy-top hexagons.
-	vec3 highlight_color = vec3(1.0); // blue: vec3(0.31, 0.31, 0.77);
+	vec3 highlight_color = vec3(1.0);
 	// TODO: Floating point inaccuarcies with "time", might look bad after some time.
 	// TODO: This only works on mobile with highp?
 	//       float t = mod(time * 0.3, 1.0 + 1e8); // small epsilon to prevent jumps?
-	float t = periodic_time;
+	float t = periodic_time * 0.5;
 
 	float circle = sdgCircle(p, t).x;
 	float fast_circle = sdgCircle(p, t * 10.0).x;
-	float ripples = max(cos(20.0 * circle), 0.0);
-	float wave = max(cos(1.0 * fast_circle), 0.0);
-	float alpha = ripples * wave * 0.3 + 0.2;
+	float ripples = max(cos(60.0 * circle), 0.0);
+	float wave = max(cos(2.0 * fast_circle), 0.0);
+	float alpha = ripples * wave * 0.1 + 0.1;
 	return mix(diffuse, highlight_color, alpha);
 }
 
@@ -71,7 +71,7 @@ void main() {
 		Albedo = vec4(effect, diffuse.a);
 	} else if (int(u_highlight) == 2) {
 		vec2 p = v_world_position.xz - u_player_world_pos.xz;
-		p *= 0.01;
+		p *= 0.1;
 		vec3 effect = highlight_walkable_area(diffuse.rgb, p);
 		Albedo = vec4(effect, diffuse.a);
 	} else {

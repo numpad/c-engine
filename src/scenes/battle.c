@@ -304,7 +304,7 @@ static void load(struct scene_battle *battle, struct engine *engine) {
 	camera_init_default(&g_camera, engine->window_width, engine->window_height);
 	glm_translate(g_camera.view, (vec3){ -g_hexmap.tile_offsets.x * 3.25f, 0.0f, g_hexmap.tile_offsets.y * -3.0f });
 	camera_init_default(&g_portrait_camera, engine->window_width, engine->window_height);
-	glm_look((vec3){ 0.0f, 0.0f, 100.0f }, (vec3){ 0.0f, 0.0f, -1.0f }, (vec3){ 0.0f, 1.0f, 0.0f }, (float*)&g_portrait_camera.view);
+	glm_look((vec3){ 0.0f, 0.0f, 10.0f }, (vec3){ 0.0f, 0.0f, -1.0f }, (vec3){ 0.0f, 1.0f, 0.0f }, (float*)&g_portrait_camera.view);
 
 	glEnable(GL_CULL_FACE);
 	glCullFace(GL_BACK);
@@ -351,13 +351,13 @@ static void load(struct scene_battle *battle, struct engine *engine) {
 		struct hexcoord campfire_pos = { .x=3, .y=4 };
 		e = ecs_new_id(g_world);
 		ecs_set(g_world, e, c_position, { .x=campfire_pos.x, .y=campfire_pos.y });
-		ecs_set(g_world, e, c_model,    { .model=&g_props_model[3], .scale=450.0f });
+		ecs_set(g_world, e, c_model,    { .model=&g_props_model[3], .scale=10.0f });
 		hexmap_tile_at(&g_hexmap, campfire_pos)->movement_cost = HEXMAP_MOVEMENT_COST_MAX;
 		// enemy
 		struct hexcoord enemy_pos = { .x=3, .y=3 };
 		e = ecs_new_id(g_world);
 		ecs_set(g_world, e, c_position,  { .x=enemy_pos.x, .y=enemy_pos.y });
-		ecs_set(g_world, e, c_model,     { .model=&g_enemy_model, .scale=80.0f });
+		ecs_set(g_world, e, c_model,     { .model=&g_enemy_model, .scale=1.8f });
 		ecs_set(g_world, e, c_health,    { .hp=8, .max_hp=8 });
 		ecs_set(g_world, e, c_npc,       { ._dummy=1 });
 		hexmap_tile_at(&g_hexmap, enemy_pos)->occupied_by = e;
@@ -365,7 +365,7 @@ static void load(struct scene_battle *battle, struct engine *engine) {
 		struct hexcoord player_pos = { .x=2, .y=5 };
 		g_player = ecs_new_id(g_world);
 		ecs_set(g_world, g_player, c_position,  { .x=player_pos.x, .y=player_pos.y });
-		ecs_set(g_world, g_player, c_model,     { .model=&g_player_model, .scale=80.0f });
+		ecs_set(g_world, g_player, c_model,     { .model=&g_player_model, .scale=1.8f });
 		ecs_set(g_world, g_player, c_health,    { .hp=7, .max_hp=10 });
 		hexmap_tile_at(&g_hexmap, player_pos)->occupied_by = g_player;
 	}
@@ -874,10 +874,10 @@ static void draw_ui(pipeline_t *pipeline) {
 		// TODO: this doesn't write to gbuffer, but rather renders with no lighting.
 		glEnable(GL_DEPTH_TEST);
 		mat4 model = GLM_MAT4_IDENTITY_INIT;
-		glm_translate(model, (vec3){ -g_engine->window_width + 100.0f, g_engine->window_height - 240.0f, -300.0f });
+		glm_translate(model, (vec3){ -g_engine->window_width / 40.0f + 2.4f, g_engine->window_height / 40.0f - 6.25f, 0.0f });
 		glm_rotate_x(model, glm_rad(10.0f + cosf(g_engine->time_elapsed) * 10.0f), model);
 		glm_rotate_y(model, glm_rad(sinf(g_engine->time_elapsed) * 40.0f), model);
-		glm_scale(model, (vec3){ 75.0f, 75.0f, 75.0f});
+		glm_scale_uni(model, 2.0f);
 		const float pr = g_engine->window_pixel_ratio;
 		glEnable(GL_SCISSOR_TEST);
 		glScissor(15.0f * pr, g_engine->window_height * pr - 81.0f * pr, 66 * pr, 66 * pr);

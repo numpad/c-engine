@@ -38,7 +38,7 @@ int hexmap_is_valid_index(struct hexmap *map, usize index) {
 void hexmap_init(struct hexmap *map, struct engine *engine) {
 	map->w = 7;
 	map->h = 9;
-	map->tilesize = 115.0f;
+	map->tilesize = 2.0f;
 	map->edges = malloc(map->w * map->h * sizeof(*map->edges) * HEXMAP_MAX_EDGES);
 	map->tiles = calloc(map->w * map->h, sizeof(*map->tiles));
 	for (usize i = 0; i < (usize)map->w * map->h; ++i) {
@@ -205,7 +205,7 @@ void hexmap_draw(struct hexmap *map, struct camera *camera, vec3 player_pos) {
 		//glm_translate(model, (vec3){ -map->tile_offsets.x * 3.f, 0.0f, map->tile_offsets.y * -2.0f });
 		glm_translate(model, (vec3){ pos.x, 0.0f, pos.y });
 		glm_rotate_y(model, map->tiles[i].rotation * glm_rad(60.0f), model);
-		glm_scale(model, (vec3){ 100.0f, 100.0f, 100.0f});
+		glm_scale_uni(model, 1.733f);
 
 		mat4 modelView = GLM_MAT4_IDENTITY_INIT;
 		glm_mat4_mul(camera->view, model, modelView);
