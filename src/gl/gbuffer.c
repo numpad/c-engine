@@ -59,10 +59,10 @@ void gbuffer_init(struct gbuffer *gbuffer, struct engine *engine) {
 	struct texture_settings_s lut_settings = TEXTURE_SETTINGS_INIT;
 	lut_settings.filter_min = GL_NEAREST;
 	lut_settings.filter_mag = GL_NEAREST;
-	lut_settings.wrap_s = GL_CLAMP_TO_EDGE;
-	lut_settings.wrap_t = GL_CLAMP_TO_EDGE;
-	lut_settings.flip_y = 1;
-	texture_init_from_image(&gbuffer->color_lut, "res/image/lut32_pop.png", &lut_settings);
+	lut_settings.wrap_s     = GL_CLAMP_TO_EDGE;
+	lut_settings.wrap_t     = GL_CLAMP_TO_EDGE;
+	lut_settings.flip_y     = 1;
+	texture_init_from_image(&gbuffer->color_lut, "res/image/lut32_night.png", &lut_settings);
 }
 
 void gbuffer_destroy(struct gbuffer *gbuffer) {
@@ -130,7 +130,6 @@ void gbuffer_display(struct gbuffer gbuffer, struct camera *camera, struct engin
 	shader_set_uniform_float(&gbuffer.shader, "u_z_near", camera->z_near);
 	shader_set_uniform_float(&gbuffer.shader, "u_z_far",  camera->z_far);
 	// TODO: Remove these:
-	shader_set_uniform_vec2(&gbuffer.shader, "u_screen_resolution", (float[2]){engine->window_highdpi_width, engine->window_highdpi_height});
 	shader_set_uniform_float(&gbuffer.shader, "u_time", engine->time_elapsed);
 	
 	// Render

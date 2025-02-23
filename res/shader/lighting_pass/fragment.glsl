@@ -20,7 +20,6 @@ uniform sampler2D u_color_lut;
 uniform float u_lut_size;
 uniform float u_z_near;
 uniform float u_z_far;
-uniform vec2 u_screen_resolution; // TODO: REMOVE
 uniform float u_time;             // TODO: REMOVE
 
 out vec4 Color;
@@ -48,7 +47,7 @@ vec4 with_outline(vec4 color) {
 	vec3  outline_color  = vec3(0.0);
 	float min_distance   = 0.015;
 
-	vec2  pixel_step = 1.0 / vec2(display_resolution.zw);
+	vec2  pixel_step = 1.0 / display_resolution.zw;
 	vec4  position   = texture(u_position, v_texcoord);
 	float depth      = (-position.z - u_z_near) / (u_z_far - u_z_near);
 
@@ -60,13 +59,13 @@ vec4 with_outline(vec4 color) {
 			mx = max(mx, abs(depth - tempDepth));
 		}
 	}
-	color.rgb = mix(color.rgb, outline_color, (mx > min_distance) ? 0.9 : 0.0);
+	color.rgb = mix(color.rgb, outline_color, (mx > min_distance) ? 0.95 : 0.0);
 	return color;
 }
 
 vec4 with_colorgrading(vec4 color) {
 	// TODO: remove split view, just for debug
-	if (gl_FragCoord.x + abs(sin(gl_FragCoord.y * 0.25)) + sin(gl_FragCoord.y * 0.25 + u_time * 5.0) * 2.0 < u_screen_resolution.x * 0.5)
+	if (gl_FragCoord.x - 25.0f + abs(sin(gl_FragCoord.y * 0.1)) + sin(gl_FragCoord.y * 0.25 + u_time * 5.0) * 1.0 < display_resolution.x * 0.5)
 		return color;
 
 	color.rgb = linear_to_srgb(color.rgb);
@@ -94,8 +93,8 @@ vec4 with_colorgrading(vec4 color) {
 	return color;
 }
 
-vec4 with_filmgrain(vec4 color) {
-	float strength = 0.015;
+vec4 with_filmgrain(float strength, vec4 color) {
+	// A subtle strength=0.015 works pretty good when applied as the last effect.
 	float to_radians = 3.14159 / 180.0;
 	float random_intensity = fract(10000.0 * sin(gl_FragCoord.x + gl_FragCoord.y * periodic_time) * to_radians);
 	float amount = strength * random_intensity - (strength * 0.5);
@@ -108,7 +107,11 @@ void main() {
 	vec4 position = texture(u_position, v_texcoord);
 	vec3 normal   = texture(u_normal,   v_texcoord).xyz;
 
-	albedo = with_filmgrain(with_colorgrading(with_outline(albedo)));
+	// Filmgrain, then colorgrading kind of fakes dithering
+	albedo = with_colorgrading(
+			 with_filmgrain(0.01,
+			 with_outline(
+			 	albedo)));
 	albedo.rgb = linear_to_srgb(albedo.rgb);
 
 	// Draw final color
