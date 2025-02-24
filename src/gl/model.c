@@ -5,6 +5,7 @@
 #include <assert.h>
 #include <SDL_opengles2.h>
 #include <cglm/cglm.h>
+#include <cglm/mat4.h>
 #include "util/util.h"
 #include "util/str.h"
 #include "gl/camera.h"
@@ -106,6 +107,34 @@ int model_init_from_file(model_t *model, const char *path) {
 
 	assert(data->skins_count <= 1 && "Cannot handle multiple skins...");
 
+	if (data->skins_count > 0) {
+		assert(model->joint_count < 48 && "model vertex shader has 48 joints hardcoded!");
+		cgltf_skin *skin             = &data->skins[0];
+		model->u_is_rigged           = 1;
+		model->joint_count           = skin->joints_count;
+		model->joint_nodes           = malloc(sizeof(cgltf_node*) * model->joint_count);
+		model->inverse_bind_matrices = malloc(sizeof(mat4) * model->joint_count);
+		model->final_joint_matrices  = malloc(sizeof(mat4) * model->joint_count);
+
+		if (skin->inverse_bind_matrices) {
+			unsigned char *ibm_ptr = (unsigned char *)skin->inverse_bind_matrices->buffer_view->buffer->data + skin->inverse_bind_matrices->buffer_view->offset;
+			for (size_t i = 0; i < model->joint_count; ++i) {
+				memcpy(model->inverse_bind_matrices[i], ibm_ptr + i * sizeof(mat4), sizeof(mat4));
+			}
+		} else {
+			for (size_t i = 0; i < model->joint_count; ++i) {
+				glm_mat4_identity(model->inverse_bind_matrices[i]);
+			}
+		}
+
+		// Cache joint nodes
+		for (size_t i = 0; i < model->joint_count; ++i) {
+			model->joint_nodes[i] = skin->joints[i];
+		}
+	}
+
+	model_update_animation(model);
+
 #ifdef DEBUG
 	// Perform some validation: unused attributes, ...
 	//glUseProgram(model->shader.program);
@@ -129,6 +158,39 @@ int model_init_from_file(model_t *model, const char *path) {
 	return 0;
 }
 
+static void compute_global_transform(cgltf_node *node, mat4 dest) {
+	mat4 local = GLM_MAT4_IDENTITY_INIT;
+	if (node->has_matrix) {
+		glm_mat4_make(node->matrix, local);
+	} else {
+		versor r = GLM_QUAT_IDENTITY_INIT;
+		glm_quat_make(node->rotation, r);
+
+		glm_translate(local, node->translation);
+		glm_quat_rotate(local, r, local);
+		glm_scale(local, node->scale);
+	}
+
+	if (node->parent) {
+		// Recursively compute parent's global transform.
+		mat4 parent = GLM_MAT4_IDENTITY_INIT;
+		compute_global_transform(node->parent, parent);
+
+		glm_mat4_mul(parent, local, local);
+	}
+
+	glm_mat4_copy(local, dest);
+}
+
+void model_update_animation(model_t *model) {
+	assert(model != NULL);
+	for (size_t i = 0; i < model->joint_count; ++i) {
+		mat4 global = GLM_MAT4_IDENTITY_INIT;
+		compute_global_transform(model->joint_nodes[i], global);
+		glm_mat4_mul(global, model->inverse_bind_matrices[i], model->final_joint_matrices[i]);
+	}
+}
+
 void model_draw(model_t *model, shader_t *shader, struct camera *camera, mat4 modelmatrix) {
 	assert(model != NULL);
 
@@ -139,6 +201,8 @@ void model_draw(model_t *model, shader_t *shader, struct camera *camera, mat4 mo
 	shader_set_uniform_mat4(shader,    "u_projection", (float*)&camera->projection);
 	shader_set_uniform_mat4(shader,    "u_view",       (float*)&camera->view);
 	shader_set_uniform_float(shader,   "u_is_rigged",  model->u_is_rigged);
+	GLint u_bone_transforms = glGetUniformLocation(shader->program, "u_bone_transforms");
+	glUniformMatrix4fv(u_bone_transforms, model->joint_count, GL_FALSE, (const GLfloat *)model->final_joint_matrices);
 
 	// TODO: maybe use a stack based approach instead of doing recursion?
 	for (cgltf_size node_index = 0; node_index < model->gltf_data->nodes_count; ++node_index) {

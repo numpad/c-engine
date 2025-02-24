@@ -64,9 +64,8 @@ vec4 with_outline(vec4 color) {
 }
 
 vec4 with_colorgrading(vec4 color) {
-	// TODO: remove split view, just for debug
-	if (gl_FragCoord.x - 25.0f + abs(sin(gl_FragCoord.y * 0.1)) + sin(gl_FragCoord.y * 0.25 + u_time * 5.0) * 1.0 < display_resolution.x * 0.5)
-		return color;
+	//if (gl_FragCoord.x - 25.0f + abs(sin(gl_FragCoord.y * 0.1)) + sin(gl_FragCoord.y * 0.25 + u_time * 5.0) * 1.0 < display_resolution.x * 0.5)
+	//	return color;
 
 	color.rgb = linear_to_srgb(color.rgb);
 
