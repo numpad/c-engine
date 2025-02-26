@@ -78,4 +78,5 @@ replace raw djikstra with A* in hexmap
 visualize pathfinder/flowfield with arrows
 end turn only after animations finished? skippable?
 fix UBO, causes mobile to crash after a handful of calls to `shader_set_uniform_buffer()`
+drastically reduce draw calls
 

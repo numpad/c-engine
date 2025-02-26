@@ -37,7 +37,7 @@ int hexmap_is_valid_index(struct hexmap *map, usize index) {
 
 void hexmap_init(struct hexmap *map, struct engine *engine) {
 	map->w = 7;
-	map->h = 9;
+	map->h = 11;
 	map->tilesize = 2.0f;
 	map->edges = malloc(map->w * map->h * sizeof(*map->edges) * HEXMAP_MAX_EDGES);
 	map->tiles = calloc(map->w * map->h, sizeof(*map->tiles));

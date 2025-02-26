@@ -504,6 +504,14 @@ static void destroy(struct scene_battle *battle, struct engine *engine) {
 }
 
 static void update(struct scene_battle *battle, struct engine *engine, float dt) {
+	// TODO: remove, test animation
+	{
+		static double t = 0.0;
+		t += dt * 0.5f;
+		if (t > 1.1) t -= 1.1;
+		model_update_animation(&g_player_model, t);
+	}
+
 	if (g_handcards_updated) {
 		g_handcards_updated = 0;
 		recalculate_handcards();
@@ -1476,9 +1484,9 @@ static void system_draw_board_entities(ecs_iter_t *it) {
 		glm_mat4_identity(model_matrix);
 		glm_translate(model_matrix, world_pos.raw);
 		// rotation
-		versor rot_around_y;
-		glm_quat(rot_around_y, g_engine->time_elapsed, 0.0f, 1.0f, 0.0f);
-		glm_quat_rotate(model_matrix, rot_around_y, model_matrix);
+		//versor rot_around_y;
+		//glm_quat(rot_around_y, g_engine->time_elapsed, 0.0f, 1.0f, 0.0f);
+		//glm_quat_rotate(model_matrix, rot_around_y, model_matrix);
 		glm_scale_uni(model_matrix, model->scale);
 		// TODO: either only draw characters here, or specify which shader to use?
 		model_draw(model->model, &g_character_model_shader, &g_camera, model_matrix);

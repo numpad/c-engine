@@ -20,6 +20,7 @@
 //  STATIC  //
 //////////////
 
+static void *get_accessor_data(cgltf_accessor *);
 static GLint accessor_to_component_size(cgltf_accessor *access);
 static const char* accessor_to_component_size_name(cgltf_accessor *access);
 static const char* attribute_type_to_name(cgltf_attribute_type type);
@@ -27,6 +28,11 @@ static GLint accessor_to_component_type(cgltf_accessor *access);
 
 static void draw_node(model_t *model, shader_t *shader, cgltf_node *node, mat4 modelmatrix);
 static void print_debug_info(cgltf_data *data);
+
+static void update_bone_matrices(model_t *model);
+
+static void interpolate_vec3(cgltf_animation_sampler *sampler, float time, vec3 dest);
+static void interpolate_quat(cgltf_animation_sampler *sampler, float time, versor dest);
 
 //////////////
 //  PUBLIC  //
@@ -37,6 +43,15 @@ int model_init_from_file(model_t *model, const char *path) {
 	// TODO: lets maybe free the cgltf_data here?
 	assert(model != NULL);
 	assert(path != NULL);
+	assert(sizeof(mat4) == (16 * sizeof(float))); // General assumption...
+
+	model->gltf_data             = NULL;
+	model->animation_time        = 0.0f;
+	model->joint_count           = 0;
+	model->joint_nodes           = NULL;
+	model->inverse_bind_matrices = NULL;
+	model->final_joint_matrices  = NULL;
+	model->u_is_rigged           = 0;
 
 	cgltf_options options = {0};
 	cgltf_data *data = NULL;
@@ -53,8 +68,6 @@ int model_init_from_file(model_t *model, const char *path) {
 		fprintf(stderr, "[warn] couldn't load buffers from \"%s\"...\n", path);
 		return 1;
 	}
-
-	model->u_is_rigged = 0;
 
 #ifdef DEBUG
 	//print_debug_info(data);
@@ -100,7 +113,7 @@ int model_init_from_file(model_t *model, const char *path) {
 			texture_init_from_image(&model->texture0, image_path, &settings);
 		} else if (i < data->images_count) {
 			unsigned int image_data_len = data->images[i].buffer_view->size;
-			unsigned char *image_data = (unsigned char *)data->images[i].buffer_view->buffer->data + data->images[i].buffer_view->offset;
+			unsigned char *image_data = (unsigned char *)(data->images[i].buffer_view->buffer->data + data->images[i].buffer_view->offset);
 			texture_init_from_memory(&model->texture0, image_data_len, image_data, &settings);
 		}
 	}
@@ -113,11 +126,11 @@ int model_init_from_file(model_t *model, const char *path) {
 		model->u_is_rigged           = 1;
 		model->joint_count           = skin->joints_count;
 		model->joint_nodes           = malloc(sizeof(cgltf_node*) * model->joint_count);
-		model->inverse_bind_matrices = malloc(sizeof(mat4) * model->joint_count);
-		model->final_joint_matrices  = malloc(sizeof(mat4) * model->joint_count);
+		model->inverse_bind_matrices = malloc(sizeof(mat4)        * model->joint_count);
+		model->final_joint_matrices  = malloc(sizeof(mat4)        * model->joint_count);
 
 		if (skin->inverse_bind_matrices) {
-			unsigned char *ibm_ptr = (unsigned char *)skin->inverse_bind_matrices->buffer_view->buffer->data + skin->inverse_bind_matrices->buffer_view->offset;
+			unsigned char *ibm_ptr = (unsigned char *)skin->inverse_bind_matrices->buffer_view->buffer->data + skin->inverse_bind_matrices->buffer_view->offset + skin->inverse_bind_matrices->offset;
 			for (size_t i = 0; i < model->joint_count; ++i) {
 				memcpy(model->inverse_bind_matrices[i], ibm_ptr + i * sizeof(mat4), sizeof(mat4));
 			}
@@ -127,33 +140,14 @@ int model_init_from_file(model_t *model, const char *path) {
 			}
 		}
 
-		// Cache joint nodes
 		for (size_t i = 0; i < model->joint_count; ++i) {
 			model->joint_nodes[i] = skin->joints[i];
 		}
 	}
 
-	model_update_animation(model);
-
-#ifdef DEBUG
-	// Perform some validation: unused attributes, ...
-	//glUseProgram(model->shader.program);
-	//for (cgltf_size mesh_index = 0; mesh_index < model->gltf_data->meshes_count; ++mesh_index) {
-	//	cgltf_mesh *mesh = &model->gltf_data->meshes[mesh_index];
-	//	for (cgltf_size prim_index = 0; prim_index < mesh->primitives_count; ++prim_index) {
-	//		cgltf_primitive *primitive = &mesh->primitives[prim_index];
-	//		for (cgltf_size attrib_index = 0; attrib_index < primitive->attributes_count; ++attrib_index) {
-	//			cgltf_attribute *attrib = &primitive->attributes[attrib_index];
-	//			const GLint location = glGetAttribLocation(model->shader.program, attrib->name);
-	//			if (location < 0) {
-	//				fprintf(stderr, "[warn] attribute \"%s\" of type %s (%s) doesn't exist (or is unused).\n",
-	//						attrib->name, attribute_type_to_name(attrib->type), accessor_to_component_size_name(attrib->data));
-	//			}
-	//		}
-	//	}
-	//}
-	//glUseProgram(0);
-#endif
+	if (model->gltf_data->animations_count > 0) {
+		model_update_animation(model, 1.0f / 60.0f);
+	}
 
 	return 0;
 }
@@ -182,13 +176,47 @@ static void compute_global_transform(cgltf_node *node, mat4 dest) {
 	glm_mat4_copy(local, dest);
 }
 
-void model_update_animation(model_t *model) {
+void model_update_animation(model_t *model, float time) {
 	assert(model != NULL);
-	for (size_t i = 0; i < model->joint_count; ++i) {
-		mat4 global = GLM_MAT4_IDENTITY_INIT;
-		compute_global_transform(model->joint_nodes[i], global);
-		glm_mat4_mul(global, model->inverse_bind_matrices[i], model->final_joint_matrices[i]);
+	assert(model->gltf_data->animations_count > 0 && "Need at least one animation.");
+
+	cgltf_animation *anim = &model->gltf_data->animations[0];
+	for (size_t i = 0; i < anim->channels_count; ++i) {
+		cgltf_animation_channel *channel = &anim->channels[i];
+		cgltf_animation_sampler *sampler = channel->sampler;
+		cgltf_node              *node    = channel->target_node;
+
+		switch (channel->target_path) {
+			case cgltf_animation_path_type_translation: {
+				vec3 trans;
+				interpolate_vec3(sampler, model->animation_time, trans);
+				memcpy(node->translation, &trans, sizeof(trans));
+				break;
+			}
+			case cgltf_animation_path_type_rotation: {
+				versor rot;
+				interpolate_quat(sampler, model->animation_time, rot);
+				memcpy(node->rotation, &rot, sizeof(rot));
+				break;
+			}
+			case cgltf_animation_path_type_scale: {
+				vec3 scale;
+				interpolate_vec3(sampler, model->animation_time, scale);
+				memcpy(node->scale, &scale, sizeof(scale));
+				break;
+			}
+			case cgltf_animation_path_type_invalid:
+			case cgltf_animation_path_type_weights:
+			case cgltf_animation_path_type_max_enum:
+				assert(0 && "this animation path type is not implemented!");
+			default:
+				break;
+		}
 	}
+
+	model->animation_time = time;
+
+	update_bone_matrices(model);
 }
 
 void model_draw(model_t *model, shader_t *shader, struct camera *camera, mat4 modelmatrix) {
@@ -245,6 +273,10 @@ void model_set_node_hidden(model_t *model, const char *name, int is_hidden) {
 ////////////
 // STATIC //
 ////////////
+
+static void *get_accessor_data(cgltf_accessor *accessor) {
+	return (void*)((unsigned char*)accessor->buffer_view->buffer->data + accessor->buffer_view->offset + accessor->offset);
+}
 
 static GLint accessor_to_component_size(cgltf_accessor *access) {
 	GLint num_components = -1;
@@ -409,5 +441,89 @@ static void print_debug_info(cgltf_data *data) {
 		cgltf_animation *anim = &data->animations[anim_index];
 		printf(" - %s: %d channels, %d samplers\n", anim->name, anim->channels_count, anim->samplers_count);
 	}
+}
+
+static void update_bone_matrices(model_t *model) {
+	for (size_t i = 0; i < model->joint_count; ++i) {
+		mat4 global = GLM_MAT4_IDENTITY_INIT;
+		compute_global_transform(model->joint_nodes[i], global);
+		glm_mat4_mul(global, model->inverse_bind_matrices[i], model->final_joint_matrices[i]);
+	}
+}
+
+static void interpolate_vec3(cgltf_animation_sampler *sampler, float time, vec3 dest) {
+	assert(sampler != NULL);
+	float *keyframe_times = get_accessor_data(sampler->input);
+	usize keyframes_count = sampler->input->count;
+
+	assert(sampler->output->stride != 0);
+	int stride = sampler->output->stride;
+
+	if (time <= keyframe_times[0]) {
+		float *data = get_accessor_data(sampler->output);
+		glm_vec3_make(data, dest);
+		return;
+	}
+	if (time >= keyframe_times[keyframes_count - 1]) {
+		float *data = (float *)((uchar *)get_accessor_data(sampler->output) + (keyframes_count - 1) * stride);
+		glm_vec3_make(data, dest);
+		return;
+	}
+
+	usize i;
+	for (i = 0; i < keyframes_count -1; ++i) {
+		if (time < keyframe_times[i + 1]) {
+			break;
+		}
+	}
+	float t0 = keyframe_times[i];
+	float t1 = keyframe_times[i + 1];
+	float factor = (time - t0) / (t1 - t0);
+
+	float *v0 = (float*)((unsigned char*)get_accessor_data(sampler->output) + i * stride);
+	float *v1 = (float*)((unsigned char*)get_accessor_data(sampler->output) + (i + 1) * stride);
+
+	vec3 a, b;
+	glm_vec3_make(v0, a);
+	glm_vec3_make(v1, b);
+	glm_vec3_lerp(a, b, factor, dest);
+}
+
+static void interpolate_quat(cgltf_animation_sampler *sampler, float time, versor dest) {
+	assert(sampler != NULL);
+	float *keyframe_times = get_accessor_data(sampler->input);
+	usize keyframes_count = sampler->input->count;
+
+	assert(sampler->output->stride != 0);
+	int stride = sampler->output->stride;
+
+	if (time <= keyframe_times[0]) {
+		float *data = get_accessor_data(sampler->output);
+		glm_quat_make(data, dest);
+		return;
+	}
+	if (time >= keyframe_times[keyframes_count - 1]) {
+		float *data = (float *)((uchar *)get_accessor_data(sampler->output) + (keyframes_count - 1) * stride);
+		glm_quat_make(data, dest);
+		return;
+	}
+
+	usize i;
+	for (i = 0; i < keyframes_count - 1; ++i) {
+		if (time < keyframe_times[i + 1]) {
+			break;
+		}
+	}
+	float t0 = keyframe_times[i];
+	float t1 = keyframe_times[i + 1];
+	float factor = (time - t0) / (t1 - t0);
+
+	float *v0 = (float*)((unsigned char*)get_accessor_data(sampler->output) + i * stride);
+	float *v1 = (float*)((unsigned char*)get_accessor_data(sampler->output) + (i + 1) * stride);
+
+	versor a, b;
+	glm_quat_make(v0, a);
+	glm_quat_make(v1, b);
+	glm_quat_lerp(a, b, factor, dest);
 }
 

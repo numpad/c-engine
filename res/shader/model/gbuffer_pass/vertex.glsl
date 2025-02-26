@@ -26,9 +26,6 @@ void main() {
 	v_texcoord0 = TEXCOORD_0;
 	v_normal = normalize(u_normalMatrix * NORMAL);
 
-	v_world_position = (u_model * vec4(POSITION, 1.0)).xyz;
-	v_view_position = (u_view * u_model * vec4(POSITION, 1.0)).xyz;
-	
 	if (int(u_is_rigged) == 1) {
 		vec4 total_position = vec4(0.0);
 		vec4 total_normal   = vec4(0.0);
@@ -40,8 +37,12 @@ void main() {
 			total_normal += local_normal * WEIGHTS_0[i];
 		}
 
+		v_world_position = (u_model * total_position).xyz;
+		v_view_position = (u_view * u_model * total_position).xyz;
 		gl_Position = u_projection * u_view * u_model * total_position;
 	} else {
+		v_world_position = (u_model * vec4(POSITION, 1.0)).xyz;
+		v_view_position = (u_view * u_model * vec4(POSITION, 1.0)).xyz;
 		gl_Position = u_projection * u_view * u_model * vec4(POSITION, 1.0);
 	}
 }
