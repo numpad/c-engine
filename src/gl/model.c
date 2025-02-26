@@ -180,7 +180,7 @@ void model_update_animation(model_t *model, float time) {
 	assert(model != NULL);
 	assert(model->gltf_data->animations_count > 0 && "Need at least one animation.");
 
-	cgltf_animation *anim = &model->gltf_data->animations[0];
+	cgltf_animation *anim = &model->gltf_data->animations[23];
 	for (size_t i = 0; i < anim->channels_count; ++i) {
 		cgltf_animation_channel *channel = &anim->channels[i];
 		cgltf_animation_sampler *sampler = channel->sampler;
@@ -524,6 +524,6 @@ static void interpolate_quat(cgltf_animation_sampler *sampler, float time, verso
 	versor a, b;
 	glm_quat_make(v0, a);
 	glm_quat_make(v1, b);
-	glm_quat_lerp(a, b, factor, dest);
+	glm_quat_slerp(a, b, factor, dest);
 }
 

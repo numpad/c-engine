@@ -507,8 +507,9 @@ static void update(struct scene_battle *battle, struct engine *engine, float dt)
 	// TODO: remove, test animation
 	{
 		static double t = 0.0;
-		t += dt * 0.5f;
-		if (t > 1.1) t -= 1.1;
+		const double duration = 1.7;
+		t += dt;
+		if (t > duration) t -= duration;
 		model_update_animation(&g_player_model, t);
 	}
 

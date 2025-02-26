@@ -21,6 +21,8 @@ color grading with LUT
 handle 16x16x16 and 32x32x32 LUT
 gamma correction / sRGB
 add menu button
+load gltf skeletal animation data
+calculate & draw a skeletal animation
 
 plan pile:
 ----------
@@ -54,8 +56,8 @@ enemy has simple AI, moves towards player and makes basic attacks
 
 animated models
  - only draw one of the KayKit character model's equipment
- - load gltf skeletal animation data
- - skeletal animation
+ - calculate multiple parallel animations
+ - animation system to handle playback, timing, endless, ... animations
 
 pathfinder edges can have increased movement cost (eg: water tile, flowing river)
 implement SSAO
@@ -79,4 +81,5 @@ visualize pathfinder/flowfield with arrows
 end turn only after animations finished? skippable?
 fix UBO, causes mobile to crash after a handful of calls to `shader_set_uniform_buffer()`
 drastically reduce draw calls
+optimize skeletal animation performance
 
