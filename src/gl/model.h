@@ -13,13 +13,14 @@ typedef struct model_s {
 	unsigned int index_buffers[8];
 	texture_t texture0;
 	// skeletal animation
+	int        is_animated;
 	uint       joint_count;
 	cgltf_node **joint_nodes;
 	mat4       *inverse_bind_matrices;
 	mat4       *final_joint_matrices;
-	float      animation_time;
-	// uniforms
-	int u_is_rigged;
+	usize      animation_index;
+	// gl
+	uint vao;
 } model_t;
 
 

@@ -11,6 +11,7 @@
 #include "gl/camera.h"
 #include "gl/shader.h"
 
+#define MODEL_ANIMATION_NONE ((usize)-1)
 
 ///////////////
 //  STRUCTS  //
@@ -25,6 +26,7 @@ static GLint accessor_to_component_size(cgltf_accessor *access);
 static const char* accessor_to_component_size_name(cgltf_accessor *access);
 static const char* attribute_type_to_name(cgltf_attribute_type type);
 static GLint accessor_to_component_type(cgltf_accessor *access);
+static const char *accessor_to_component_type_name(cgltf_accessor *access);
 
 static void draw_node(model_t *model, shader_t *shader, cgltf_node *node, mat4 modelmatrix);
 static void print_debug_info(cgltf_data *data);
@@ -46,12 +48,13 @@ int model_init_from_file(model_t *model, const char *path) {
 	assert(sizeof(mat4) == (16 * sizeof(float))); // General assumption...
 
 	model->gltf_data             = NULL;
-	model->animation_time        = 0.0f;
 	model->joint_count           = 0;
 	model->joint_nodes           = NULL;
 	model->inverse_bind_matrices = NULL;
 	model->final_joint_matrices  = NULL;
-	model->u_is_rigged           = 0;
+	model->animation_index       = MODEL_ANIMATION_NONE;
+	model->is_animated           = 0;
+	glGenVertexArrays(1, &model->vao);
 
 	cgltf_options options = {0};
 	cgltf_data *data = NULL;
@@ -69,12 +72,10 @@ int model_init_from_file(model_t *model, const char *path) {
 		return 1;
 	}
 
-#ifdef DEBUG
-	//print_debug_info(data);
-#endif
-
+	glBindVertexArray(model->vao);
 	// load buffer data
 	assert(data->buffers_count < count_of(model->vertex_buffers));
+	assert(data->buffers_count == 1 && "multiple buffers are not tested, i guess rendering doesnt handle them either?");
 	glGenBuffers(data->buffers_count, model->vertex_buffers);
 	glGenBuffers(data->buffers_count, model->index_buffers);
 	for (cgltf_size i = 0; i < data->buffers_count; ++i) {
@@ -113,7 +114,7 @@ int model_init_from_file(model_t *model, const char *path) {
 			texture_init_from_image(&model->texture0, image_path, &settings);
 		} else if (i < data->images_count) {
 			unsigned int image_data_len = data->images[i].buffer_view->size;
-			unsigned char *image_data = (unsigned char *)(data->images[i].buffer_view->buffer->data + data->images[i].buffer_view->offset);
+			unsigned char *image_data = ((uchar *)data->images[i].buffer_view->buffer->data + data->images[i].buffer_view->offset);
 			texture_init_from_memory(&model->texture0, image_data_len, image_data, &settings);
 		}
 	}
@@ -121,87 +122,63 @@ int model_init_from_file(model_t *model, const char *path) {
 	assert(data->skins_count <= 1 && "Cannot handle multiple skins...");
 
 	if (data->skins_count > 0) {
-		assert(model->joint_count < 48 && "model vertex shader has 48 joints hardcoded!");
 		cgltf_skin *skin             = &data->skins[0];
-		model->u_is_rigged           = 1;
+		model->is_animated           = 1;
 		model->joint_count           = skin->joints_count;
+		assert(model->joint_count < 48 && "model vertex shader has 48 joints hardcoded!");
 		model->joint_nodes           = malloc(sizeof(cgltf_node*) * model->joint_count);
 		model->inverse_bind_matrices = malloc(sizeof(mat4)        * model->joint_count);
 		model->final_joint_matrices  = malloc(sizeof(mat4)        * model->joint_count);
 
 		if (skin->inverse_bind_matrices) {
-			unsigned char *ibm_ptr = (unsigned char *)skin->inverse_bind_matrices->buffer_view->buffer->data + skin->inverse_bind_matrices->buffer_view->offset + skin->inverse_bind_matrices->offset;
-			for (size_t i = 0; i < model->joint_count; ++i) {
-				memcpy(model->inverse_bind_matrices[i], ibm_ptr + i * sizeof(mat4), sizeof(mat4));
+			uchar *ibm_ptr = (uchar *)get_accessor_data(skin->inverse_bind_matrices);
+			for (usize i = 0; i < model->joint_count; ++i) {
+				glm_mat4_make((float*)(ibm_ptr + i * sizeof(mat4)), model->inverse_bind_matrices[i]);
 			}
 		} else {
-			for (size_t i = 0; i < model->joint_count; ++i) {
+			for (usize i = 0; i < model->joint_count; ++i) {
 				glm_mat4_identity(model->inverse_bind_matrices[i]);
 			}
 		}
 
-		for (size_t i = 0; i < model->joint_count; ++i) {
+		for (usize i = 0; i < model->joint_count; ++i) {
 			model->joint_nodes[i] = skin->joints[i];
 		}
+
+		update_bone_matrices(model);
 	}
 
-	if (model->gltf_data->animations_count > 0) {
-		model_update_animation(model, 1.0f / 60.0f);
-	}
-
+	glBindVertexArray(0);
 	return 0;
-}
-
-static void compute_global_transform(cgltf_node *node, mat4 dest) {
-	mat4 local = GLM_MAT4_IDENTITY_INIT;
-	if (node->has_matrix) {
-		glm_mat4_make(node->matrix, local);
-	} else {
-		versor r = GLM_QUAT_IDENTITY_INIT;
-		glm_quat_make(node->rotation, r);
-
-		glm_translate(local, node->translation);
-		glm_quat_rotate(local, r, local);
-		glm_scale(local, node->scale);
-	}
-
-	if (node->parent) {
-		// Recursively compute parent's global transform.
-		mat4 parent = GLM_MAT4_IDENTITY_INIT;
-		compute_global_transform(node->parent, parent);
-
-		glm_mat4_mul(parent, local, local);
-	}
-
-	glm_mat4_copy(local, dest);
 }
 
 void model_update_animation(model_t *model, float time) {
 	assert(model != NULL);
+	assert(model->gltf_data != NULL);
 	assert(model->gltf_data->animations_count > 0 && "Need at least one animation.");
+	assert(model->animation_index != MODEL_ANIMATION_NONE);
 
-	cgltf_animation *anim = &model->gltf_data->animations[23];
+	cgltf_animation *anim = &model->gltf_data->animations[model->animation_index];
 	for (size_t i = 0; i < anim->channels_count; ++i) {
 		cgltf_animation_channel *channel = &anim->channels[i];
 		cgltf_animation_sampler *sampler = channel->sampler;
 		cgltf_node              *node    = channel->target_node;
-
 		switch (channel->target_path) {
 			case cgltf_animation_path_type_translation: {
 				vec3 trans;
-				interpolate_vec3(sampler, model->animation_time, trans);
+				interpolate_vec3(sampler, time, trans);
 				memcpy(node->translation, &trans, sizeof(trans));
 				break;
 			}
 			case cgltf_animation_path_type_rotation: {
 				versor rot;
-				interpolate_quat(sampler, model->animation_time, rot);
+				interpolate_quat(sampler, time, rot);
 				memcpy(node->rotation, &rot, sizeof(rot));
 				break;
 			}
 			case cgltf_animation_path_type_scale: {
 				vec3 scale;
-				interpolate_vec3(sampler, model->animation_time, scale);
+				interpolate_vec3(sampler, time, scale);
 				memcpy(node->scale, &scale, sizeof(scale));
 				break;
 			}
@@ -209,12 +186,9 @@ void model_update_animation(model_t *model, float time) {
 			case cgltf_animation_path_type_weights:
 			case cgltf_animation_path_type_max_enum:
 				assert(0 && "this animation path type is not implemented!");
-			default:
 				break;
 		}
 	}
-
-	model->animation_time = time;
 
 	update_bone_matrices(model);
 }
@@ -222,22 +196,25 @@ void model_update_animation(model_t *model, float time) {
 void model_draw(model_t *model, shader_t *shader, struct camera *camera, mat4 modelmatrix) {
 	assert(model != NULL);
 
+	glBindVertexArray(model->vao);
 	shader_use(shader);
 	glBindBuffer(GL_ARRAY_BUFFER, model->vertex_buffers[0]);
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, model->index_buffers[0]);
 	shader_set_uniform_texture(shader, "u_diffuse",    GL_TEXTURE0, &model->texture0);
 	shader_set_uniform_mat4(shader,    "u_projection", (float*)&camera->projection);
 	shader_set_uniform_mat4(shader,    "u_view",       (float*)&camera->view);
-	shader_set_uniform_float(shader,   "u_is_rigged",  model->u_is_rigged);
-	GLint u_bone_transforms = glGetUniformLocation(shader->program, "u_bone_transforms");
-	glUniformMatrix4fv(u_bone_transforms, model->joint_count, GL_FALSE, (const GLfloat *)model->final_joint_matrices);
-
-	// TODO: maybe use a stack based approach instead of doing recursion?
-	for (cgltf_size node_index = 0; node_index < model->gltf_data->nodes_count; ++node_index) {
-		cgltf_node *node = &model->gltf_data->nodes[node_index];
-		draw_node(model, shader, node, modelmatrix);
+	if (model->is_animated) {
+		GLint u_bone_transforms = glGetUniformLocation(shader->program, "u_bone_transforms");
+		glUniformMatrix4fv(u_bone_transforms, model->joint_count, GL_FALSE, (const GLfloat *)model->final_joint_matrices);
 	}
 
+	cgltf_scene *scene = model->gltf_data->scene;
+	assert(scene != NULL);
+	for (usize i = 0; i < scene->nodes_count; ++i) {
+		draw_node(model, shader, scene->nodes[i], modelmatrix);
+	}
+
+	glBindVertexArray(0);
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 }
@@ -246,9 +223,16 @@ void model_draw(model_t *model, shader_t *shader, struct camera *camera, mat4 mo
 void model_destroy(model_t *model) {
 	assert(model != NULL);
 
+	if (model->is_animated == 1) {
+		free(model->joint_nodes);
+		free(model->inverse_bind_matrices);
+		free(model->final_joint_matrices);
+	}
+
 	glDeleteBuffers(model->gltf_data->buffers_count, model->vertex_buffers);
-	// TODO: delete index buffers
+	glDeleteBuffers(model->gltf_data->buffers_count, model->index_buffers);
 	cgltf_free(model->gltf_data);
+	glDeleteVertexArrays(1, &model->vao);
 
 	texture_destroy(&model->texture0);
 }
@@ -260,7 +244,7 @@ void model_set_node_hidden(model_t *model, const char *name, int is_hidden) {
 #ifdef DEBUG
 	int node_with_name_exists = 0;
 #endif
-	
+
 	for (cgltf_size node_index = 0; node_index < model->gltf_data->nodes_count; ++node_index) {
 	}
 
@@ -275,7 +259,7 @@ void model_set_node_hidden(model_t *model, const char *name, int is_hidden) {
 ////////////
 
 static void *get_accessor_data(cgltf_accessor *accessor) {
-	return (void*)((unsigned char*)accessor->buffer_view->buffer->data + accessor->buffer_view->offset + accessor->offset);
+	return (void*)((uchar*)accessor->buffer_view->buffer->data + accessor->buffer_view->offset + accessor->offset);
 }
 
 static GLint accessor_to_component_size(cgltf_accessor *access) {
@@ -310,7 +294,6 @@ static const char* accessor_to_component_size_name(cgltf_accessor *access) {
 		case cgltf_type_invalid : return "cgltf_type_invalid";
 		case cgltf_type_max_enum: return "cgltf_type_max_enum";
 	}
-
 	return NULL;
 }
 
@@ -327,7 +310,6 @@ static const char* attribute_type_to_name(cgltf_attribute_type type) {
 		case cgltf_attribute_type_invalid : return "invalid";
 		case cgltf_attribute_type_max_enum: return "invalid (MAX_ENUM)";
 	}
-
 	return NULL;
 }
 
@@ -344,44 +326,78 @@ static GLint accessor_to_component_type(cgltf_accessor *access) {
 		case cgltf_component_type_max_enum:
 			break;
 	}
-
 	assert(comp_type != -1);
 	return comp_type;
 }
 
-static void draw_node(model_t *model, shader_t *shader, cgltf_node *node, mat4 modelmatrix) {
-	if (node->mesh != NULL) {
+static const char *accessor_to_component_type_name(cgltf_accessor *access) {
+	const char *name = NULL;
+	switch(access->component_type) {
+		case cgltf_component_type_r_8     : name = "GL_BYTE";           break;
+		case cgltf_component_type_r_8u    : name = "GL_UNSIGNED_BYTE";  break;
+		case cgltf_component_type_r_16    : name = "GL_SHORT";          break;
+		case cgltf_component_type_r_16u   : name = "GL_UNSIGNED_SHORT"; break;
+		case cgltf_component_type_r_32u   : name = "GL_UNSIGNED_INT";   break;
+		case cgltf_component_type_r_32f   : name = "GL_FLOAT";          break;
+		case cgltf_component_type_invalid :
+		case cgltf_component_type_max_enum:
+			break;
+	}
+	assert(name != NULL);
+	return name;
+}
+
+static void draw_node(model_t *model, shader_t *shader, cgltf_node *node, mat4 parent_transform) {
+	mat4 global_transform;
+	cgltf_node_transform_local(node, (float*)global_transform);
+	glm_mat4_mul(parent_transform, global_transform, global_transform);
+
+	shader_set_uniform_mat4(shader, "u_model", (float*)global_transform);
+	shader_set_uniform_float(shader, "u_is_rigged", node->skin ? 1 : 0);
+
+	if (node->mesh) {
 		cgltf_mesh *mesh = node->mesh;
 
 		for (cgltf_size prim_index = 0; prim_index < mesh->primitives_count; ++prim_index) {
 			cgltf_primitive *primitive = &mesh->primitives[prim_index];
-
+			// set attributes
 			for (cgltf_size attrib_index = 0; attrib_index < primitive->attributes_count; ++attrib_index) {
 				cgltf_attribute *attrib = &primitive->attributes[attrib_index];
 				cgltf_accessor *access = attrib->data;
-
+				// TODO: Whats up with access->count
+				assert(access->is_sparse == 0);
 				const int location = glGetAttribLocation(shader->program, attrib->name);
 				if (location < 0) {
 					continue;
 				}
-
-				glVertexAttribPointer(location, accessor_to_component_size(access), accessor_to_component_type(access),
-					access->normalized, access->buffer_view->stride, (void *)access->buffer_view->offset);
+				assert(access->offset == 0 && "This isn't handled at the moment...");
+				assert(access->stride != 0 && "stride=0 is not supported");
+				assert( (access->buffer_view->stride == 0 || access->buffer_view->stride == access->stride)
+						&& "No idea how to handle different strides");
 				glEnableVertexAttribArray(location);
+				switch (access->component_type) {
+				case cgltf_component_type_r_32f:
+					glVertexAttribPointer(location, accessor_to_component_size(access), accessor_to_component_type(access),
+						access->normalized, access->stride, (void *)access->buffer_view->offset);
+					break;
+				case cgltf_component_type_r_8u:
+					glVertexAttribIPointer(location, accessor_to_component_size(access), accessor_to_component_type(access),
+						access->stride, (void *)access->buffer_view->offset);
+					break;
+				case cgltf_component_type_r_8:
+				case cgltf_component_type_r_16:
+				case cgltf_component_type_r_16u:
+				case cgltf_component_type_r_32u:
+				case cgltf_component_type_invalid:
+				case cgltf_component_type_max_enum:
+					assert(0 && "component type not supported!");
+					break;
+				}
 			}
 
-			// calculate matrices
-			mat4 node_transform;
-			cgltf_node_transform_world(node, (float*)node_transform);
-			glm_mat4_mul(modelmatrix, node_transform, node_transform);
-			shader_set_uniform_mat4(shader, "u_model", (float*)node_transform);
-
-			if (primitive->indices != NULL) {
-				glDrawElements(GL_TRIANGLES, primitive->indices->count, accessor_to_component_type(primitive->indices), (void*)primitive->indices->buffer_view->offset);
-			} else {
-				// TODO: glDrawArrays
-			}
-
+			assert(primitive->indices != NULL && "only indexed drawing is supported, implement glDrawArrays!");
+			assert(primitive->indices->offset == 0 && "need to consider this offset");
+			glDrawElements(GL_TRIANGLES, primitive->indices->count, accessor_to_component_type(primitive->indices), (void*)primitive->indices->buffer_view->offset);
 			// cleanup
 			for (cgltf_size attrib_index = 0; attrib_index < primitive->attributes_count; ++attrib_index) {
 				char *attrib_name = primitive->attributes[attrib_index].name;
@@ -393,13 +409,10 @@ static void draw_node(model_t *model, shader_t *shader, cgltf_node *node, mat4 m
 		}
 	}
 
-	// TODO: why not draw this? this duplicates everything
-	/*
 	for (cgltf_size child_index = 0; child_index < node->children_count; ++child_index) {
 		cgltf_node *child = node->children[child_index];
-		draw_node(model, child, modelmatrix);
+		draw_node(model, shader, child, global_transform);
 	}
-	*/
 }
 
 static void print_debug_info(cgltf_data *data) {
@@ -439,24 +452,37 @@ static void print_debug_info(cgltf_data *data) {
 	printf("Animations: %ld\n", data->animations_count);
 	for (cgltf_size anim_index = 0; anim_index < data->animations_count; ++anim_index) {
 		cgltf_animation *anim = &data->animations[anim_index];
-		printf(" - %s: %d channels, %d samplers\n", anim->name, anim->channels_count, anim->samplers_count);
+		printf(" - %s: %ld channels, %ld samplers\n", anim->name, anim->channels_count, anim->samplers_count);
 	}
 }
 
 static void update_bone_matrices(model_t *model) {
-	for (size_t i = 0; i < model->joint_count; ++i) {
+	for (usize i = 0; i < model->joint_count; ++i) {
 		mat4 global = GLM_MAT4_IDENTITY_INIT;
-		compute_global_transform(model->joint_nodes[i], global);
+		cgltf_node_transform_world(model->joint_nodes[i], (float*)global);
 		glm_mat4_mul(global, model->inverse_bind_matrices[i], model->final_joint_matrices[i]);
 	}
 }
 
 static void interpolate_vec3(cgltf_animation_sampler *sampler, float time, vec3 dest) {
 	assert(sampler != NULL);
+	// inputs
+	assert(sampler->input->component_type == cgltf_component_type_r_32f);
+	assert(sampler->input->has_min && sampler->input->has_max);
+	assert(sampler->input->is_sparse      == 0);
+	assert(sampler->input->normalized     == 0);
+	assert(sampler->input->type           == cgltf_type_scalar);
+	// outputs
+	assert(sampler->output->component_type == cgltf_component_type_r_32f);
+	assert(sampler->output->has_max        == 0 && sampler->output->has_min == 0); // output has no min/max?
+	assert(sampler->output->is_sparse      == 0);
+	assert(sampler->output->normalized     == 0);
+	assert(sampler->output->type           == cgltf_type_vec3);
 	float *keyframe_times = get_accessor_data(sampler->input);
 	usize keyframes_count = sampler->input->count;
+	assert(sampler->input->count == sampler->output->count);
 
-	assert(sampler->output->stride != 0);
+	assert(sampler->output->stride > 0);
 	int stride = sampler->output->stride;
 
 	if (time <= keyframe_times[0]) {
@@ -476,25 +502,40 @@ static void interpolate_vec3(cgltf_animation_sampler *sampler, float time, vec3 
 			break;
 		}
 	}
+	assert(i >= 0 && i < keyframes_count);
 	float t0 = keyframe_times[i];
 	float t1 = keyframe_times[i + 1];
 	float factor = (time - t0) / (t1 - t0);
 
-	float *v0 = (float*)((unsigned char*)get_accessor_data(sampler->output) + i * stride);
-	float *v1 = (float*)((unsigned char*)get_accessor_data(sampler->output) + (i + 1) * stride);
+	float *v0 = (float*)((uchar*)get_accessor_data(sampler->output) + i * stride);
+	float *v1 = (float*)((uchar*)get_accessor_data(sampler->output) + (i + 1) * stride);
 
 	vec3 a, b;
 	glm_vec3_make(v0, a);
 	glm_vec3_make(v1, b);
+	assert(sampler->interpolation == cgltf_interpolation_type_linear);
 	glm_vec3_lerp(a, b, factor, dest);
 }
 
 static void interpolate_quat(cgltf_animation_sampler *sampler, float time, versor dest) {
 	assert(sampler != NULL);
+	// inputs
+	assert(sampler->input->component_type == cgltf_component_type_r_32f);
+	assert(sampler->input->has_min && sampler->input->has_max);
+	assert(sampler->input->is_sparse == 0);
+	assert(sampler->input->normalized == 0);
+	assert(sampler->input->type == cgltf_type_scalar);
+	// outputs
+	assert(sampler->output->component_type == cgltf_component_type_r_32f);
+	assert(sampler->output->has_max == 0 && sampler->output->has_min == 0); // output has no min/max?
+	assert(sampler->output->is_sparse == 0);
+	assert(sampler->output->normalized == 0);
+	assert(sampler->output->type == cgltf_type_vec4);
 	float *keyframe_times = get_accessor_data(sampler->input);
 	usize keyframes_count = sampler->input->count;
+	assert(sampler->input->count == sampler->output->count);
 
-	assert(sampler->output->stride != 0);
+	assert(sampler->output->stride > 0);
 	int stride = sampler->output->stride;
 
 	if (time <= keyframe_times[0]) {
@@ -514,6 +555,7 @@ static void interpolate_quat(cgltf_animation_sampler *sampler, float time, verso
 			break;
 		}
 	}
+	assert(i >= 0 && i < keyframes_count);
 	float t0 = keyframe_times[i];
 	float t1 = keyframe_times[i + 1];
 	float factor = (time - t0) / (t1 - t0);
@@ -524,6 +566,7 @@ static void interpolate_quat(cgltf_animation_sampler *sampler, float time, verso
 	versor a, b;
 	glm_quat_make(v0, a);
 	glm_quat_make(v1, b);
+	assert(sampler->interpolation == cgltf_interpolation_type_linear);
 	glm_quat_slerp(a, b, factor, dest);
 }
 

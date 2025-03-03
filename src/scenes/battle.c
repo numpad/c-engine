@@ -188,7 +188,6 @@ static void         trigger_card_effect(c_card *, enum effect_trigger);
 static void system_move_cards           (ecs_iter_t *);
 static void system_move_models          (ecs_iter_t *);
 static void system_draw_cards           (ecs_iter_t *);
-static void system_draw_props           (ecs_iter_t *);
 static void system_draw_board_entities  (ecs_iter_t *);
 static void system_draw_healthbars      (ecs_iter_t *);
 static void system_enemy_turn           (ecs_iter_t *);
@@ -198,7 +197,6 @@ static void observer_on_update_handcards(ecs_iter_t *);
 ECS_SYSTEM_DECLARE(system_move_cards);
 ECS_SYSTEM_DECLARE(system_move_models);
 ECS_SYSTEM_DECLARE(system_draw_cards);
-ECS_SYSTEM_DECLARE(system_draw_props);
 ECS_SYSTEM_DECLARE(system_draw_board_entities);
 ECS_SYSTEM_DECLARE(system_draw_healthbars);
 ECS_SYSTEM_DECLARE(system_enemy_turn);
@@ -275,7 +273,6 @@ static void load(struct scene_battle *battle, struct engine *engine) {
 	g_debug_rect.w = 100.0f;
 	g_debug_rect.h = 50.0f;
 
-
 	console_log(engine, "Starting battle scene!");
 	gbuffer_init(&g_gbuffer, engine);
 
@@ -326,7 +323,6 @@ static void load(struct scene_battle *battle, struct engine *engine) {
 	ECS_SYSTEM_DEFINE(g_world, system_move_cards,          0, c_pos2d, c_handcard);
 	ECS_SYSTEM_DEFINE(g_world, system_move_models,         0, c_pos3d, c_model, c_velocity);
 	ECS_SYSTEM_DEFINE(g_world, system_draw_cards,          0, c_card, ?c_handcard, c_pos2d); _syntax_fix_label:
-	ECS_SYSTEM_DEFINE(g_world, system_draw_props,          0, c_pos3d, c_model);
 	ECS_SYSTEM_DEFINE(g_world, system_draw_board_entities, 0, c_position, c_model, ?c_tile_offset); _syntax_fix_label2:
 	ECS_SYSTEM_DEFINE(g_world, system_draw_healthbars,     0, c_position, c_health, ?c_tile_offset); _syntax_fix_label3:
 	ECS_SYSTEM_DEFINE(g_world, system_enemy_turn,          0, c_position, c_npc);
@@ -361,12 +357,14 @@ static void load(struct scene_battle *battle, struct engine *engine) {
 		ecs_set(g_world, e, c_health,    { .hp=8, .max_hp=8 });
 		ecs_set(g_world, e, c_npc,       { ._dummy=1 });
 		hexmap_tile_at(&g_hexmap, enemy_pos)->occupied_by = e;
+		g_enemy_model.animation_index = 3;
 		// player
 		struct hexcoord player_pos = { .x=2, .y=5 };
 		g_player = ecs_new_id(g_world);
 		ecs_set(g_world, g_player, c_position,  { .x=player_pos.x, .y=player_pos.y });
 		ecs_set(g_world, g_player, c_model,     { .model=&g_player_model, .scale=1.8f });
 		ecs_set(g_world, g_player, c_health,    { .hp=7, .max_hp=10 });
+		g_player_model.animation_index = 72;
 		hexmap_tile_at(&g_hexmap, player_pos)->occupied_by = g_player;
 	}
 
@@ -507,10 +505,11 @@ static void update(struct scene_battle *battle, struct engine *engine, float dt)
 	// TODO: remove, test animation
 	{
 		static double t = 0.0;
-		const double duration = 1.7;
+		const double duration = 1.1;
 		t += dt;
 		if (t > duration) t -= duration;
 		model_update_animation(&g_player_model, t);
+		model_update_animation(&g_enemy_model, t);
 	}
 
 	if (g_handcards_updated) {
@@ -544,7 +543,6 @@ static void draw(struct scene_battle *battle, struct engine *engine) {
 	vec2s player_pos = hexmap_coord_to_world_position(&g_hexmap, *player_coord);
 	hexmap_draw(&g_hexmap, &g_camera, (vec3){player_pos.x, 0.0f, player_pos.y});
 
-	ecs_run(g_world, ecs_id(system_draw_props), engine->dt, NULL);
 	ecs_run(g_world, ecs_id(system_draw_board_entities), engine->dt, NULL);
 
 	glDisable(GL_DEPTH_TEST);
@@ -883,13 +881,13 @@ static void draw_ui(pipeline_t *pipeline) {
 		// TODO: this doesn't write to gbuffer, but rather renders with no lighting.
 		glEnable(GL_DEPTH_TEST);
 		mat4 model = GLM_MAT4_IDENTITY_INIT;
-		glm_translate(model, (vec3){ -g_engine->window_width / 40.0f + 2.4f, g_engine->window_height / 40.0f - 6.25f, 0.0f });
+		glm_translate(model, (vec3){ -g_engine->window_width / 40.0f + 2.4f, g_engine->window_height / 40.0f - 5.5f, 0.0f });
 		glm_rotate_x(model, glm_rad(10.0f + cosf(g_engine->time_elapsed) * 10.0f), model);
 		glm_rotate_y(model, glm_rad(sinf(g_engine->time_elapsed) * 40.0f), model);
-		glm_scale_uni(model, 2.0f);
+		glm_scale_uni(model, 1.75f);
 		const float pr = g_engine->window_pixel_ratio;
 		glEnable(GL_SCISSOR_TEST);
-		glScissor(15.0f * pr, g_engine->window_height * pr - 81.0f * pr, 66 * pr, 66 * pr);
+		glScissor(15.0f * pr, g_engine->window_height - 81.0f * pr, 66 * pr, 66 * pr);
 		model_draw(&g_player_model, &g_character_model_shader, &g_portrait_camera, model);
 		glDisable(GL_SCISSOR_TEST);
 		glDisable(GL_DEPTH_TEST);
@@ -1316,13 +1314,13 @@ static void system_move_cards(ecs_iter_t *it) {
 }
 
 static void system_move_models(ecs_iter_t *it) {
-	c_pos3d *pos_it = ecs_field(it, c_pos3d, 1);
-	c_model *model_it = ecs_field(it, c_model, 2);
+	c_pos3d    *pos_it      = ecs_field(it, c_pos3d,    1);
+	c_model    *model_it    = ecs_field(it, c_model,    2);
 	c_velocity *velocity_it = ecs_field(it, c_velocity, 3);
 
 	for (int i = 0; i < it->count; ++i) {
-		c_pos3d *pos = &pos_it[i];
-		c_model *model = &model_it[i];
+		c_pos3d    *pos      = &pos_it[i];
+		c_model    *model    = &model_it[i];
 		c_velocity *velocity = &velocity_it[i];
 
 		glm_vec3_add(pos->raw, velocity->vel.raw, pos->raw);
@@ -1447,23 +1445,6 @@ static void system_draw_cards(ecs_iter_t *it) {
 	}
 }
 
-static void system_draw_props(ecs_iter_t *it) {
-	c_pos3d *pos_it = ecs_field(it, c_pos3d, 1);
-	c_model *models_it = ecs_field(it, c_model, 2);
-
-	for (int i = 0; i < it->count; ++i) {
-		//c_pos3d *pos = &pos_it[i];
-		//c_model *model = &models_it[i];
-
-		//mat4 model_matrix = GLM_MAT4_IDENTITY_INIT;
-		//shader_set_uniform_mat3(&g_props_model[model->model_index].shader, "u_normalMatrix", (float*)model_matrix);
-		//glm_mat4_identity(model_matrix);
-		//glm_translate(model_matrix, pos->raw);
-		//glm_scale_uni(model_matrix, model->scale);
-		//model_draw(&g_props_model[model->model_index], & &g_camera, model_matrix);
-	}
-}
-
 static void system_draw_board_entities(ecs_iter_t *it) {
 	c_position    *it_positions = ecs_field(it, c_position, 1);
 	c_model       *it_models    = ecs_field(it, c_model,    2);
@@ -1482,12 +1463,7 @@ static void system_draw_board_entities(ecs_iter_t *it) {
 
 		mat4 model_matrix = GLM_MAT4_IDENTITY_INIT;
 		shader_set_uniform_mat3(&g_character_model_shader, "u_normalMatrix", (float*)model_matrix);
-		glm_mat4_identity(model_matrix);
 		glm_translate(model_matrix, world_pos.raw);
-		// rotation
-		//versor rot_around_y;
-		//glm_quat(rot_around_y, g_engine->time_elapsed, 0.0f, 1.0f, 0.0f);
-		//glm_quat_rotate(model_matrix, rot_around_y, model_matrix);
 		glm_scale_uni(model_matrix, model->scale);
 		// TODO: either only draw characters here, or specify which shader to use?
 		model_draw(model->model, &g_character_model_shader, &g_camera, model_matrix);

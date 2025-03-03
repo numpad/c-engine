@@ -23,6 +23,7 @@ gamma correction / sRGB
 add menu button
 load gltf skeletal animation data
 calculate & draw a skeletal animation
+fix skeletal animation clipping
 
 plan pile:
 ----------
@@ -31,6 +32,11 @@ add status effects icons to ui
 
 entities die if hp <= 0
 hexmap highlight for enemy (only those in reach?) for basic attacks
+
+grass decoration, 2d planes
+decals
+depth of field
+implement SSAO
 
 characters (position & angle) tile movement along spline path, catmullrom?
 
@@ -60,7 +66,6 @@ animated models
  - animation system to handle playback, timing, endless, ... animations
 
 pathfinder edges can have increased movement cost (eg: water tile, flowing river)
-implement SSAO
 
 simple dialogue screen (just text and button, animated/each letter fades in)
 map fade-off transition at edges:

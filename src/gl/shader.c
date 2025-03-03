@@ -288,12 +288,6 @@ static GLint uniform_location(shader_t *shader, const char *uniform_name) {
 
 	GLint u_location = glGetUniformLocation(shader->program, uniform_name);
 
-#ifdef DEBUG
-	if (u_location < 0) {
-		//fprintf(stderr, "[warn] uniform \"%s\" not found.\n", uniform_name);
-	}
-#endif
-
 	return u_location;
 }
 

@@ -1,5 +1,5 @@
 #version 300 es
-precision highp float;
+precision mediump float;
 
 #define MAX_BONES 48
 #define MAX_WEIGHTS 4
@@ -11,11 +11,11 @@ uniform mat3 u_normalMatrix;
 uniform mat4 u_bone_transforms[MAX_BONES];
 uniform float u_is_rigged;
 
-in vec3 POSITION;
-in vec3 NORMAL;
-in vec2 TEXCOORD_0;
-in vec4 JOINTS_0;
-in vec4 WEIGHTS_0;
+in  vec3 POSITION;
+in  vec3 NORMAL;
+in  vec2 TEXCOORD_0;
+in ivec4 JOINTS_0;
+in  vec4 WEIGHTS_0;
 
 out vec2 v_texcoord0;
 out vec3 v_normal;
@@ -24,19 +24,17 @@ out vec3 v_view_position;
 
 void main() {
 	v_texcoord0 = TEXCOORD_0;
+	// TODO: fix normals
 	v_normal = normalize(u_normalMatrix * NORMAL);
 
-	if (int(u_is_rigged) == 1) {
-		vec4 total_position = vec4(0.0);
-		vec4 total_normal   = vec4(0.0);
-		for (int i = 0; i < MAX_WEIGHTS; ++i) {
-			vec4 local_position = u_bone_transforms[int(JOINTS_0[i])] * vec4(POSITION, 1.0);
-			total_position += local_position * WEIGHTS_0[i];
+	if (u_is_rigged > 0.5) {
+		mat4 skin_matrix =
+			WEIGHTS_0[0] * u_bone_transforms[int(JOINTS_0[0])] +
+			WEIGHTS_0[1] * u_bone_transforms[int(JOINTS_0[1])] +
+			WEIGHTS_0[2] * u_bone_transforms[int(JOINTS_0[2])] +
+			WEIGHTS_0[3] * u_bone_transforms[int(JOINTS_0[3])];
 
-			vec4 local_normal = u_bone_transforms[int(JOINTS_0[i])] * vec4(NORMAL, 0.0);
-			total_normal += local_normal * WEIGHTS_0[i];
-		}
-
+		vec4 total_position = skin_matrix * vec4(POSITION, 1.0);
 		v_world_position = (u_model * total_position).xyz;
 		v_view_position = (u_view * u_model * total_position).xyz;
 		gl_Position = u_projection * u_view * u_model * total_position;
