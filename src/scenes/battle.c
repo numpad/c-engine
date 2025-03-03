@@ -887,7 +887,7 @@ static void draw_ui(pipeline_t *pipeline) {
 		glm_scale_uni(model, 1.75f);
 		const float pr = g_engine->window_pixel_ratio;
 		glEnable(GL_SCISSOR_TEST);
-		glScissor(15.0f * pr, g_engine->window_height - 81.0f * pr, 66 * pr, 66 * pr);
+		glScissor(15.0f * pr, g_engine->window_highdpi_height - 81.0f * pr, 66 * pr, 66 * pr);
 		model_draw(&g_player_model, &g_character_model_shader, &g_portrait_camera, model);
 		glDisable(GL_SCISSOR_TEST);
 		glDisable(GL_DEPTH_TEST);
