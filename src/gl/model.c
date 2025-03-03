@@ -376,13 +376,13 @@ static void draw_node(model_t *model, shader_t *shader, cgltf_node *node, mat4 p
 						&& "No idea how to handle different strides");
 				glEnableVertexAttribArray(location);
 				switch (access->component_type) {
+				case cgltf_component_type_r_8u:
+					// Sadly(?), glVertexAttrib_I_Pointer() doesn't work on mobile,
+					// but it is completely fine to implicitly convert to float.
+					// So just fall-through here:
 				case cgltf_component_type_r_32f:
 					glVertexAttribPointer(location, accessor_to_component_size(access), accessor_to_component_type(access),
 						access->normalized, access->stride, (void *)access->buffer_view->offset);
-					break;
-				case cgltf_component_type_r_8u:
-					glVertexAttribIPointer(location, accessor_to_component_size(access), accessor_to_component_type(access),
-						access->stride, (void *)access->buffer_view->offset);
 					break;
 				case cgltf_component_type_r_8:
 				case cgltf_component_type_r_16:

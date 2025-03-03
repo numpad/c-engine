@@ -11,11 +11,11 @@ uniform mat3 u_normalMatrix;
 uniform mat4 u_bone_transforms[MAX_BONES];
 uniform float u_is_rigged;
 
-in  vec3 POSITION;
-in  vec3 NORMAL;
-in  vec2 TEXCOORD_0;
-in ivec4 JOINTS_0;
-in  vec4 WEIGHTS_0;
+in vec3 POSITION;
+in vec3 NORMAL;
+in vec2 TEXCOORD_0;
+in vec4 JOINTS_0;
+in vec4 WEIGHTS_0;
 
 out vec2 v_texcoord0;
 out vec3 v_normal;
