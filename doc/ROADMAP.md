@@ -24,6 +24,7 @@ add menu button
 load gltf skeletal animation data
 calculate & draw a skeletal animation
 fix skeletal animation clipping
+at-least-usable skeletal animation data structure
 
 plan pile:
 ----------

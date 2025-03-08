@@ -61,6 +61,13 @@ const char *str_match_bracket(const char *str, size_t len, char open, char close
 	return NULL;
 }
 
+void memswap(void *restrict a, void *restrict b, usize size) {
+	uchar tmp[size];
+	memcpy(tmp, a, size);
+	memcpy(a, b, size);
+	memcpy(b, tmp, size);
+}
+
 float calculate_angle_segment(float angle, int segments) {
 	assert(segments > 0);
 

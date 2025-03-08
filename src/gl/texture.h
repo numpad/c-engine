@@ -1,15 +1,14 @@
 #ifndef TEXTURE_H
 #define TEXTURE_H
 
-#include <SDL_opengles2.h>
+#include "gl/opengles3.h"
 
-typedef struct texture_s texture_t;
-struct texture_s {
+typedef struct texture_s {
 	GLuint texture;
 
 	unsigned int width, height;
 	GLint internal_format;
-};
+} texture_t;
 
 #define TEXTURE_SETTINGS_INIT      \
 	{                              \

@@ -227,6 +227,9 @@ static fontatlas_t           g_card_font;
 static model_t               g_player_model;
 static model_t               g_enemy_model;
 static model_t               g_props_model[4];
+static model_skeleton_t      g_portrait_skeleton;
+static model_skeleton_t      g_player_skeleton;
+static model_skeleton_t      g_enemy_skeleton;
 static float                 g_pickup_next_card;
 static struct camera         g_camera;
 static struct camera         g_portrait_camera;
@@ -276,12 +279,17 @@ static void load(struct scene_battle *battle, struct engine *engine) {
 	console_log(engine, "Starting battle scene!");
 	gbuffer_init(&g_gbuffer, engine);
 
+	// load character models
 	static int loads = 0;
 	const char *models[] = {"res/models/characters/Knight.glb", "res/models/characters/Mage.glb", "res/models/characters/Barbarian.glb", "res/models/characters/Rogue.glb"};
 	int load_error = model_init_from_file(&g_player_model, models[loads++ % 4]);
 	assert(load_error == 0);
 	load_error = model_init_from_file(&g_enemy_model, "res/models/characters/Skeleton_Minion.glb");
 	assert(load_error == 0);
+	// load character skeletons
+	model_skeleton_init_from_model(&g_portrait_skeleton, &g_player_model);
+	model_skeleton_init_from_model(&g_player_skeleton, &g_player_model);
+	model_skeleton_init_from_model(&g_enemy_skeleton, &g_enemy_model);
 
 	// some random props
 	const char *fun_models[] = {
@@ -301,10 +309,7 @@ static void load(struct scene_battle *battle, struct engine *engine) {
 	camera_init_default(&g_camera, engine->window_width, engine->window_height);
 	glm_translate(g_camera.view, (vec3){ -g_hexmap.tile_offsets.x * 3.25f, 0.0f, g_hexmap.tile_offsets.y * -3.0f });
 	camera_init_default(&g_portrait_camera, engine->window_width, engine->window_height);
-	glm_look((vec3){ 0.0f, 0.0f, 10.0f }, (vec3){ 0.0f, 0.0f, -1.0f }, (vec3){ 0.0f, 1.0f, 0.0f }, (float*)&g_portrait_camera.view);
-
-	glEnable(GL_CULL_FACE);
-	glCullFace(GL_BACK);
+	glm_look((vec3){ 0.0f, 0.0f, 10.0f }, (vec3){ 0.0f, 0.0f, -1.0f }, (vec3){ 0.0f, 1.0f, 0.0f }, g_portrait_camera.view);
 
 	// ecs
 	g_world = ecs_init();
@@ -357,14 +362,15 @@ static void load(struct scene_battle *battle, struct engine *engine) {
 		ecs_set(g_world, e, c_health,    { .hp=8, .max_hp=8 });
 		ecs_set(g_world, e, c_npc,       { ._dummy=1 });
 		hexmap_tile_at(&g_hexmap, enemy_pos)->occupied_by = e;
-		g_enemy_model.animation_index = 3;
+		g_enemy_skeleton.animation_index = 3;
 		// player
 		struct hexcoord player_pos = { .x=2, .y=5 };
 		g_player = ecs_new_id(g_world);
 		ecs_set(g_world, g_player, c_position,  { .x=player_pos.x, .y=player_pos.y });
 		ecs_set(g_world, g_player, c_model,     { .model=&g_player_model, .scale=1.8f });
 		ecs_set(g_world, g_player, c_health,    { .hp=7, .max_hp=10 });
-		g_player_model.animation_index = 72;
+		g_portrait_skeleton.animation_index = 72;
+		g_player_skeleton.animation_index = 0;
 		hexmap_tile_at(&g_hexmap, player_pos)->occupied_by = g_player;
 	}
 
@@ -464,6 +470,10 @@ static void load(struct scene_battle *battle, struct engine *engine) {
 	g_place_card_sfx = Mix_LoadWAV("res/sounds/place_card.ogg");
 	g_pick_card_sfx = Mix_LoadWAV("res/sounds/cardSlide5.ogg");
 	g_slide_card_sfx = Mix_LoadWAV("res/sounds/cardSlide7.ogg");
+
+	// gl state
+	glEnable(GL_CULL_FACE);
+	glCullFace(GL_BACK);
 }
 
 
@@ -498,6 +508,10 @@ static void destroy(struct scene_battle *battle, struct engine *engine) {
 
 	model_destroy(&g_player_model);
 	model_destroy(&g_enemy_model);
+	model_skeleton_destroy(&g_portrait_skeleton);
+	model_skeleton_destroy(&g_player_skeleton);
+	model_skeleton_destroy(&g_enemy_skeleton);
+
 	gbuffer_destroy(&g_gbuffer);
 }
 
@@ -508,8 +522,9 @@ static void update(struct scene_battle *battle, struct engine *engine, float dt)
 		const double duration = 1.1;
 		t += dt;
 		if (t > duration) t -= duration;
-		model_update_animation(&g_player_model, t);
-		model_update_animation(&g_enemy_model, t);
+		model_skeleton_animate(&g_portrait_skeleton, t);
+		model_skeleton_animate(&g_enemy_skeleton, t);
+		model_skeleton_animate(&g_player_skeleton, t);
 	}
 
 	if (g_handcards_updated) {
@@ -888,7 +903,7 @@ static void draw_ui(pipeline_t *pipeline) {
 		const float pr = g_engine->window_pixel_ratio;
 		glEnable(GL_SCISSOR_TEST);
 		glScissor(15.0f * pr, g_engine->window_highdpi_height - 81.0f * pr, 66 * pr, 66 * pr);
-		model_draw(&g_player_model, &g_character_model_shader, &g_portrait_camera, model);
+		model_draw(&g_player_model, &g_character_model_shader, &g_portrait_camera, model, &g_portrait_skeleton);
 		glDisable(GL_SCISSOR_TEST);
 		glDisable(GL_DEPTH_TEST);
 
@@ -1466,7 +1481,13 @@ static void system_draw_board_entities(ecs_iter_t *it) {
 		glm_translate(model_matrix, world_pos.raw);
 		glm_scale_uni(model_matrix, model->scale);
 		// TODO: either only draw characters here, or specify which shader to use?
-		model_draw(model->model, &g_character_model_shader, &g_camera, model_matrix);
+		// TODO: obviously remove:
+		if (model->model == &g_player_model)
+			model_draw(model->model, &g_character_model_shader, &g_camera, model_matrix, &g_player_skeleton);
+		else if (model->model == &g_enemy_model)
+			model_draw(model->model, &g_character_model_shader, &g_camera, model_matrix, &g_enemy_skeleton);
+		else
+			model_draw(model->model, &g_character_model_shader, &g_camera, model_matrix, NULL);
 
 		if (g_debug_draw_pathfinder) {
 			// Show components of this entity

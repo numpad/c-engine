@@ -11,8 +11,6 @@
 #include "gl/camera.h"
 #include "gl/shader.h"
 
-#define MODEL_ANIMATION_NONE ((usize)-1)
-
 ///////////////
 //  STRUCTS  //
 ///////////////
@@ -28,13 +26,12 @@ static const char* attribute_type_to_name(cgltf_attribute_type type);
 static GLint accessor_to_component_type(cgltf_accessor *access);
 static const char *accessor_to_component_type_name(cgltf_accessor *access);
 
-static void draw_node(model_t *model, shader_t *shader, cgltf_node *node, mat4 modelmatrix);
-static void print_debug_info(cgltf_data *data);
-
-static void update_bone_matrices(model_t *model);
-
+static void draw_node(model_t *model, shader_t *shader, cgltf_node *node, mat4 modelmatrix, model_skeleton_t *skeleton);
 static void interpolate_vec3(cgltf_animation_sampler *sampler, float time, vec3 dest);
 static void interpolate_quat(cgltf_animation_sampler *sampler, float time, versor dest);
+
+static void swap_node_transforms(cgltf_node *original, skeleton_joint_t *actual);
+static float calculate_animation_duration(model_t *, usize animation_index);
 
 //////////////
 //  PUBLIC  //
@@ -48,12 +45,6 @@ int model_init_from_file(model_t *model, const char *path) {
 	assert(sizeof(mat4) == (16 * sizeof(float))); // General assumption...
 
 	model->gltf_data             = NULL;
-	model->joint_count           = 0;
-	model->joint_nodes           = NULL;
-	model->inverse_bind_matrices = NULL;
-	model->final_joint_matrices  = NULL;
-	model->animation_index       = MODEL_ANIMATION_NONE;
-	model->is_animated           = 0;
 	glGenVertexArrays(1, &model->vao);
 
 	cgltf_options options = {0};
@@ -119,82 +110,42 @@ int model_init_from_file(model_t *model, const char *path) {
 		}
 	}
 
-	assert(data->skins_count <= 1 && "Cannot handle multiple skins...");
-
-	if (data->skins_count > 0) {
-		cgltf_skin *skin             = &data->skins[0];
-		model->is_animated           = 1;
-		model->joint_count           = skin->joints_count;
-		assert(model->joint_count < 48 && "model vertex shader has 48 joints hardcoded!");
-		model->joint_nodes           = malloc(sizeof(cgltf_node*) * model->joint_count);
-		model->inverse_bind_matrices = malloc(sizeof(mat4)        * model->joint_count);
-		model->final_joint_matrices  = malloc(sizeof(mat4)        * model->joint_count);
-
-		if (skin->inverse_bind_matrices) {
-			uchar *ibm_ptr = (uchar *)get_accessor_data(skin->inverse_bind_matrices);
-			for (usize i = 0; i < model->joint_count; ++i) {
+	// skin
+	model->inverse_bind_matrices = NULL;
+	model->skin                  = NULL;
+	assert(data->skins_count <= 1 && "Multiple skins are not supported");
+	if (data->skins_count == 1) {
+		model->skin                  = &data->skins[0];
+		assert(model->skin->joints_count > 0 && "We can expect one bone at least, right!?");
+		assert(model->skin->joints_count <= 48 && "More than 48 joints are not supported!"); // Need to change the model vertex shader if this number changes.
+		model->inverse_bind_matrices = malloc(sizeof(mat4)        * model->skin->joints_count);
+		model->joint_nodes           = malloc(sizeof(cgltf_node*) * model->skin->joints_count);
+		// load IBMs & bones/joint nodes
+		if (model->skin->inverse_bind_matrices) {
+			assert(model->skin->inverse_bind_matrices->count == model->skin->joints_count && "Number of inverse bind matrices do not match number of joints.");
+			uchar *ibm_ptr = (uchar *)get_accessor_data(model->skin->inverse_bind_matrices);
+			for (usize i = 0; i < model->skin->joints_count; ++i) {
 				glm_mat4_make((float*)(ibm_ptr + i * sizeof(mat4)), model->inverse_bind_matrices[i]);
 			}
 		} else {
-			for (usize i = 0; i < model->joint_count; ++i) {
+			for (usize i = 0; i < model->skin->joints_count; ++i) {
 				glm_mat4_identity(model->inverse_bind_matrices[i]);
 			}
 		}
-
-		for (usize i = 0; i < model->joint_count; ++i) {
-			model->joint_nodes[i] = skin->joints[i];
+		for (usize i = 0; i < model->skin->joints_count; ++i) {
+			model->joint_nodes[i] = model->skin->joints[i];
 		}
-
-		update_bone_matrices(model);
 	}
 
 	glBindVertexArray(0);
 	return 0;
 }
 
-void model_update_animation(model_t *model, float time) {
+void model_draw(model_t *model, shader_t *shader, struct camera *camera, mat4 modelmatrix, model_skeleton_t *skeleton) {
 	assert(model != NULL);
-	assert(model->gltf_data != NULL);
-	assert(model->gltf_data->animations_count > 0 && "Need at least one animation.");
-	assert(model->animation_index != MODEL_ANIMATION_NONE);
-
-	cgltf_animation *anim = &model->gltf_data->animations[model->animation_index];
-	for (size_t i = 0; i < anim->channels_count; ++i) {
-		cgltf_animation_channel *channel = &anim->channels[i];
-		cgltf_animation_sampler *sampler = channel->sampler;
-		cgltf_node              *node    = channel->target_node;
-		switch (channel->target_path) {
-			case cgltf_animation_path_type_translation: {
-				vec3 trans;
-				interpolate_vec3(sampler, time, trans);
-				memcpy(node->translation, &trans, sizeof(trans));
-				break;
-			}
-			case cgltf_animation_path_type_rotation: {
-				versor rot;
-				interpolate_quat(sampler, time, rot);
-				memcpy(node->rotation, &rot, sizeof(rot));
-				break;
-			}
-			case cgltf_animation_path_type_scale: {
-				vec3 scale;
-				interpolate_vec3(sampler, time, scale);
-				memcpy(node->scale, &scale, sizeof(scale));
-				break;
-			}
-			case cgltf_animation_path_type_invalid:
-			case cgltf_animation_path_type_weights:
-			case cgltf_animation_path_type_max_enum:
-				assert(0 && "this animation path type is not implemented!");
-				break;
-		}
-	}
-
-	update_bone_matrices(model);
-}
-
-void model_draw(model_t *model, shader_t *shader, struct camera *camera, mat4 modelmatrix) {
-	assert(model != NULL);
+	assert(shader != NULL);
+	assert(camera != NULL);
+	assert(skeleton == NULL || skeleton->model == model);
 
 	glBindVertexArray(model->vao);
 	shader_use(shader);
@@ -203,15 +154,16 @@ void model_draw(model_t *model, shader_t *shader, struct camera *camera, mat4 mo
 	shader_set_uniform_texture(shader, "u_diffuse",    GL_TEXTURE0, &model->texture0);
 	shader_set_uniform_mat4(shader,    "u_projection", (float*)&camera->projection);
 	shader_set_uniform_mat4(shader,    "u_view",       (float*)&camera->view);
-	if (model->is_animated) {
+	if (skeleton) {
+		// TODO: Reset when skeleton is NULL?
 		GLint u_bone_transforms = glGetUniformLocation(shader->program, "u_bone_transforms");
-		glUniformMatrix4fv(u_bone_transforms, model->joint_count, GL_FALSE, (const GLfloat *)model->final_joint_matrices);
+		glUniformMatrix4fv(u_bone_transforms, model->skin->joints_count, GL_FALSE, (const GLfloat *)skeleton->final_joint_matrices);
 	}
 
 	cgltf_scene *scene = model->gltf_data->scene;
 	assert(scene != NULL);
 	for (usize i = 0; i < scene->nodes_count; ++i) {
-		draw_node(model, shader, scene->nodes[i], modelmatrix);
+		draw_node(model, shader, scene->nodes[i], modelmatrix, skeleton);
 	}
 
 	glBindVertexArray(0);
@@ -219,38 +171,134 @@ void model_draw(model_t *model, shader_t *shader, struct camera *camera, mat4 mo
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 }
 
-
 void model_destroy(model_t *model) {
 	assert(model != NULL);
-
-	if (model->is_animated == 1) {
-		free(model->joint_nodes);
+	if (model->skin != NULL) {
 		free(model->inverse_bind_matrices);
-		free(model->final_joint_matrices);
+		free(model->joint_nodes);
 	}
-
 	glDeleteBuffers(model->gltf_data->buffers_count, model->vertex_buffers);
 	glDeleteBuffers(model->gltf_data->buffers_count, model->index_buffers);
 	cgltf_free(model->gltf_data);
 	glDeleteVertexArrays(1, &model->vao);
-
 	texture_destroy(&model->texture0);
 }
 
-void model_set_node_hidden(model_t *model, const char *name, int is_hidden) {
-	assert(model != NULL);
-	assert(name != NULL);
+// Skeleton
 
-#ifdef DEBUG
-	int node_with_name_exists = 0;
-#endif
+void model_skeleton_init_from_model(model_skeleton_t *skeleton, const model_t *model) {
+	assert(skeleton != NULL);
+	assert(model != NULL && model->gltf_data != NULL);
 
-	for (cgltf_size node_index = 0; node_index < model->gltf_data->nodes_count; ++node_index) {
+	skeleton->model                 = model;
+	skeleton->animation_index       = MODEL_ANIMATION_NONE;
+	skeleton->joint_node_transforms = calloc(model->gltf_data->nodes_count, sizeof(skeleton_joint_t));
+	skeleton->final_joint_matrices  = malloc(model->skin->joints_count * sizeof(mat4));
+
+	for (usize i = 0; i < model->gltf_data->nodes_count; ++i) {
+		cgltf_node       *node             = &model->gltf_data->nodes[i];
+		usize             joint_node_index = cgltf_node_index(skeleton->model->gltf_data, node);
+		skeleton_joint_t *joint            = &skeleton->joint_node_transforms[joint_node_index];
+
+		memcpy(&joint->matrix,      node->matrix,      sizeof(mat4));
+		memcpy(&joint->translation, node->translation, sizeof(vec3));
+		memcpy(&joint->rotation,    node->rotation,    sizeof(versor));
+		memcpy(&joint->scale,       node->scale,       sizeof(vec3));
 	}
 
-#ifdef DEBUG
-	assert(node_with_name_exists == 1);
-#endif
+	// Set the initial joint matrices.
+	for (usize i = 0; i < skeleton->model->skin->joints_count; ++i) {
+		mat4 global;
+		cgltf_node_transform_world(skeleton->model->joint_nodes[i], (float*)global);
+		glm_mat4_mul(global, skeleton->model->inverse_bind_matrices[i], skeleton->final_joint_matrices[i]);
+	}
+}
+
+void model_skeleton_destroy(model_skeleton_t *skeleton) {
+	assert(skeleton != NULL);
+	free(skeleton->final_joint_matrices);
+	free(skeleton->joint_node_transforms);
+}
+
+void model_skeleton_animate(model_skeleton_t *skeleton, float time) {
+	assert(skeleton != NULL);
+
+	// TODO: Do we want to allow calling with no animation?
+	//       Pros: easier to handle
+	//       Cons: a bit too implicit?
+	assert(skeleton->animation_index != MODEL_ANIMATION_NONE);
+	assert(skeleton->model != NULL);
+	assert(skeleton->model->gltf_data != NULL);
+	assert(skeleton->model->gltf_data->animations_count > 0 && "Need at least one animation.");
+	assert(skeleton->animation_index < skeleton->model->gltf_data->animations_count);
+	cgltf_animation *anim = &skeleton->model->gltf_data->animations[skeleton->animation_index];
+	for (usize i = 0; i < anim->channels_count; ++i) {
+		cgltf_animation_channel *channel          = &anim->channels[i];
+		cgltf_animation_sampler *sampler          = channel->sampler;
+		cgltf_node              *node             = channel->target_node;
+		usize                    joint_node_index = cgltf_node_index(skeleton->model->gltf_data, node);
+		skeleton_joint_t        *joint            = &skeleton->joint_node_transforms[joint_node_index];
+		switch (channel->target_path) {
+			case cgltf_animation_path_type_translation:
+				interpolate_vec3(sampler, time, joint->translation);
+				break;
+			case cgltf_animation_path_type_rotation:
+				interpolate_quat(sampler, time, joint->rotation);
+				break;
+			case cgltf_animation_path_type_scale:
+				interpolate_vec3(sampler, time, joint->scale);
+				break;
+			case cgltf_animation_path_type_invalid:
+			case cgltf_animation_path_type_weights:
+			case cgltf_animation_path_type_max_enum:
+				assert(0 && "this animation path type is not implemented!");
+				break;
+		}
+	}
+
+	// The logic here is pretty meh, the main reason for this is that I
+	// don't want to recreate the joint/bone hierarchy in the skeleton,
+	// as cgltf already provides this. And I'm a bit lazy atm.
+	// cgltf also provides the cgltf_node_transform_local()/-_world()
+	// functions.
+	// In the future I'd like to fully control the hierarchy myself,
+	// the skeleton should probably also store the bone hierarchy in
+	// BFS order, so I can later just iterate over it and calculate
+	// the transformations. This would allow me to just use
+	// _node_transform_local() like draw_node() does, making less
+	// duplicate/unnecessary mat4 computations.
+	//
+	// For now this is sufficient.
+	// The gist is that our ACTUAL bone & node transformations
+	// are stored in the skeleton->joint_node_transforms.
+	// Now, when I calculate the final mat4's, we copy the ACTUAL
+	// transformations into the cgltf node, as we rely on their
+	// node->parent relationship in _node_transform_world().
+	// After the mat4's are calculated, we write the original values back into
+	// the nodes, and the ACTUAL values back into our transformations.
+
+	// move skeleton transforms into gltf hierarchy
+	const usize nodes_count = skeleton->model->gltf_data->nodes_count;
+	for (usize i = 0; i < nodes_count; ++i) {
+		cgltf_node *joint_node = &skeleton->model->gltf_data->nodes[i];
+		usize joint_node_index = cgltf_node_index(skeleton->model->gltf_data, joint_node);
+		skeleton_joint_t *joint = &skeleton->joint_node_transforms[joint_node_index];
+		swap_node_transforms(joint_node, joint);
+	}
+	// calculate final transforms for joints
+	for (usize i = 0; i < skeleton->model->skin->joints_count; ++i) {
+		cgltf_node *joint_node = skeleton->model->skin->joints[i];
+		mat4 global;
+		cgltf_node_transform_world(joint_node, (float*)global);
+		glm_mat4_mul(global, skeleton->model->inverse_bind_matrices[i], skeleton->final_joint_matrices[i]);
+	}
+	// restore transforms
+	for (usize i = 0; i < nodes_count; ++i) {
+		cgltf_node *joint_node = &skeleton->model->gltf_data->nodes[i];
+		usize joint_node_index = cgltf_node_index(skeleton->model->gltf_data, joint_node);
+		skeleton_joint_t *joint = &skeleton->joint_node_transforms[joint_node_index];
+		swap_node_transforms(joint_node, joint);
+	}
 }
 
 
@@ -277,7 +325,6 @@ static GLint accessor_to_component_size(cgltf_accessor *access) {
 		case cgltf_type_max_enum:
 			break;
 	}
-
 	assert(num_components != -1);
 	return num_components;
 }
@@ -347,13 +394,23 @@ static const char *accessor_to_component_type_name(cgltf_accessor *access) {
 	return name;
 }
 
-static void draw_node(model_t *model, shader_t *shader, cgltf_node *node, mat4 parent_transform) {
+static void draw_node(model_t *model, shader_t *shader, cgltf_node *node, mat4 parent_transform, model_skeleton_t *skeleton) {
 	mat4 global_transform;
-	cgltf_node_transform_local(node, (float*)global_transform);
+	if (skeleton) {
+		// With a skeleton we need to use our custom node transforms,
+		// without one we just draw the model as is.
+		usize joint_node_index = cgltf_node_index(model->gltf_data, node);
+		skeleton_joint_t *joint = &skeleton->joint_node_transforms[joint_node_index];
+		swap_node_transforms(node, joint);
+		cgltf_node_transform_local(node, (float*)global_transform);
+		swap_node_transforms(node, joint);
+	} else {
+		cgltf_node_transform_local(node, (float*)global_transform);
+	}
 	glm_mat4_mul(parent_transform, global_transform, global_transform);
 
 	shader_set_uniform_mat4(shader, "u_model", (float*)global_transform);
-	shader_set_uniform_float(shader, "u_is_rigged", node->skin ? 1 : 0);
+	shader_set_uniform_float(shader, "u_is_rigged", (node->skin && skeleton) ? 1 : 0);
 
 	if (node->mesh) {
 		cgltf_mesh *mesh = node->mesh;
@@ -411,56 +468,7 @@ static void draw_node(model_t *model, shader_t *shader, cgltf_node *node, mat4 p
 
 	for (cgltf_size child_index = 0; child_index < node->children_count; ++child_index) {
 		cgltf_node *child = node->children[child_index];
-		draw_node(model, shader, child, global_transform);
-	}
-}
-
-static void print_debug_info(cgltf_data *data) {
-	printf("-------------------\n");
-	// find images
-	for (cgltf_size i = 0; i < data->materials_count; ++i) {
-		printf("Material #%ld:\n", i);
-		printf(" - name : \"%s\"\n", data->materials[i].name);
-	}
-	for (cgltf_size i = 0; i < data->images_count; ++i) {
-		printf("Image #%ld:\n", i);
-		printf(" - name      : \"%s\"\n", data->images[i].name);
-		printf(" - uri       : %s\n", data->images[i].uri);
-		printf(" - mime-type : %s\n", data->images[i].mime_type);
-		if (data->images[i].buffer_view) {
-			printf(" - size      : %zu\n", data->images[i].buffer_view->size);
-		} else {
-			printf(" - size      : (no buffer view)\n");
-		}
-	}
-
-	for (cgltf_size i = 0; i < data->textures_count; ++i) {
-		printf("Texture #%ld:\n", i);
-		printf(" - name : \"%s\"\n", data->textures[i].name);
-	}
-
-	for (cgltf_size i = 0; i < data->samplers_count; ++i) {
-		printf("Sampler #%ld:\n", i);
-		printf(" - name : \"%s\"\n", data->samplers[i].name);
-	}
-
-	// animations
-	for (cgltf_size skin_index = 0; skin_index < data->skins_count; ++skin_index) {
-		cgltf_skin *skin = &data->skins[skin_index];
-		printf("Skin: %s\n", skin->name);
-	}
-	printf("Animations: %ld\n", data->animations_count);
-	for (cgltf_size anim_index = 0; anim_index < data->animations_count; ++anim_index) {
-		cgltf_animation *anim = &data->animations[anim_index];
-		printf(" - %s: %ld channels, %ld samplers\n", anim->name, anim->channels_count, anim->samplers_count);
-	}
-}
-
-static void update_bone_matrices(model_t *model) {
-	for (usize i = 0; i < model->joint_count; ++i) {
-		mat4 global = GLM_MAT4_IDENTITY_INIT;
-		cgltf_node_transform_world(model->joint_nodes[i], (float*)global);
-		glm_mat4_mul(global, model->inverse_bind_matrices[i], model->final_joint_matrices[i]);
+		draw_node(model, shader, child, global_transform, skeleton);
 	}
 }
 
@@ -568,5 +576,30 @@ static void interpolate_quat(cgltf_animation_sampler *sampler, float time, verso
 	glm_quat_make(v1, b);
 	assert(sampler->interpolation == cgltf_interpolation_type_linear);
 	glm_quat_slerp(a, b, factor, dest);
+}
+
+static void swap_node_transforms(cgltf_node *original, skeleton_joint_t *actual) {
+	memswap(actual->matrix,      original->matrix,      sizeof(mat4));
+	memswap(actual->translation, original->translation, sizeof(vec3));
+	memswap(actual->rotation,    original->rotation,    sizeof(versor));
+	memswap(actual->scale,       original->scale,       sizeof(vec3));
+}
+
+static float calculate_animation_duration(model_t *model, usize animation_index) {
+	assert(model != NULL);
+	assert(animation_index != MODEL_ANIMATION_NONE);
+	assert(animation_index < model->gltf_data->animations_count);
+
+	float max_keyframe = -1.0f;
+	cgltf_animation *anim = &model->gltf_data->animations[animation_index];
+	for (usize i = 0; i < anim->channels_count; ++i) {
+		cgltf_animation_channel *channel = &anim->channels[i];
+		cgltf_animation_sampler *sampler = channel->sampler;
+		float *keyframes                 = get_accessor_data(sampler->input);
+		usize keyframes_count            = sampler->input->count;
+		assert(keyframes[0] < 0.0001f && "We assume all animations start at keyframe 0.0s, but this is probably not important?");
+		max_keyframe = fmaxf(max_keyframe, keyframes[keyframes_count - 1]);
+	}
+	return max_keyframe;
 }
 

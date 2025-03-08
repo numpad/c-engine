@@ -79,6 +79,9 @@ vec3s screen_to_world(float vw, float vh, mat4 projection, mat4 view, float scre
 // string utils
 const char *str_match_bracket(const char *str, size_t len, char open, char close);
 
+// memory
+void memswap(void *restrict a, void *restrict b, usize size);
+
 // gl utils
 int gl_check_error(const char *file, int line);
 int gl_check_framebuffer(const char *file, int line);

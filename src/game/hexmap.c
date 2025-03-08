@@ -192,7 +192,7 @@ void hexmap_draw(struct hexmap *map, struct camera *camera, vec3 player_pos) {
 	//		mat4 model = GLM_MAT4_IDENTITY_INIT;
 	//		glm_translate(model, (vec3){ wp.x, 40.0f, wp.y });
 	//		glm_scale(model, (vec3){ 100.0f, 100.0f, 100.0f});
-	//		model_draw(&map->models[1], &map->tile_shader, camera, model);
+	//		model_draw(&map->models[1], &map->tile_shader, camera, model, NULL);
 	//	}
 	//}
 	
@@ -219,10 +219,10 @@ void hexmap_draw(struct hexmap *map, struct camera *camera, vec3 player_pos) {
 		shader_set_uniform_vec3(&map->tile_shader, "u_player_world_pos", player_pos);
 
 		usize model_index = map->tiles[i].tile;
-		model_draw(&map->models[model_index], &map->tile_shader, camera, model);
+		model_draw(&map->models[model_index], &map->tile_shader, camera, model, NULL);
 		// Draw water for waterless coast tiles
 		if (model_index >= 2 && model_index <= 6) {
-			model_draw(&map->models[1], &map->tile_shader, camera, model);
+			model_draw(&map->models[1], &map->tile_shader, camera, model, NULL);
 		}
 	}
 }
