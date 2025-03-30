@@ -29,6 +29,7 @@ at-least-usable skeletal animation data structure
 plan pile:
 ----------
 when player attacks with multiple basic attacks, let them select the card. valid cards get highlighted.
+when player plays attack card, let them select the enemy
 add status effects icons to ui
 
 entities die if hp <= 0

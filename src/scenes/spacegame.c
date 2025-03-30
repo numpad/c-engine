@@ -1,4 +1,4 @@
-#include "brickbreaker.h"
+#include "spacegame.h"
 
 #include <assert.h>
 #include <box2d/box2d.h>
@@ -392,7 +392,7 @@ void draw_gs_flying(void) {
 
 // Callbacks
 
-static void load(struct scene_brickbreaker_s *scene, struct engine *engine) {
+static void load(struct scene_spacegame_s *scene, struct engine *engine) {
 	vg = engine->vg;
 	g_engine = engine;
 	wsize = (vec2s){ .x = engine->window_width, .y = engine->window_height };
@@ -427,10 +427,10 @@ static void load(struct scene_brickbreaker_s *scene, struct engine *engine) {
 	engine_set_clear_color(0.16f, 0.16f, 0.16f);
 }
 
-static void destroy(struct scene_brickbreaker_s *scene, struct engine *engine) {
+static void destroy(struct scene_spacegame_s *scene, struct engine *engine) {
 }
 
-static void update(struct scene_brickbreaker_s *scene, struct engine *engine, float dt) {
+static void update(struct scene_spacegame_s *scene, struct engine *engine, float dt) {
 	wsize = (vec2s){ .x = engine->window_width, .y = engine->window_height };
 
 	const float FIXED_TIME_STEP = (1.0f / 60.0f);
@@ -462,7 +462,7 @@ static void update(struct scene_brickbreaker_s *scene, struct engine *engine, fl
 	g_time_elapsed += dt;
 }
 
-static void draw(struct scene_brickbreaker_s *scene, struct engine *engine) {
+static void draw(struct scene_spacegame_s *scene, struct engine *engine) {
 	draw_background_stars();
 
 	// Draw Asteroids
@@ -500,7 +500,7 @@ static void draw(struct scene_brickbreaker_s *scene, struct engine *engine) {
 	nvgText(vg, 10.0f, wsize.y - 130.0f, txt_money, NULL);
 }
 
-void scene_brickbreaker_init(struct scene_brickbreaker_s *scene, struct engine *engine) {
+void scene_spacegame_init(struct scene_spacegame_s *scene, struct engine *engine) {
 	scene_init((struct scene_s *)scene, engine);
 
 	scene->base.load    = (scene_load_fn)load;

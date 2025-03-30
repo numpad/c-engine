@@ -13,7 +13,7 @@
 #include "scenes/intro.h"
 #include "scenes/menu.h"
 #include "scenes/battle.h"
-#include "scenes/brickbreaker.h"
+#include "scenes/spacegame.h"
 #include "gl/shader.h"
 #include "gui/console.h"
 #include "net/message.h"
@@ -180,10 +180,10 @@ struct engine *engine_new(int argc, char **argv) {
 		struct scene_battle *battle = malloc(sizeof(struct scene_battle));
 		scene_battle_init(battle, engine);
 		engine_setscene(engine, (struct scene_s *)battle);
-	} else if (is_argv_set(argc, argv, "--scene=asteroids")) {
-		struct scene_brickbreaker_s *brickbreaker = malloc(sizeof(struct scene_brickbreaker_s));
-		scene_brickbreaker_init(brickbreaker, engine);
-		engine_setscene(engine, (struct scene_s *)brickbreaker);
+	} else if (is_argv_set(argc, argv, "--scene=spacegame")) {
+		struct scene_spacegame_s *spacegame = malloc(sizeof(struct scene_spacegame_s));
+		scene_spacegame_init(spacegame, engine);
+		engine_setscene(engine, (struct scene_s *)spacegame);
 	} else {
 		struct scene_intro_s *intro = malloc(sizeof(struct scene_intro_s));
 		scene_intro_init(intro, engine);

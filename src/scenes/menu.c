@@ -13,7 +13,7 @@
 #include "scenes/battle.h"
 #include "scenes/experiments.h"
 #include "scenes/planes.h"
-#include "scenes/brickbreaker.h"
+#include "scenes/spacegame.h"
 #include "game/isoterrain.h"
 #include "game/background.h"
 #include "gui/ugui.h"
@@ -582,8 +582,8 @@ static void switch_to_planes_scene(struct engine *engine) {
 }
 
 static void switch_to_asteroid_scene(struct engine *engine) {
-	struct scene_brickbreaker_s *scene = malloc(sizeof(struct scene_brickbreaker_s));
-	scene_brickbreaker_init(scene, engine);
+	struct scene_spacegame_s *scene = malloc(sizeof(struct scene_spacegame_s));
+	scene_spacegame_init(scene, engine);
 	g_next_scene = (struct scene_s *)scene;
 	platform_vibrate(PLATFORM_VIBRATE_TAP);
 }
