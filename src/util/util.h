@@ -31,6 +31,13 @@ struct camera;
 #define GL_CHECK_ERROR() gl_check_error(__FILE__, __LINE__)
 #define GL_CHECK_FRAMEBUFFER() gl_check_framebuffer(__FILE__, __LINE__)
 
+#ifdef NDEBUG
+#define gl_check (void)
+#else
+#define gl_check \
+	for (int _i = (GL_CHECK_ERROR(), 0); !_i; GL_CHECK_ERROR(), _i++)
+#endif
+
 #define UTIL_IS_GL_FILTER_MIPMAP(filter)      \
 	(   (filter) == GL_NEAREST_MIPMAP_NEAREST \
 	 || (filter) == GL_NEAREST_MIPMAP_LINEAR  \

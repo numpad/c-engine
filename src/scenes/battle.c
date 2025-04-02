@@ -22,6 +22,7 @@
 #include "gl/model.h"
 #include "gl/gbuffer.h"
 #include "gl/camera.h"
+#include "gl/particle_system.h"
 #include "game/background.h"
 #include "game/hexmap.h"
 #include "gui/console.h"
@@ -220,6 +221,7 @@ static shader_t              g_character_model_shader;
 static pipeline_t            g_cards_pipeline;
 static pipeline_t            g_ui_pipeline;
 static pipeline_t            g_text_pipeline;
+static particle_renderer_t   g_particle_renderer;
 static ecs_world_t          *g_world;
 static ecs_entity_t          g_selected_card;
 static ecs_entity_t          g_player;
@@ -278,6 +280,7 @@ static void load(struct scene_battle *battle, struct engine *engine) {
 
 	console_log(engine, "Starting battle scene!");
 	gbuffer_init(&g_gbuffer, engine);
+	particle_renderer_init(&g_particle_renderer);
 
 	// load character models
 	static int loads = 0;
@@ -538,6 +541,14 @@ static void update(struct scene_battle *battle, struct engine *engine, float dt)
 	ecs_run(g_world, ecs_id(system_move_models),     g_engine->dt, NULL);
 	ecs_run(g_world, ecs_id(system_move_along_path), g_engine->dt, NULL);
 
+	if (INPUT_DRAG_IS_DOWN(g_engine->input_drag)) {
+		vec3s mouse = screen_to_world(g_engine->window_width, g_engine->window_height, g_camera.projection, g_camera.view, g_engine->input_drag.x, g_engine->input_drag.y);
+		usize i = particle_renderer_spawn(&g_particle_renderer);
+		struct particle_instance_data *p = &g_particle_renderer.particle_instance_data[i];
+		glm_vec3_copy(mouse.raw, p->pos);
+		p->scale[0] = p->scale[1] = 1.0f;
+	}
+
 	if (g_next_gamestate != g_gamestate) {
 		if (gamestate_changed(g_gamestate, g_next_gamestate)) {
 			g_gamestate = g_next_gamestate;
@@ -547,8 +558,10 @@ static void update(struct scene_battle *battle, struct engine *engine, float dt)
 
 
 static void draw(struct scene_battle *battle, struct engine *engine) {
-	// Draw Scene (Map & Entites)
 	gbuffer_bind(g_gbuffer);
+
+	// Geometry
+	//  -> Draws scene (background, map, characters, props)
 	gbuffer_clear(g_gbuffer);
 	background_draw(engine);
 
@@ -564,12 +577,15 @@ static void draw(struct scene_battle *battle, struct engine *engine) {
 
 	gbuffer_unbind(g_gbuffer);
 
-	// Combine scene with gbuffer
-	engine_set_clear_color(0.34f, 0.72f, 0.98f);
-	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+	// Lighting
+	//  -> Combine scene with gbuffer
+	glClear(GL_DEPTH_BUFFER_BIT); // no need to clear color buffer
 	gbuffer_display(g_gbuffer, &g_camera, engine);
 
-	// Draw ui
+	// Particles
+	particle_renderer_draw(&g_particle_renderer, &g_camera);
+
+	// UI
 	draw_ui(&g_ui_pipeline);
 }
 
@@ -1081,7 +1097,6 @@ static void draw_hud(pipeline_t *pipeline) {
 			nvgStrokeColor(vg, nvgRGB(128, 0, 128));
 		}
 	}
-
 }
 
 

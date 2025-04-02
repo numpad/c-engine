@@ -112,7 +112,8 @@ debug: LIBS += -ldl
 debug: $(TARGET)
 
 # Release Flags
-release: CFLAGS += -O2
+# TODO: Ensure LTO creates no problems
+release: CFLAGS += -O2 -flto
 release: $(TARGET)
 
 # Disable warnings in library code.
