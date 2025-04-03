@@ -14,10 +14,15 @@
 
 typedef struct particle_renderer particle_renderer_t;
 
-struct particle_instance_data {
+struct particle_render_data {
 	vec3 pos;
 	vec2 scale;
 	// vec4 texcoord;
+};
+
+struct particle_data {
+	vec3 velocity;
+	float lifetime;
 };
 
 struct particle_renderer {
@@ -29,13 +34,17 @@ struct particle_renderer {
 	usize  particles_count;
 	usize  particles_capacity;
 	// TODO: SoA to split up GPU & CPU particle data?
-	struct particle_instance_data *particle_instance_data;
+	struct particle_render_data *particle_render_data;
+	struct particle_data *particle_data;
 };
 
 void  particle_renderer_init   (struct particle_renderer *);
 void  particle_renderer_destroy(struct particle_renderer *);
 void  particle_renderer_draw   (struct particle_renderer *, struct camera *);
-usize particle_renderer_spawn  (struct particle_renderer *);
+
+// System specific
+usize particle_renderer_spawn  (struct particle_renderer *, vec3 pos);
+void  particle_renderer_update (struct particle_renderer *, float dt);
 
 #endif
 

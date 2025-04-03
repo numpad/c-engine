@@ -541,12 +541,17 @@ static void update(struct scene_battle *battle, struct engine *engine, float dt)
 	ecs_run(g_world, ecs_id(system_move_models),     g_engine->dt, NULL);
 	ecs_run(g_world, ecs_id(system_move_along_path), g_engine->dt, NULL);
 
+	particle_renderer_update(&g_particle_renderer, dt);
+
+	// Spawn particles
 	if (INPUT_DRAG_IS_DOWN(g_engine->input_drag)) {
 		vec3s mouse = screen_to_world(g_engine->window_width, g_engine->window_height, g_camera.projection, g_camera.view, g_engine->input_drag.x, g_engine->input_drag.y);
-		usize i = particle_renderer_spawn(&g_particle_renderer);
-		struct particle_instance_data *p = &g_particle_renderer.particle_instance_data[i];
-		glm_vec3_copy(mouse.raw, p->pos);
-		p->scale[0] = p->scale[1] = 1.0f;
+		usize i = particle_renderer_spawn(&g_particle_renderer, mouse.raw);
+		struct particle_render_data *draw = &g_particle_renderer.particle_render_data[i];
+		struct particle_data *particle = &g_particle_renderer.particle_data[i];
+		particle->velocity[0] = ((rand() % 200) - 100) / 300.0f;
+		particle->velocity[1] = 0.4f;
+		particle->velocity[2] = ((rand() % 200) - 100) / 300.0f;
 	}
 
 	if (g_next_gamestate != g_gamestate) {
