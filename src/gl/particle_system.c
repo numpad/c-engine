@@ -3,28 +3,35 @@
 #include <assert.h>
 #include "gl/camera.h"
 #include "gl/shader.h"
+#include "gl/texture.h"
 
 struct particle_vertex {
 	float pos[2];
+	float texcoord[2];
 	float color[4];
 };
 
 static struct particle_vertex quad_vertices[] = {
 		(struct particle_vertex){
 			.pos[0]=-0.5f, .pos[1]=-0.5f,
-			.color={ 0.0f, 1.0f, 0.0f, 1.0f }
+			.texcoord={ 0.0f, 0.0f },
+			.color={ 1.0f, 0.0f, 0.0f, 1.0f },
+
 		},
 		(struct particle_vertex){
 			.pos[0]= 0.5f, .pos[1]=-0.5f,
-			.color={ 1.0f, 0.0f, 0.0f, 1.0f }
+			.texcoord={ 1.0f, 0.0f },
+			.color={ 1.0f, 0.0f, 0.0f, 1.0f },
 		},
 		(struct particle_vertex){
 			.pos[0]=-0.5f, .pos[1]= 0.5f,
-			.color={ 0.0f, 0.0f, 1.0f, 1.0f }
+			.texcoord={ 0.0f, 1.0f },
+			.color={ 1.0f, 0.0f, 0.0f, 1.0f },
 		},
 		(struct particle_vertex){
 			.pos[0]= 0.5f, .pos[1]= 0.5f,
-			.color={ 1.0f, 1.0f, 0.0f, 1.0f }
+			.texcoord={ 1.0f, 1.0f },
+			.color={ 1.0f, 0.0f, 0.0f, 1.0f },
 		}
 	};
 
@@ -36,13 +43,14 @@ void particle_renderer_init(struct particle_renderer *system) {
 	assert(system != NULL);
 
 	// init system
-	system->particles_count    =   0;
-	system->particles_capacity = 2048; // TODO: reduce and implement growing buffer
+	system->particles_count      = 0;
+	system->particles_capacity   = 2048; // TODO: reduce and implement growing buffer
 	system->particle_render_data = malloc(system->particles_capacity * sizeof(struct particle_render_data));
-	system->particle_data          = malloc(system->particles_capacity * sizeof(struct particle_data));
+	system->particle_data        = malloc(system->particles_capacity * sizeof(struct particle_data));
 	glGenBuffers(1, &system->instance_vbo);
 
 	// init renderer
+	texture_init_from_image(&system->texture, "res/image/particles.png", NULL);
 	shader_init_from_dir(&system->shader, "res/shader/particle/");
 
 	// vertex data
@@ -57,30 +65,43 @@ void particle_renderer_init(struct particle_renderer *system) {
 	glBufferData(GL_ARRAY_BUFFER, system->particles_capacity * sizeof(struct particle_render_data), NULL, GL_DYNAMIC_DRAW);
 
 	// layout
-	GLuint a_position          = glGetAttribLocation(system->shader.program, "POSITION");
-	GLuint a_color             = glGetAttribLocation(system->shader.program, "COLOR");
-	GLuint a_instance_position = glGetAttribLocation(system->shader.program, "INSTANCE_POSITION");
-	GLuint a_instance_scale    = glGetAttribLocation(system->shader.program, "INSTANCE_SCALE");
+	GLuint a_position             = glGetAttribLocation(system->shader.program, "POSITION");
+	GLuint a_texcoord             = glGetAttribLocation(system->shader.program, "TEXCOORD");
+	GLuint a_color                = glGetAttribLocation(system->shader.program, "COLOR");
+	GLuint a_instance_position    = glGetAttribLocation(system->shader.program, "INSTANCE_POSITION");
+	GLuint a_instance_scale       = glGetAttribLocation(system->shader.program, "INSTANCE_SCALE");
+	GLuint a_instance_tex_subrect = glGetAttribLocation(system->shader.program, "INSTANCE_TEXTURE_SUBRECT");
 	glBindBuffer(GL_ARRAY_BUFFER, system->vbo);
 	gl_check glEnableVertexAttribArray(a_position);
+	gl_check glEnableVertexAttribArray(a_texcoord);
 	gl_check glEnableVertexAttribArray(a_color);
-	assert(offsetof(struct particle_vertex, pos) == 0);
-	assert(offsetof(struct particle_vertex, color) == 2 * sizeof(float));
+	assert(offsetof(struct particle_vertex, pos)      == 0);
+	assert(offsetof(struct particle_vertex, texcoord) == 2 * sizeof(float));
+	assert(offsetof(struct particle_vertex, color)    == 4 * sizeof(float));
+
 	// base attribs
+	// TODO: pack position & texcoord into a single vec4
 	gl_check glVertexAttribPointer(a_position, 2, GL_FLOAT, GL_FALSE, sizeof(struct particle_vertex), (void*)offsetof(struct particle_vertex, pos));
+	gl_check glVertexAttribPointer(a_texcoord, 2, GL_FLOAT, GL_FALSE, sizeof(struct particle_vertex), (void*)offsetof(struct particle_vertex, texcoord));
 	gl_check glVertexAttribPointer(a_color   , 4, GL_FLOAT, GL_FALSE, sizeof(struct particle_vertex), (void*)offsetof(struct particle_vertex, color));
+
 	// instance attribs
 	glBindBuffer(GL_ARRAY_BUFFER, system->instance_vbo);
 	// attrib: instance position
 	assert(offsetof(struct particle_render_data, pos) == 0 * sizeof(float));
 	gl_check glEnableVertexAttribArray(a_instance_position);
-	gl_check glVertexAttribPointer(a_instance_position, 3, GL_FLOAT, GL_FALSE, sizeof(struct particle_render_data), (void*)offsetof(struct particle_render_data, pos));
+	gl_check glVertexAttribPointer(a_instance_position,    3, GL_FLOAT, GL_FALSE, sizeof(struct particle_render_data), (void*)offsetof(struct particle_render_data, pos));
 	glVertexAttribDivisor(a_instance_position, 1);
 	// attrib: instance scale
-	assert(offsetof(struct particle_render_data, scale) == 3 * sizeof(float));
+	assert(offsetof(struct particle_render_data, scale) == 4 * sizeof(float));
 	gl_check glEnableVertexAttribArray(a_instance_scale);
-	gl_check glVertexAttribPointer(a_instance_scale, 2, GL_FLOAT, GL_FALSE, sizeof(struct particle_render_data), (void*)offsetof(struct particle_render_data, scale));
+	gl_check glVertexAttribPointer(a_instance_scale,       2, GL_FLOAT, GL_FALSE, sizeof(struct particle_render_data), (void*)offsetof(struct particle_render_data, scale));
 	glVertexAttribDivisor(a_instance_scale, 1);
+	// attrib: instance texture_subrect
+	assert(offsetof(struct particle_render_data, texture_subrect) == 8 * sizeof(float));
+	gl_check glEnableVertexAttribArray(a_instance_tex_subrect);
+	gl_check glVertexAttribPointer(a_instance_tex_subrect, 4, GL_FLOAT, GL_FALSE, sizeof(struct particle_render_data), (void*)offsetof(struct particle_render_data, texture_subrect));
+	glVertexAttribDivisor(a_instance_tex_subrect, 1);
 
 	glBindVertexArray(0);
 	shader_use(NULL);
@@ -105,6 +126,7 @@ void particle_renderer_draw(struct particle_renderer *system, struct camera *cam
 	shader_use(&system->shader);
 	shader_set_uniform_mat4(&system->shader, "u_projection", (float*)camera->projection);
 	shader_set_uniform_mat4(&system->shader, "u_view"      , (float*)camera->view);
+	shader_set_uniform_texture(&system->shader, "u_texture", GL_TEXTURE0, &system->texture);
 
 	glEnable(GL_DEPTH_TEST);
 	glBindBuffer(GL_ARRAY_BUFFER, system->instance_vbo);
@@ -130,9 +152,14 @@ usize particle_renderer_spawn(struct particle_renderer *system, vec3 pos) {
 	// init this particle
 	usize particle_i = system->particles_count;
 	struct particle_render_data *draw = &system->particle_render_data[particle_i];
-	struct particle_data *particle = &system->particle_data[particle_i];
 	glm_vec3_copy(pos, draw->pos);
 	glm_vec2_one(draw->scale);
+	draw->texture_subrect[0] = 0.0f;
+	draw->texture_subrect[1] = 0.5f;
+	draw->texture_subrect[2] = 0.5f;
+	draw->texture_subrect[3] = 0.5f;
+
+	struct particle_data *particle = &system->particle_data[particle_i];
 	glm_vec3_zero(particle->velocity);
 	particle->lifetime = 1.0f;
 

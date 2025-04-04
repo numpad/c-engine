@@ -16,14 +16,10 @@ static void set_texparams_from_settings(GLuint target, struct texture_settings_s
 static int channels_from_format(GLint format) {
 	switch (format) {
 		case GL_RED_EXT:
-		case GL_ALPHA:
-			return 1;
-		case GL_RG_EXT:
-			return 2;
-		case GL_RGB:
-			return 3;
-		case GL_RGBA:
-			return 4;
+		case GL_ALPHA:  return 1;
+		case GL_RG_EXT: return 2;
+		case GL_RGB:    return 3;
+		case GL_RGBA:   return 4;
 	default:
 		fprintf(stderr, "[warn] no information about number of channels in texture format \"%d\"... assuming 4.\n", format);
 		break;
