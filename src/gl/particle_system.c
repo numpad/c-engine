@@ -8,30 +8,25 @@
 struct particle_vertex {
 	float pos[2];
 	float texcoord[2];
-	float color[4];
 };
 
 static struct particle_vertex quad_vertices[] = {
 		(struct particle_vertex){
 			.pos[0]=-0.5f, .pos[1]=-0.5f,
-			.texcoord={ 0.0f, 0.0f },
-			.color={ 1.0f, 0.0f, 0.0f, 1.0f },
+			.texcoord={ 0.0f, 1.0f },
 
 		},
 		(struct particle_vertex){
 			.pos[0]= 0.5f, .pos[1]=-0.5f,
-			.texcoord={ 1.0f, 0.0f },
-			.color={ 1.0f, 0.0f, 0.0f, 1.0f },
+			.texcoord={ 1.0f, 1.0f },
 		},
 		(struct particle_vertex){
 			.pos[0]=-0.5f, .pos[1]= 0.5f,
-			.texcoord={ 0.0f, 1.0f },
-			.color={ 1.0f, 0.0f, 0.0f, 1.0f },
+			.texcoord={ 0.0f, 0.0f },
 		},
 		(struct particle_vertex){
 			.pos[0]= 0.5f, .pos[1]= 0.5f,
-			.texcoord={ 1.0f, 1.0f },
-			.color={ 1.0f, 0.0f, 0.0f, 1.0f },
+			.texcoord={ 1.0f, 0.0f },
 		}
 	};
 
@@ -50,7 +45,13 @@ void particle_renderer_init(struct particle_renderer *system) {
 	glGenBuffers(1, &system->instance_vbo);
 
 	// init renderer
-	texture_init_from_image(&system->texture, "res/image/particles.png", NULL);
+	struct texture_settings_s settings = TEXTURE_SETTINGS_INIT;
+	settings.flip_y = 0;
+	settings.filter_min = GL_NEAREST;
+	settings.filter_mag = GL_NEAREST;
+	settings.wrap_s = GL_CLAMP_TO_EDGE;
+	settings.wrap_t = GL_CLAMP_TO_EDGE;
+	texture_init_from_image(&system->texture, "res/image/particles.png", &settings);
 	shader_init_from_dir(&system->shader, "res/shader/particle/");
 
 	// vertex data
@@ -67,23 +68,20 @@ void particle_renderer_init(struct particle_renderer *system) {
 	// layout
 	GLuint a_position             = glGetAttribLocation(system->shader.program, "POSITION");
 	GLuint a_texcoord             = glGetAttribLocation(system->shader.program, "TEXCOORD");
-	GLuint a_color                = glGetAttribLocation(system->shader.program, "COLOR");
 	GLuint a_instance_position    = glGetAttribLocation(system->shader.program, "INSTANCE_POSITION");
 	GLuint a_instance_scale       = glGetAttribLocation(system->shader.program, "INSTANCE_SCALE");
+	GLuint a_instance_color       = glGetAttribLocation(system->shader.program, "INSTANCE_COLOR");
 	GLuint a_instance_tex_subrect = glGetAttribLocation(system->shader.program, "INSTANCE_TEXTURE_SUBRECT");
 	glBindBuffer(GL_ARRAY_BUFFER, system->vbo);
 	gl_check glEnableVertexAttribArray(a_position);
 	gl_check glEnableVertexAttribArray(a_texcoord);
-	gl_check glEnableVertexAttribArray(a_color);
 	assert(offsetof(struct particle_vertex, pos)      == 0);
 	assert(offsetof(struct particle_vertex, texcoord) == 2 * sizeof(float));
-	assert(offsetof(struct particle_vertex, color)    == 4 * sizeof(float));
 
 	// base attribs
 	// TODO: pack position & texcoord into a single vec4
 	gl_check glVertexAttribPointer(a_position, 2, GL_FLOAT, GL_FALSE, sizeof(struct particle_vertex), (void*)offsetof(struct particle_vertex, pos));
 	gl_check glVertexAttribPointer(a_texcoord, 2, GL_FLOAT, GL_FALSE, sizeof(struct particle_vertex), (void*)offsetof(struct particle_vertex, texcoord));
-	gl_check glVertexAttribPointer(a_color   , 4, GL_FLOAT, GL_FALSE, sizeof(struct particle_vertex), (void*)offsetof(struct particle_vertex, color));
 
 	// instance attribs
 	glBindBuffer(GL_ARRAY_BUFFER, system->instance_vbo);
@@ -97,8 +95,13 @@ void particle_renderer_init(struct particle_renderer *system) {
 	gl_check glEnableVertexAttribArray(a_instance_scale);
 	gl_check glVertexAttribPointer(a_instance_scale,       2, GL_FLOAT, GL_FALSE, sizeof(struct particle_render_data), (void*)offsetof(struct particle_render_data, scale));
 	glVertexAttribDivisor(a_instance_scale, 1);
+	// attrib: instance color
+	assert(offsetof(struct particle_render_data, color) == 8 * sizeof(float));
+	gl_check glEnableVertexAttribArray(a_instance_color);
+	gl_check glVertexAttribPointer(a_instance_color,       4, GL_FLOAT, GL_FALSE, sizeof(struct particle_render_data), (void*)offsetof(struct particle_render_data, color));
+	glVertexAttribDivisor(a_instance_color, 1);
 	// attrib: instance texture_subrect
-	assert(offsetof(struct particle_render_data, texture_subrect) == 8 * sizeof(float));
+	assert(offsetof(struct particle_render_data, texture_subrect) == 12 * sizeof(float));
 	gl_check glEnableVertexAttribArray(a_instance_tex_subrect);
 	gl_check glVertexAttribPointer(a_instance_tex_subrect, 4, GL_FLOAT, GL_FALSE, sizeof(struct particle_render_data), (void*)offsetof(struct particle_render_data, texture_subrect));
 	glVertexAttribDivisor(a_instance_tex_subrect, 1);
@@ -122,17 +125,28 @@ void particle_renderer_draw(struct particle_renderer *system, struct camera *cam
 	if (system->particles_count <= 0)
 		return;
 
+	// bind resources
 	glBindVertexArray(system->vao);
 	shader_use(&system->shader);
-	shader_set_uniform_mat4(&system->shader, "u_projection", (float*)camera->projection);
-	shader_set_uniform_mat4(&system->shader, "u_view"      , (float*)camera->view);
-	shader_set_uniform_texture(&system->shader, "u_texture", GL_TEXTURE0, &system->texture);
-
-	glEnable(GL_DEPTH_TEST);
+	shader_set_uniform_mat4(&system->shader,    "u_projection", (float*)camera->projection);
+	shader_set_uniform_mat4(&system->shader,    "u_view",       (float*)camera->view);
+	shader_set_uniform_texture(&system->shader, "u_texture",    GL_TEXTURE0, &system->texture);
+	// update particle data
 	glBindBuffer(GL_ARRAY_BUFFER, system->instance_vbo);
 	glBufferSubData(GL_ARRAY_BUFFER, 0, system->particles_count * sizeof(struct particle_render_data), system->particle_render_data);
+
+	// configure GL
+	glEnable(GL_DEPTH_TEST);
+	glDepthMask(GL_FALSE);
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+
 	glDrawArraysInstanced(GL_TRIANGLE_STRIP, 0, 4, system->particles_count);
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+	// restore state
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+	glDepthMask(GL_TRUE);
 
 	shader_use(NULL);
 	glBindVertexArray(0);
@@ -154,10 +168,18 @@ usize particle_renderer_spawn(struct particle_renderer *system, vec3 pos) {
 	struct particle_render_data *draw = &system->particle_render_data[particle_i];
 	glm_vec3_copy(pos, draw->pos);
 	glm_vec2_one(draw->scale);
-	draw->texture_subrect[0] = 0.0f;
-	draw->texture_subrect[1] = 0.5f;
-	draw->texture_subrect[2] = 0.5f;
-	draw->texture_subrect[3] = 0.5f;
+	glm_vec4_one(draw->color);
+
+	uint tex_w = system->texture.width;
+	uint tex_h = system->texture.height;
+	uint x = 16 * 4;
+	uint y = 0;
+	uint w = 16;
+	uint h = 16;
+	draw->texture_subrect[0] = x / (float)tex_w;
+	draw->texture_subrect[1] = y / (float)tex_h;
+	draw->texture_subrect[2] = w / (float)tex_w;
+	draw->texture_subrect[3] = h / (float)tex_h;
 
 	struct particle_data *particle = &system->particle_data[particle_i];
 	glm_vec3_zero(particle->velocity);

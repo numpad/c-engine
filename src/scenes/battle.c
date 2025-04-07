@@ -530,13 +530,14 @@ static void update(struct scene_battle *battle, struct engine *engine, float dt)
 		model_skeleton_animate(&g_player_skeleton, t);
 	}
 
+	// User Input:
 	if (g_handcards_updated) {
 		g_handcards_updated = 0;
 		recalculate_handcards();
 	}
 
+	// Game state & systems
 	update_gamestate(g_gamestate, dt);
-
 	ecs_run(g_world, ecs_id(system_move_cards),      g_engine->dt, NULL);
 	ecs_run(g_world, ecs_id(system_move_models),     g_engine->dt, NULL);
 	ecs_run(g_world, ecs_id(system_move_along_path), g_engine->dt, NULL);
@@ -544,9 +545,14 @@ static void update(struct scene_battle *battle, struct engine *engine, float dt)
 	particle_renderer_update(&g_particle_renderer, dt);
 
 	// Spawn particles
-	if (INPUT_DRAG_IS_DOWN(g_engine->input_drag)) {
-		vec3s mouse = screen_to_world(g_engine->window_width, g_engine->window_height, g_camera.projection, g_camera.view, g_engine->input_drag.x, g_engine->input_drag.y);
-		usize i = particle_renderer_spawn(&g_particle_renderer, mouse.raw);
+	static float t = 0.0f;
+	const float particle_spawn_interval = 0.08f;
+	t += dt;
+	if (t > particle_spawn_interval) {
+		t -= particle_spawn_interval;
+		struct hexcoord campfire_pos = { .x=3, .y=4 };
+		vec2s spawn_pos = hexmap_coord_to_world_position(&g_hexmap, campfire_pos);
+		usize i = particle_renderer_spawn(&g_particle_renderer, (vec3){ spawn_pos.x, 0.0f, spawn_pos.y });
 		struct particle_render_data *draw = &g_particle_renderer.particle_render_data[i];
 		struct particle_data *particle = &g_particle_renderer.particle_data[i];
 		particle->velocity[0] = ((rand() % 200) - 100) / 300.0f;

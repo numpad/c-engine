@@ -23,6 +23,7 @@ struct particle_render_data {
 	float __padding0[1];
 	float scale[2];
 	float __padding1[2];
+	float color[4];
 	float texture_subrect[4];
 };
 

@@ -6,9 +6,9 @@ uniform mat4 u_view;
 
 in vec2 POSITION;
 in vec2 TEXCOORD;
-in vec4 COLOR;
 in vec3 INSTANCE_POSITION;
 in vec2 INSTANCE_SCALE;
+in vec4 INSTANCE_COLOR;
 in vec4 INSTANCE_TEXTURE_SUBRECT;
 
 out vec2 v_texcoord;
@@ -22,8 +22,8 @@ void main() {
 	vec3 quad_vertex_pos = (right * POSITION.x * INSTANCE_SCALE.x + up * POSITION.y * INSTANCE_SCALE.y);
 	vec3 position = quad_vertex_pos + INSTANCE_POSITION;
 
-	v_texcoord = TEXCOORD * INSTANCE_TEXTURE_SUBRECT.zw + INSTANCE_TEXTURE_SUBRECT.xy;
-	v_color = COLOR;
+	v_texcoord  = TEXCOORD * INSTANCE_TEXTURE_SUBRECT.zw + INSTANCE_TEXTURE_SUBRECT.xy;
+	v_color     = INSTANCE_COLOR;
 	gl_Position = u_projection * u_view * vec4(position, 1.0);
 }
 
