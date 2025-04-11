@@ -30,6 +30,7 @@ plan pile:
 ----------
 basic instanced particle rendering
 camera movement on touch/mouse drag
+cache all `glGetUniformLocation` calls instead of doing them each frame
 
 when player attacks with multiple basic attacks, let them select the card. valid cards get highlighted.
 when player plays attack card, let them select the enemy

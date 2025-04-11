@@ -70,6 +70,8 @@ struct camera;
 		--NAME.len;                                  \
 	} while (0)
 
+#define IS_FLAG_SET(value, flag) (((value) & (flag)) != 0)
+
 // math
 int point_in_rect(float px, float py, float x, float y, float w, float h);
 int drag_in_rect(struct input_drag_s *, float x, float y, float w, float h);

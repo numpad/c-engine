@@ -25,6 +25,7 @@
 #include "gl/particle_system.h"
 #include "game/background.h"
 #include "game/hexmap.h"
+#include "game/particle_spawners.h"
 #include "gui/console.h"
 #include "scenes/menu.h"
 #include "util/fs.h"
@@ -552,12 +553,8 @@ static void update(struct scene_battle *battle, struct engine *engine, float dt)
 		t -= particle_spawn_interval;
 		struct hexcoord campfire_pos = { .x=3, .y=4 };
 		vec2s spawn_pos = hexmap_coord_to_world_position(&g_hexmap, campfire_pos);
-		usize i = particle_renderer_spawn(&g_particle_renderer, (vec3){ spawn_pos.x, 0.0f, spawn_pos.y });
-		struct particle_render_data *draw = &g_particle_renderer.particle_render_data[i];
-		struct particle_data *particle = &g_particle_renderer.particle_data[i];
-		particle->velocity[0] = ((rand() % 200) - 100) / 300.0f;
-		particle->velocity[1] = 0.4f;
-		particle->velocity[2] = ((rand() % 200) - 100) / 300.0f;
+		vec3 spawn_pos_s = {spawn_pos.x, 0.0f, spawn_pos.y};
+		particle_spawn_flame(&g_particle_renderer, spawn_pos_s);
 	}
 
 	if (g_next_gamestate != g_gamestate) {

@@ -4,6 +4,7 @@
 #include "gl/camera.h"
 #include "gl/shader.h"
 #include "gl/texture.h"
+#include "util/util.h"
 
 struct particle_vertex {
 	float pos[2];
@@ -47,8 +48,8 @@ void particle_renderer_init(struct particle_renderer *system) {
 	// init renderer
 	struct texture_settings_s settings = TEXTURE_SETTINGS_INIT;
 	settings.flip_y = 0;
-	settings.filter_min = GL_NEAREST;
-	settings.filter_mag = GL_NEAREST;
+	settings.filter_min = GL_LINEAR;
+	settings.filter_mag = GL_LINEAR;
 	settings.wrap_s = GL_CLAMP_TO_EDGE;
 	settings.wrap_t = GL_CLAMP_TO_EDGE;
 	texture_init_from_image(&system->texture, "res/image/particles.png", &settings);
@@ -170,12 +171,12 @@ usize particle_renderer_spawn(struct particle_renderer *system, vec3 pos) {
 	glm_vec2_one(draw->scale);
 	glm_vec4_one(draw->color);
 
-	uint tex_w = system->texture.width;
-	uint tex_h = system->texture.height;
-	uint x = 16 * 4;
-	uint y = 0;
-	uint w = 16;
-	uint h = 16;
+	float tex_w = system->texture.width;
+	float tex_h = system->texture.height;
+	float x = 16 * 4;
+	float y = 0;
+	float w = 16;
+	float h = 16;
 	draw->texture_subrect[0] = x / (float)tex_w;
 	draw->texture_subrect[1] = y / (float)tex_h;
 	draw->texture_subrect[2] = w / (float)tex_w;
@@ -183,7 +184,13 @@ usize particle_renderer_spawn(struct particle_renderer *system, vec3 pos) {
 
 	struct particle_data *particle = &system->particle_data[particle_i];
 	glm_vec3_zero(particle->velocity);
+	glm_vec3_zero(particle->acceleration);
 	particle->lifetime = 1.0f;
+	particle->mass     = 1.0f;
+	glm_vec3_zero(particle->force_acc);
+	glm_vec3_zero(particle->gravity);
+	glm_vec3_zero(particle->drag);
+	particle->flags = PARTICLE_FLAGS_NONE;
 
 	++system->particles_count;
 	return particle_i;
@@ -196,10 +203,51 @@ void particle_renderer_update(struct particle_renderer *system, float dt) {
 		struct particle_render_data *draw = &system->particle_render_data[i];
 		struct particle_data *particle = &system->particle_data[i];
 
-		// physics
-		glm_vec3_add(draw->pos, particle->velocity, draw->pos);
-		glm_vec3_scale(particle->velocity, 0.95f, particle->velocity);
-		particle->velocity[1] -= 0.01f;
+		// Physics
+		const float fadeout_extra_time = 0.667f;
+		particle->lifetime -= dt;
+		const int is_dead = (particle->lifetime < 0.0f);
+		const int is_fading_out = (is_dead && (particle->lifetime > fadeout_extra_time));
+		if (is_dead) {
+			if (IS_FLAG_SET(particle->flags, PARTICLE_FLAGS_SHRINK_ON_DEATH)) {
+				glm_vec2_scale(draw->scale, 0.6f, draw->scale);
+			}
+			if (IS_FLAG_SET(particle->flags, PARTICLE_FLAGS_FADE_TO_BLACK)) {
+				glm_vec3_scale(draw->color, 0.8f, draw->color);
+			}
+		}
+
+		// forceAccum += gravity * mass;
+		vec3 additional_force;
+		glm_vec3_scale(particle->gravity, particle->mass, additional_force);
+		glm_vec3_add(particle->force_acc, additional_force, particle->force_acc);
+		// vec3 dragForce = -drag * velocity;
+		vec3 drag_force;
+		glm_vec3_negate_to(particle->drag, drag_force);
+		glm_vec3_mul(drag_force, particle->velocity, drag_force);
+		// forceAccum += dragForce;
+		glm_vec3_add(particle->force_acc, drag_force, particle->force_acc);
+		// acceleration (+?)= forceAccum / mass;
+		vec3 additional_acceleration;
+		glm_vec3_divs(particle->force_acc, particle->mass, additional_acceleration);
+		glm_vec3_add(particle->acceleration, additional_acceleration, particle->acceleration);
+		// velocity += acceleration * dt;
+		vec3 additional_velocity;
+		glm_vec3_scale(particle->acceleration, dt, additional_velocity);
+		glm_vec3_add(particle->velocity, additional_velocity, particle->velocity);
+		// position += velocity * dt;
+		vec3 additional_position;
+		glm_vec3_scale(particle->velocity, dt, additional_position);
+		glm_vec3_add(draw->pos, additional_position, draw->pos);
+		// forceAccum = vec3(0.0f);
+		glm_vec3_zero(particle->force_acc);
+		// TODO: reset or not? both? 
+		// glm_vec3_zero(particle->acceleration);
+
+		// old
+		//glm_vec3_add(draw->pos, particle->velocity, draw->pos);
+		//glm_vec3_scale(particle->velocity, 0.95f, particle->velocity);
+		//particle->velocity[1] -= 0.01f;
 
 		particle->lifetime -= dt;
 	}

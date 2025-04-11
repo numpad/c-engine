@@ -15,6 +15,12 @@
 
 typedef struct particle_renderer particle_renderer_t;
 
+enum particle_flag {
+	PARTICLE_FLAGS_NONE            = 0,
+	PARTICLE_FLAGS_SHRINK_ON_DEATH = 1,
+	PARTICLE_FLAGS_FADE_TO_BLACK   = 2,
+};
+
 // TODO: SoA this? Scale & Subrect will rarely change, however Pos will change
 //       often. Can we use this? Upload pos each frame, scale&subrect only on
 //       spawn/change?
@@ -28,8 +34,14 @@ struct particle_render_data {
 };
 
 struct particle_data {
-	vec3 velocity;
+	vec3  velocity;
+	vec3  acceleration;
 	float lifetime;
+	float mass;
+	vec3  force_acc;
+	vec3  gravity; // TODO: maybe move this to system?
+	vec3  drag;
+	u64   flags;
 };
 
 struct particle_renderer {
