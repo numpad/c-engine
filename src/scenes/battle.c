@@ -185,6 +185,8 @@ static int          gamestate_changed(enum gamestate_battle old_state, enum game
 static void         update_gamestate(enum gamestate_battle state, float dt);
 static void         highlight_reachable_tiles(struct hexcoord origin, usize distance);
 static void         trigger_card_effect(c_card *, enum effect_trigger);
+static void         update_animations(float dt);
+static void         interact_with_camera(void);
 
 // systems
 static void system_move_cards           (ecs_iter_t *);
@@ -309,9 +311,15 @@ static void load(struct scene_battle *battle, struct engine *engine) {
 
 	hexmap_init(&g_hexmap, g_engine);
 
-	// initialize camera
+	// initialize cameras
 	camera_init_default(&g_camera, engine->window_width, engine->window_height);
-	glm_translate(g_camera.view, (vec3){ -g_hexmap.tile_offsets.x * 3.25f, 0.0f, g_hexmap.tile_offsets.y * -3.0f });
+	glm_vec3_add(g_camera.view_offset.raw, (vec3) {
+			-g_hexmap.tile_offsets.x * 3.25f,
+			0.0f,
+			g_hexmap.tile_offsets.y * -3.0f
+		}, g_camera.view_offset.raw);
+	camera_transform_changed(&g_camera);
+	//
 	camera_init_default(&g_portrait_camera, engine->window_width, engine->window_height);
 	glm_look((vec3){ 0.0f, 0.0f, 10.0f }, (vec3){ 0.0f, 0.0f, -1.0f }, (vec3){ 0.0f, 1.0f, 0.0f }, g_portrait_camera.view);
 
@@ -520,21 +528,16 @@ static void destroy(struct scene_battle *battle, struct engine *engine) {
 }
 
 static void update(struct scene_battle *battle, struct engine *engine, float dt) {
-	// TODO: remove, test animation
-	{
-		static double t = 0.0;
-		const double duration = 1.1;
-		t += dt;
-		if (t > duration) t -= duration;
-		model_skeleton_animate(&g_portrait_skeleton, t);
-		model_skeleton_animate(&g_enemy_skeleton, t);
-		model_skeleton_animate(&g_player_skeleton, t);
-	}
+	update_animations(dt);
 
-	// User Input:
 	if (g_handcards_updated) {
 		g_handcards_updated = 0;
 		recalculate_handcards();
+	}
+
+	// Move camera
+	if (!ecs_is_valid(g_world, g_selected_card)) {
+		interact_with_camera();
 	}
 
 	// Game state & systems
@@ -1692,5 +1695,39 @@ static void observer_on_update_handcards(ecs_iter_t *it) {
 	//c_handcard *changed_handcards = ecs_field(it, c_handcard, 2);
 
 	g_handcards_updated = 1;
+}
+
+static void update_animations(float dt) {
+	// TODO: remove, test animation
+	{
+		static double t = 0.0;
+		const double duration = 1.1;
+		t += dt;
+		if (t > duration) t -= duration;
+		model_skeleton_animate(&g_portrait_skeleton, t);
+		model_skeleton_animate(&g_enemy_skeleton, t);
+		model_skeleton_animate(&g_player_skeleton, t);
+	}
+}
+
+static void interact_with_camera(void) {
+	// TODO: this is so meh, do it properly with screen_to_world or similar.
+	//p_previous = screen_to_world(g_engine->window_width, g_engine->window_height, g_camera.projection, g_camera.view, g_engine->input_drag.begin_x, g_engine->input_drag.begin_y);
+	static vec3s p_previous;
+	if (INPUT_DRAG_IS_DOWN(g_engine->input_drag)) {
+		if (g_engine->input_drag.state == INPUT_DRAG_BEGIN) {
+			p_previous.x = g_engine->input_drag.begin_x / g_engine->window_aspect;
+			p_previous.y = 0.0f;
+			p_previous.z = g_engine->input_drag.begin_y;
+		}
+		vec3s p_current = (vec3s){ .x=g_engine->input_drag.x / g_engine->window_aspect, .z=g_engine->input_drag.y };
+		vec3 delta;
+		glm_vec3_sub(p_current.raw, p_previous.raw, delta);
+		glm_vec3_scale(delta, 0.1f, delta);
+
+		glm_vec3_add(g_camera.view_offset.raw, delta, g_camera.view_offset.raw);
+		glm_vec3_copy(p_current.raw, p_previous.raw);
+		camera_transform_changed(&g_camera);
+	}
 }
 

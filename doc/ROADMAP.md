@@ -25,11 +25,14 @@ load gltf skeletal animation data
 calculate & draw a skeletal animation
 fix skeletal animation clipping
 at-least-usable skeletal animation data structure
+camera movement on touch/mouse drag
 
 plan pile:
 ----------
 basic instanced particle rendering
-camera movement on touch/mouse drag
+render cartoon fire particles
+ - 2 particle with same XY pos but Z offset (small white circle in front, bigger orange circle behind, ...) (Z need to be fixed at spawn/particle system origin, and/or include enough "padding")
+ - or multiple passes?
 cache all `glGetUniformLocation` calls instead of doing them each frame
 
 when player attacks with multiple basic attacks, let them select the card. valid cards get highlighted.

@@ -6,10 +6,10 @@ void camera_init_default(struct camera *camera, int width, int height) {
 	camera->position.x = 0.0f;
 	camera->position.y = 0.0f;
 	camera->position.z = -25.0f;
-	glm_mat4_identity(camera->view);
-	glm_translate(camera->view, camera->position.raw);
-	glm_rotate_x(camera->view, glm_rad(35.0f), camera->view);
-
+	camera->view_offset.x = 0.0f;
+	camera->view_offset.y = 0.0f;
+	camera->view_offset.z = 0.0f;
+	camera_transform_changed(camera);
 	camera_resize_projection(camera, width, height);
 }
 
@@ -17,6 +17,13 @@ void camera_resize_projection(struct camera *camera, int width, int height) {
 	float aspect = (float)height / width;
 	float size = width / 40.0f;
 	glm_ortho(-size, size, -size * aspect, size * aspect, camera->z_near, camera->z_far, camera->projection);
+}
+
+void camera_transform_changed(struct camera *camera) {
+	glm_mat4_identity(camera->view);
+	glm_translate(camera->view, camera->position.raw);
+	glm_rotate_x(camera->view, glm_rad(35.0f), camera->view);
+	glm_translate(camera->view, camera->view_offset.raw);
 }
 
 // Perspective camera experiment:
