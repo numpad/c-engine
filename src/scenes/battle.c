@@ -554,7 +554,8 @@ static void update(struct scene_battle *battle, struct engine *engine, float dt)
 		struct hexcoord campfire_pos = { .x=3, .y=4 };
 		vec2s spawn_pos = hexmap_coord_to_world_position(&g_hexmap, campfire_pos);
 		vec3 spawn_pos_s = {spawn_pos.x, 0.0f, spawn_pos.y};
-		particle_spawn_flame(&g_particle_renderer, spawn_pos_s);
+		for (int i = 0; i < 3; ++i)
+			particle_spawn_flame(&g_particle_renderer, spawn_pos_s);
 	}
 
 	if (g_next_gamestate != g_gamestate) {
@@ -944,7 +945,7 @@ static void draw_ui(pipeline_t *pipeline) {
 		glm_translate(model, (vec3){g_debug_rect.x, g_debug_rect.y, 0.0f});
 		pipeline_set_transform(&g_text_pipeline, model);
 		pipeline_reset(&g_text_pipeline);
-		fontatlas_writef_ex(&g_card_font, &g_text_pipeline, 0, g_debug_rect.w, "$1Test -> $BText $0$1$IText $BText.$0\nTest -> Text Text Text.");
+		fontatlas_writef_ex(&g_card_font, &g_text_pipeline, 0, g_debug_rect.w, "$2Number of particles: $1$B%d$0.\nYaay", g_particle_renderer.particles_count);
 		pipeline_draw_ortho(&g_text_pipeline, g_engine->window_width, g_engine->window_height);
 
 		float corner_radius = 6.0f;

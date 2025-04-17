@@ -31,6 +31,8 @@ static struct particle_vertex quad_vertices[] = {
 		}
 	};
 
+static void delete_particle(struct particle_renderer *system, usize i);
+
 //
 // Renderer specific
 //
@@ -173,7 +175,7 @@ usize particle_renderer_spawn(struct particle_renderer *system, vec3 pos) {
 
 	float tex_w = system->texture.width;
 	float tex_h = system->texture.height;
-	float x = 16 * 4;
+	float x = 16 * 3;
 	float y = 0;
 	float w = 16;
 	float h = 16;
@@ -250,6 +252,26 @@ void particle_renderer_update(struct particle_renderer *system, float dt) {
 		//particle->velocity[1] -= 0.01f;
 
 		particle->lifetime -= dt;
+
+		if (particle->lifetime < 0.0f - fadeout_extra_time) {
+			delete_particle(system, i);
+			--i;
+		}
 	}
+}
+
+//
+// Static
+//
+
+static void delete_particle(struct particle_renderer *system, usize i) {
+	assert(system != NULL);
+	assert(system->particles_count > 0);
+	assert(i < system->particles_count);
+
+	const usize last_i = (system->particles_count - 1);
+	memcpy(&system->particle_data[i],        &system->particle_data[last_i],        sizeof(struct particle_data));
+	memcpy(&system->particle_render_data[i], &system->particle_render_data[last_i], sizeof(struct particle_render_data));
+	system->particles_count -= 1;
 }
 

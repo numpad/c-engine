@@ -15,7 +15,7 @@ void particle_spawn_flame(struct particle_renderer *renderer, vec3 pos) {
 	case 1: glm_vec3_copy((vec3){0.7f, 0.2f, 0.04f}, draw->color);
 		break;
 	}
-	draw->color[3] = 0.4f + rng_f() * 0.4f;
+	draw->color[3] = 0.2f + rng_f() * 0.4f;
 	const float rx = (rng_f() * 2.0f - 1.0f);
 	const float rz = (rng_f() * 2.0f - 1.0f);
 	draw->pos[0] += rx * 0.35f;
