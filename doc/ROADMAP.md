@@ -27,14 +27,16 @@ fix skeletal animation clipping
 at-least-usable skeletal animation data structure
 camera movement on touch/mouse drag
 offscreen position indicator
+basic instanced particle rendering
+cache all `glGetUniformLocation` calls instead of doing them each frame
 
 plan pile:
 ----------
-basic instanced particle rendering
+context menu when long-pressing a tile
 render cartoon fire particles
  - 2 particle with same XY pos but Z offset (small white circle in front, bigger orange circle behind, ...) (Z need to be fixed at spawn/particle system origin, and/or include enough "padding")
+ - 3d particle/cone pointing to camera with gradient
  - or multiple passes?
-cache all `glGetUniformLocation` calls instead of doing them each frame
 
 when player attacks with multiple basic attacks, let them select the card. valid cards get highlighted.
 when player plays attack card, let them select the enemy

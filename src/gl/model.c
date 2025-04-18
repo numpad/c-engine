@@ -143,7 +143,7 @@ int model_init_from_file(model_t *model, const char *path) {
 
 void model_draw(model_t *model, shader_t *shader, struct camera *camera, mat4 modelmatrix, model_skeleton_t *skeleton) {
 	assert(model != NULL);
-	assert(shader != NULL);
+	assert(shader != NULL && shader->kind == SHADER_KIND_MODEL);
 	assert(camera != NULL);
 	assert(skeleton == NULL || skeleton->model == model);
 
@@ -151,13 +151,12 @@ void model_draw(model_t *model, shader_t *shader, struct camera *camera, mat4 mo
 	shader_use(shader);
 	glBindBuffer(GL_ARRAY_BUFFER, model->vertex_buffers[0]);
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, model->index_buffers[0]);
-	shader_set_uniform_texture(shader, "u_diffuse",    GL_TEXTURE0, &model->texture0);
-	shader_set_uniform_mat4(shader,    "u_projection", (float*)&camera->projection);
-	shader_set_uniform_mat4(shader,    "u_view",       (float*)&camera->view);
+	shader_set_texture(shader, shader->uniforms.model.diffuse,    GL_TEXTURE0, &model->texture0);
+	shader_set_mat4(shader,    shader->uniforms.model.projection, (float*)&camera->projection);
+	shader_set_mat4(shader,    shader->uniforms.model.view,       (float*)&camera->view);
 	if (skeleton) {
 		// TODO: Reset when skeleton is NULL?
-		GLint u_bone_transforms = glGetUniformLocation(shader->program, "u_bone_transforms");
-		glUniformMatrix4fv(u_bone_transforms, model->skin->joints_count, GL_FALSE, (const GLfloat *)skeleton->final_joint_matrices);
+		shader_set_mat4_ptr(shader, shader->uniforms.model.bone_transforms, model->skin->joints_count, (float*)skeleton->final_joint_matrices);
 	}
 
 	cgltf_scene *scene = model->gltf_data->scene;
@@ -409,8 +408,8 @@ static void draw_node(model_t *model, shader_t *shader, cgltf_node *node, mat4 p
 	}
 	glm_mat4_mul(parent_transform, global_transform, global_transform);
 
-	shader_set_uniform_mat4(shader, "u_model", (float*)global_transform);
-	shader_set_uniform_float(shader, "u_is_rigged", (node->skin && skeleton) ? 1 : 0);
+	shader_set_mat4(shader, shader->uniforms.model.model, (float*)global_transform);
+	shader_set_float(shader, shader->uniforms.model.is_rigged, (node->skin && skeleton) ? 1 : 0);
 
 	if (node->mesh) {
 		cgltf_mesh *mesh = node->mesh;

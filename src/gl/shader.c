@@ -19,6 +19,16 @@ static int shader_program_new(int vertex_shader, int fragment_shader);
 
 static GLint uniform_location(shader_t *shader, const char *uniform_name);
 
+static inline void assert_shader_is_bound(shader_t *shader) {
+#ifdef DEBUG
+	// assume correct shader is in use
+	GLint current_program;
+	glGetIntegerv(GL_CURRENT_PROGRAM, &current_program);
+	assert(current_program > 0);
+	assert((GLuint)current_program == shader->program);
+#endif
+}
+
 //
 // public api
 //
@@ -81,6 +91,7 @@ void shader_init(shader_t *shader, const char *vert_path, const char *frag_path)
 	assert(fs >= 0);
 	shader->program = shader_program_new(vs, fs);
 	assert(shader->program >= 0);
+	shader->kind = SHADER_KIND_UNKNOWN;
 }
 
 void shader_init_from_dir(shader_t *program, const char *dir_path) {
@@ -114,14 +125,55 @@ void shader_destroy(shader_t *shader) {
 void shader_reload_source(shader_t *shader) {
 	char *vert_path = str_copy(shader->source.vert_path);
 	char *frag_path = str_copy(shader->source.frag_path);
+	enum shader_kind previous_kind = shader->kind;
 	shader_destroy(shader);
 	shader_init(shader, vert_path, frag_path);
+	shader_use(shader);
+	shader_set_kind(shader, previous_kind);
+	shader_use(NULL);
 	str_free(vert_path);
 	str_free(frag_path);
 }
 
+void shader_set_kind(shader_t *shader, enum shader_kind kind) {
+	assert_shader_is_bound(shader);
+	assert(shader != NULL);
+	assert(kind != SHADER_KIND_UNKNOWN && "Makes no sense to set the kind to SHADER_KIND_UNKNOWN...");
+	assert(shader->kind == SHADER_KIND_UNKNOWN && "Shader already has a kind specified, but tried to set again!");
+
+	shader->kind = kind;
+	switch (shader->kind) {
+		case SHADER_KIND_UNKNOWN:
+			break;
+		case SHADER_KIND_MODEL:
+			shader->uniforms.model.model           = glGetUniformLocation(shader->program, "u_model");
+			shader->uniforms.model.view            = glGetUniformLocation(shader->program, "u_view");
+			shader->uniforms.model.projection      = glGetUniformLocation(shader->program, "u_projection");
+			shader->uniforms.model.bone_transforms = glGetUniformLocation(shader->program, "u_bone_transforms");
+			shader->uniforms.model.is_rigged       = glGetUniformLocation(shader->program, "u_is_rigged");
+			shader->uniforms.model.diffuse         = glGetUniformLocation(shader->program, "u_diffuse");
+			shader->uniforms.model.normal_matrix   = glGetUniformLocation(shader->program, "u_normalMatrix");
+			shader->uniforms.model.highlight       = glGetUniformLocation(shader->program, "u_highlight");
+			shader->uniforms.model.player_world_pos= glGetUniformLocation(shader->program, "u_player_world_pos");
+			break;
+		case SHADER_KIND_GBUFFER:
+			shader->uniforms.gbuffer.albedo    = glGetUniformLocation(shader->program, "u_albedo");
+			shader->uniforms.gbuffer.position  = glGetUniformLocation(shader->program, "u_position");
+			shader->uniforms.gbuffer.normal    = glGetUniformLocation(shader->program, "u_normal");
+			shader->uniforms.gbuffer.lut_size  = glGetUniformLocation(shader->program, "u_lut_size");
+			shader->uniforms.gbuffer.color_lut = glGetUniformLocation(shader->program, "u_color_lut");
+			shader->uniforms.gbuffer.z_near    = glGetUniformLocation(shader->program, "u_z_near");
+			shader->uniforms.gbuffer.z_far     = glGetUniformLocation(shader->program, "u_z_far");
+			shader->uniforms.gbuffer.time      = glGetUniformLocation(shader->program, "u_time");
+			break;
+	};
+}
+
 // use
 void shader_use(shader_t *shader) {
+	// TODO: assert that GL_CURRENT_PROGRAM == 0, or otherwise
+	//       GL_CURRENT_PROGRAM != shader->program, to ensure
+	//       previous cleanup and/or duplicate shader_use()s.
 	glUseProgram(shader == NULL ? 0 : shader->program);
 }
 
@@ -219,6 +271,55 @@ void shader_set_uniform_mat4(shader_t *shader, const char *uniform_name, float m
 	glUniformMatrix4fv(u_location, 1, GL_FALSE, matrix);
 }
 
+// uniform setters
+
+void shader_set_texture(shader_t *shader, GLint uniform_location, GLenum texture_unit, texture_t *texture) {
+	assert_shader_is_bound(shader);
+	assert(texture_unit >= GL_TEXTURE0 && texture_unit < GL_MAX_COMBINED_TEXTURE_IMAGE_UNITS);
+	assert(texture != NULL);
+
+	// only set shader/uniform assignment
+	glUniform1i(uniform_location, texture_unit - GL_TEXTURE0);
+
+	glActiveTexture(texture_unit);
+	glBindTexture(GL_TEXTURE_2D, texture->texture);
+}
+
+void shader_set_int(shader_t *shader, GLint uniform_location, GLint value) {
+	assert_shader_is_bound(shader);
+	glUniform1i(uniform_location, value);
+}
+
+void shader_set_float(shader_t *shader, GLint uniform_location, float value) {
+	assert_shader_is_bound(shader);
+	glUniform1f(uniform_location, value);
+}
+
+void shader_set_vec3(shader_t *shader, GLint uniform_location, float values[3]) {
+	assert_shader_is_bound(shader);
+	glUniform3f(uniform_location, values[0], values[1], values[2]);
+}
+
+void shader_set_vec4(shader_t *shader, GLint uniform_location, float values[4]) {
+	assert_shader_is_bound(shader);
+	glUniform4f(uniform_location, values[0], values[1], values[2], values[3]);
+}
+
+void shader_set_mat3(shader_t *shader, GLint uniform_location, float matrix[9]) {
+	assert_shader_is_bound(shader);
+	glUniformMatrix3fv(uniform_location, 1, GL_FALSE, matrix);
+}
+
+void shader_set_mat4(shader_t *shader, GLint uniform_location, float matrix[16]) {
+	assert_shader_is_bound(shader);
+	glUniformMatrix4fv(uniform_location, 1, GL_FALSE, matrix);
+}
+
+void shader_set_mat4_ptr(shader_t *shader, GLint uniform_location, usize count, float *matrix) {
+	assert_shader_is_bound(shader);
+	glUniformMatrix4fv(uniform_location, count, GL_FALSE, matrix);
+}
+
 
 //
 // private impl
@@ -278,14 +379,7 @@ static int shader_program_new(int vertex_shader, int fragment_shader) {
 }
 
 static GLint uniform_location(shader_t *shader, const char *uniform_name) {
-#ifdef DEBUG
-	// assume correct shader is in use
-	GLint current_program;
-	glGetIntegerv(GL_CURRENT_PROGRAM, &current_program);
-	assert(current_program > 0);
-	assert((GLuint)current_program == shader->program);
-#endif
-
+	assert_shader_is_bound(shader);
 	GLint u_location = glGetUniformLocation(shader->program, uniform_name);
 
 	return u_location;

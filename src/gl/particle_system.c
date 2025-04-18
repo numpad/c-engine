@@ -172,18 +172,7 @@ usize particle_renderer_spawn(struct particle_renderer *system, vec3 pos) {
 	glm_vec3_copy(pos, draw->pos);
 	glm_vec2_one(draw->scale);
 	glm_vec4_one(draw->color);
-
-	float tex_w = system->texture.width;
-	float tex_h = system->texture.height;
-	float x = 16 * 3;
-	float y = 0;
-	float w = 16;
-	float h = 16;
-	draw->texture_subrect[0] = x / (float)tex_w;
-	draw->texture_subrect[1] = y / (float)tex_h;
-	draw->texture_subrect[2] = w / (float)tex_w;
-	draw->texture_subrect[3] = h / (float)tex_h;
-
+	particle_renderer_set_particle_texture_subrect(system, particle_i, 16*3, 0, 16, 16);
 	struct particle_data *particle = &system->particle_data[particle_i];
 	glm_vec3_zero(particle->velocity);
 	glm_vec3_zero(particle->acceleration);
@@ -258,6 +247,18 @@ void particle_renderer_update(struct particle_renderer *system, float dt) {
 			--i;
 		}
 	}
+}
+
+void particle_renderer_set_particle_texture_subrect(struct particle_renderer *system, usize particle_index, int x, int y, int w, int h) {
+	assert(system != NULL);
+	struct particle_render_data *draw = &system->particle_render_data[particle_index];
+
+	float tex_w = system->texture.width;
+	float tex_h = system->texture.height;
+	draw->texture_subrect[0] = x / (float)tex_w;
+	draw->texture_subrect[1] = y / (float)tex_h;
+	draw->texture_subrect[2] = w / (float)tex_w;
+	draw->texture_subrect[3] = h / (float)tex_h;
 }
 
 //

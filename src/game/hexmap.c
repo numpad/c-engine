@@ -46,6 +46,8 @@ void hexmap_init(struct hexmap *map, struct engine *engine) {
 		map->tiles[i].occupied_by = 0;
 	}
 	shader_init_from_dir(&map->tile_shader, "res/shader/model/hexmap_tile/");
+	shader_use(&map->tile_shader);
+	shader_set_kind(&map->tile_shader, SHADER_KIND_MODEL);
 	shader_set_uniform_buffer(&map->tile_shader, "Global", &engine->shader_global_ubo);
 
 	// Make some map
@@ -214,9 +216,9 @@ void hexmap_draw(struct hexmap *map, struct camera *camera, vec3 player_pos) {
 		glm_mat3_inv(normalMatrix, normalMatrix);
 		glm_mat3_transpose(normalMatrix);
 		// Set uniforms
-		shader_set_uniform_mat3(&map->tile_shader, "u_normalMatrix", (float*)normalMatrix);
-		shader_set_uniform_float(&map->tile_shader, "u_highlight", map->tiles[i].highlight);
-		shader_set_uniform_vec3(&map->tile_shader, "u_player_world_pos", player_pos);
+		shader_set_mat3(&map->tile_shader,  map->tile_shader.uniforms.model.normal_matrix,    (float*)normalMatrix);
+		shader_set_float(&map->tile_shader, map->tile_shader.uniforms.model.highlight,        map->tiles[i].highlight);
+		shader_set_vec3(&map->tile_shader,  map->tile_shader.uniforms.model.player_world_pos, player_pos);
 
 		usize model_index = map->tiles[i].tile;
 		model_draw(&map->models[model_index], &map->tile_shader, camera, model, NULL);

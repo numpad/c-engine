@@ -92,6 +92,7 @@ typedef vec3s           c_pos3d;
 typedef vec3s           c_tile_offset;
 typedef struct hexcoord c_position;
 
+// model rendering
 typedef struct {
 	model_t *model;
 	float scale;
@@ -367,7 +368,7 @@ static void load(struct scene_battle *battle, struct engine *engine) {
 		e = ecs_new_id(g_world);
 		ecs_set(g_world, e, c_position, { .x=campfire_pos.x, .y=campfire_pos.y });
 		ecs_set(g_world, e, c_model,    { .model=&g_props_model[3], .scale=10.0f });
-		hexmap_tile_at(&g_hexmap, campfire_pos)->movement_cost = HEXMAP_MOVEMENT_COST_MAX;
+		hexmap_tile_at(&g_hexmap, campfire_pos)->occupied_by = e;
 		// enemy
 		struct hexcoord enemy_pos = { .x=3, .y=3 };
 		e = ecs_new_id(g_world);
@@ -390,6 +391,8 @@ static void load(struct scene_battle *battle, struct engine *engine) {
 
 	// Character Shader
 	shader_init_from_dir(&g_character_model_shader, "res/shader/model/gbuffer_pass/");
+	shader_use(&g_character_model_shader);
+	shader_set_kind(&g_character_model_shader, SHADER_KIND_MODEL);
 
 	// Load base cards
 	{
@@ -1169,6 +1172,15 @@ static void on_game_event_play_card(struct game_event event) {
 	c_card *card = ecs_get_mut(g_world, card_entity, c_card);
 
 	// TODO: Do something with card
+	if (card->image_id == 1) {
+		ecs_entity_t caused_by_entity = event.play_card.caused_by;
+		assert(caused_by_entity != 0 && ecs_is_valid(g_world, caused_by_entity));
+		const c_position *pos = ecs_get(g_world, caused_by_entity, c_position);
+		vec2s caused_by_pos = hexmap_coord_to_world_position(&g_hexmap, *pos);
+		vec3s caused_by_world_pos = (vec3s){ .x=caused_by_pos.x, .y=0.0f, .z=caused_by_pos.y };
+		particle_spawn_gain_health(&g_particle_renderer, caused_by_world_pos.raw);
+	}
+
 	trigger_card_effect(card, TRIGGER_PLAY_CARD);
 
 	// Old code, prevent placing card.
@@ -1506,7 +1518,8 @@ static void system_draw_board_entities(ecs_iter_t *it) {
 		}
 
 		mat4 model_matrix = GLM_MAT4_IDENTITY_INIT;
-		shader_set_uniform_mat3(&g_character_model_shader, "u_normalMatrix", (float*)model_matrix);
+		shader_use(&g_character_model_shader);
+		shader_set_mat3(&g_character_model_shader, g_character_model_shader.uniforms.model.normal_matrix, (float*)model_matrix);
 		glm_translate(model_matrix, world_pos.raw);
 		glm_scale_uni(model_matrix, model->scale);
 		// TODO: either only draw characters here, or specify which shader to use?
@@ -1758,7 +1771,7 @@ static void draw_offscreen_tooltip_ui(vec3s world_pos) {
 		glm_vec2_sub(screen_pos.raw, clamped_screen_pos.raw, tooltip_to_offscreen.raw);
 
 		// calculate how far away from screen
-		const float far_offscreen_distance = 190.0f;
+		const float far_offscreen_distance = 100.0f;
 		const float distance = glm_vec2_norm(tooltip_to_offscreen.raw) - offset_padding - clamp_padding;
 		const float offscreen_percentage = glm_clamp(distance / far_offscreen_distance, 0.0f, 1.0f);
 		const float offscreen_percentage_eased = glm_ease_quint_out(glm_clamp(offscreen_percentage, 0.09f, 1.0f));

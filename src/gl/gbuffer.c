@@ -53,6 +53,8 @@ void gbuffer_init(struct gbuffer *gbuffer, struct engine *engine) {
 
 	// Setup shader
 	shader_init_from_dir(&gbuffer->shader, "res/shader/lighting_pass/");
+	shader_use(&gbuffer->shader);
+	shader_set_kind(&gbuffer->shader, SHADER_KIND_GBUFFER);
 	shader_set_uniform_buffer(&gbuffer->shader, "Global", &engine->shader_global_ubo);
 
 	// color lut
@@ -110,11 +112,12 @@ void gbuffer_clear(struct gbuffer gbuffer) {
 }
 
 void gbuffer_display(struct gbuffer gbuffer, struct camera *camera, struct engine *engine) {
+	assert(gbuffer.shader.kind == SHADER_KIND_GBUFFER);
 	shader_use(&gbuffer.shader);
 	// gbuffer inputs
-	shader_set_uniform_int(&gbuffer.shader, "u_albedo", 0);
-	shader_set_uniform_int(&gbuffer.shader, "u_position", 1);
-	shader_set_uniform_int(&gbuffer.shader, "u_normal", 2);
+	shader_set_int(&gbuffer.shader, gbuffer.shader.uniforms.gbuffer.albedo,   0);
+	shader_set_int(&gbuffer.shader, gbuffer.shader.uniforms.gbuffer.position, 1);
+	shader_set_int(&gbuffer.shader, gbuffer.shader.uniforms.gbuffer.normal,   2);
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_2D, gbuffer.textures[GBUFFER_TEXTURE_ALBEDO]);
 	glActiveTexture(GL_TEXTURE1);
@@ -122,15 +125,15 @@ void gbuffer_display(struct gbuffer gbuffer, struct camera *camera, struct engin
 	glActiveTexture(GL_TEXTURE2);
 	glBindTexture(GL_TEXTURE_2D, gbuffer.textures[GBUFFER_TEXTURE_NORMAL]);
 	// color lut
-	shader_set_uniform_float(&gbuffer.shader, "u_lut_size", 32.0f);
-	shader_set_uniform_int(&gbuffer.shader, "u_color_lut", 3);
+	shader_set_float(&gbuffer.shader, gbuffer.shader.uniforms.gbuffer.lut_size, 32.0f);
+	shader_set_int(&gbuffer.shader, gbuffer.shader.uniforms.gbuffer.color_lut, 3);
 	glActiveTexture(GL_TEXTURE3);
 	glBindTexture(GL_TEXTURE_2D, gbuffer.color_lut.texture);
 
-	shader_set_uniform_float(&gbuffer.shader, "u_z_near", camera->z_near);
-	shader_set_uniform_float(&gbuffer.shader, "u_z_far",  camera->z_far);
+	shader_set_float(&gbuffer.shader, gbuffer.shader.uniforms.gbuffer.z_near, camera->z_near);
+	shader_set_float(&gbuffer.shader, gbuffer.shader.uniforms.gbuffer.z_far,  camera->z_far);
 	// TODO: Remove these:
-	shader_set_uniform_float(&gbuffer.shader, "u_time", engine->time_elapsed);
+	shader_set_float(&gbuffer.shader, gbuffer.shader.uniforms.gbuffer.time, engine->time_elapsed);
 	
 	// Render
 	draw_fullscreen_triangle(gbuffer, engine);

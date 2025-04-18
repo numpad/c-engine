@@ -66,5 +66,7 @@ void  particle_renderer_draw   (struct particle_renderer *, struct camera *);
 usize particle_renderer_spawn  (struct particle_renderer *, vec3 pos);
 void  particle_renderer_update (struct particle_renderer *, float dt);
 
+void particle_renderer_set_particle_texture_subrect(struct particle_renderer *, usize particle_index, int x, int y, int w, int h);
+
 #endif
 
