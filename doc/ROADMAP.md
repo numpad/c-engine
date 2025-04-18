@@ -26,6 +26,7 @@ calculate & draw a skeletal animation
 fix skeletal animation clipping
 at-least-usable skeletal animation data structure
 camera movement on touch/mouse drag
+offscreen position indicator
 
 plan pile:
 ----------

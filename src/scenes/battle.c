@@ -187,6 +187,8 @@ static void         highlight_reachable_tiles(struct hexcoord origin, usize dist
 static void         trigger_card_effect(c_card *, enum effect_trigger);
 static void         update_animations(float dt);
 static void         interact_with_camera(void);
+static void         draw_entity_component_tooltip(ecs_entity_t entity, vec3s world_position);
+static void         draw_offscreen_tooltip_ui(vec3s world_pos);
 
 // systems
 static void system_move_cards           (ecs_iter_t *);
@@ -1509,60 +1511,17 @@ static void system_draw_board_entities(ecs_iter_t *it) {
 		glm_scale_uni(model_matrix, model->scale);
 		// TODO: either only draw characters here, or specify which shader to use?
 		// TODO: obviously remove:
-		if (model->model == &g_player_model)
+		if (model->model == &g_player_model) {
 			model_draw(model->model, &g_character_model_shader, &g_camera, model_matrix, &g_player_skeleton);
-		else if (model->model == &g_enemy_model)
+		} else if (model->model == &g_enemy_model) {
 			model_draw(model->model, &g_character_model_shader, &g_camera, model_matrix, &g_enemy_skeleton);
-		else
+		} else {
 			model_draw(model->model, &g_character_model_shader, &g_camera, model_matrix, NULL);
+		}
 
+		draw_offscreen_tooltip_ui(world_pos);
 		if (g_debug_draw_pathfinder) {
-			// Show components of this entity
-			static char win_text[4096];
-			ecs_entity_t e = it->entities[i];
-			const ecs_type_t *type = ecs_get_type(g_world, e);
-			if (type == NULL) continue;
-			sprintf(win_text, "#%d components:\n", type->count);
-			for (int j = 0; j < type->count; ++j) {
-				ecs_id_t id = type->array[j];
-				const char *name = ecs_get_name(g_world, id);
-				sprintf(win_text + strlen(win_text), " - %s\n", name);
-			}
-
-
-			vec2s screen_pos = world_to_screen_camera(g_engine, &g_camera, GLM_MAT4_IDENTITY, world_pos);
-			vec2s win_pos = { .x=screen_pos.x + 40.0f, .y=screen_pos.y - 70.0f };
-			float win_max_width = 120.0f;
-			NVGcontext *vg = g_engine->vg;
-			// measure window size
-			float win_bounds[4];
-			nvgFontFaceId(vg, g_engine->font_monospace);
-			nvgFontSize(vg, 10.0f);
-			nvgTextBoxBounds(vg, 0.0f, 0.0f, win_max_width, win_text, NULL, win_bounds);
-			// window
-			nvgBeginPath(vg);
-			nvgRect(vg, win_pos.x, win_pos.y, win_bounds[2] - win_bounds[0], win_bounds[3] - win_bounds[1]);
-			nvgFillColor(vg, nvgRGBA(45, 40, 100, 0xA0));
-			nvgFill(vg);
-			// window border
-			nvgBeginPath(vg);
-			nvgRect(vg, win_pos.x, win_pos.y, win_bounds[2] - win_bounds[0], win_bounds[3] - win_bounds[1]);
-			nvgStrokeWidth(vg, 3.5f);
-			nvgStrokeColor(vg, nvgRGBA(35, 30, 95, 0xA0));
-			nvgStroke(vg);
-			// line to entity
-			nvgBeginPath(vg);
-			nvgStrokeWidth(vg, 3.5f);
-			nvgMoveTo(vg, win_pos.x, win_pos.y + (win_bounds[3] - win_bounds[1]));
-			nvgLineTo(vg, screen_pos.x, win_pos.y + 7.0f + (win_bounds[3] - win_bounds[1]));
-			nvgStrokeColor(vg, nvgRGBA(35, 30, 95, 0xA0));
-			nvgStroke(vg);
-			// content
-			nvgTextAlign(vg, NVG_ALIGN_TOP | NVG_ALIGN_LEFT);
-			nvgFillColor(vg, nvgRGB(255, 255, 255));
-			nvgTextBox(vg, win_pos.x, win_pos.y, win_max_width, win_text, NULL);
-			// restore previous font face
-			nvgFontFaceId(vg, g_engine->font_default_bold);
+			draw_entity_component_tooltip(it->entities[i], world_pos);
 		}
 	}
 }
@@ -1728,6 +1687,107 @@ static void interact_with_camera(void) {
 		glm_vec3_add(g_camera.view_offset.raw, delta, g_camera.view_offset.raw);
 		glm_vec3_copy(p_current.raw, p_previous.raw);
 		camera_transform_changed(&g_camera);
+	}
+}
+
+static void draw_entity_component_tooltip(ecs_entity_t e, vec3s world_pos) {
+	// Show components of this entity
+	static char win_text[4096];
+	const ecs_type_t *type = ecs_get_type(g_world, e);
+	if (type == NULL) {
+		return;
+	}
+
+	sprintf(win_text, "#%d components:\n", type->count);
+	for (int j = 0; j < type->count; ++j) {
+		ecs_id_t id = type->array[j];
+		const char *name = ecs_get_name(g_world, id);
+		sprintf(win_text + strlen(win_text), " - %s\n", name);
+	}
+
+
+	vec2s screen_pos = world_to_screen_camera(g_engine, &g_camera, GLM_MAT4_IDENTITY, world_pos);
+	vec2s win_pos = { .x=screen_pos.x + 40.0f, .y=screen_pos.y - 70.0f };
+	float win_max_width = 120.0f;
+	NVGcontext *vg = g_engine->vg;
+	// measure window size
+	float win_bounds[4];
+	nvgFontFaceId(vg, g_engine->font_monospace);
+	nvgFontSize(vg, 10.0f);
+	nvgTextBoxBounds(vg, 0.0f, 0.0f, win_max_width, win_text, NULL, win_bounds);
+	// window
+	nvgBeginPath(vg);
+	nvgRect(vg, win_pos.x, win_pos.y, win_bounds[2] - win_bounds[0], win_bounds[3] - win_bounds[1]);
+	nvgFillColor(vg, nvgRGBA(45, 40, 100, 0xA0));
+	nvgFill(vg);
+	// window border
+	nvgBeginPath(vg);
+	nvgRect(vg, win_pos.x, win_pos.y, win_bounds[2] - win_bounds[0], win_bounds[3] - win_bounds[1]);
+	nvgStrokeWidth(vg, 3.5f);
+	nvgStrokeColor(vg, nvgRGBA(35, 30, 95, 0xA0));
+	nvgStroke(vg);
+	// line to entity
+	nvgBeginPath(vg);
+	nvgStrokeWidth(vg, 3.5f);
+	nvgMoveTo(vg, win_pos.x, win_pos.y + (win_bounds[3] - win_bounds[1]));
+	nvgLineTo(vg, screen_pos.x, win_pos.y + 7.0f + (win_bounds[3] - win_bounds[1]));
+	nvgStrokeColor(vg, nvgRGBA(35, 30, 95, 0xA0));
+	nvgStroke(vg);
+	// content
+	nvgTextAlign(vg, NVG_ALIGN_TOP | NVG_ALIGN_LEFT);
+	nvgFillColor(vg, nvgRGB(255, 255, 255));
+	nvgTextBox(vg, win_pos.x, win_pos.y, win_max_width, win_text, NULL);
+	// restore previous font face
+	nvgFontFaceId(vg, g_engine->font_default_bold);
+}
+
+static void draw_offscreen_tooltip_ui(vec3s world_pos) {
+	// draw offscreen tooltip
+	vec2s screen_pos = world_to_screen_camera(g_engine, &g_camera, GLM_MAT4_IDENTITY, world_pos);
+	const float offset_padding = 30.0f;
+	if (!vec2s_in_rect(screen_pos, 0.0f - offset_padding, 0.0f - offset_padding, g_engine->window_width + offset_padding * 2, g_engine->window_height + offset_padding * 2)) {
+		float tooltip_radius = 15.0f;
+		const float clamp_padding = tooltip_radius + 25.0f;
+		vec2s clamped_screen_pos = (vec2s){
+			.x=glm_clamp(screen_pos.x, 0.0f + clamp_padding, g_engine->window_width  - clamp_padding),
+			.y=glm_clamp(screen_pos.y, 0.0f + clamp_padding, g_engine->window_height - clamp_padding),
+		};
+
+		// tooltip_to_offscreen = normalize(screen_pos - clamped_screen_pos) * tooltip_radius;
+		vec2s tooltip_to_offscreen;
+		glm_vec2_sub(screen_pos.raw, clamped_screen_pos.raw, tooltip_to_offscreen.raw);
+
+		// calculate how far away from screen
+		const float far_offscreen_distance = 190.0f;
+		const float distance = glm_vec2_norm(tooltip_to_offscreen.raw) - offset_padding - clamp_padding;
+		const float offscreen_percentage = glm_clamp(distance / far_offscreen_distance, 0.0f, 1.0f);
+		const float offscreen_percentage_eased = glm_ease_quint_out(glm_clamp(offscreen_percentage, 0.09f, 1.0f));
+		tooltip_radius *= offscreen_percentage_eased;
+
+		// triangle/arrow indicator corners
+		const float triangle_width = 30.0f + 7.0f * offscreen_percentage_eased;
+		const float triangle_height = 6.0f * offscreen_percentage_eased;
+		vec2s to_corner_0;
+		glm_vec2_scale_as(tooltip_to_offscreen.raw, tooltip_radius, to_corner_0.raw);
+		vec2s to_corner_1;
+		vec2s to_corner_2;
+		glm_vec2_rotate(to_corner_0.raw, glm_rad( triangle_width), to_corner_1.raw);
+		glm_vec2_rotate(to_corner_0.raw, glm_rad(-triangle_width), to_corner_2.raw);
+		glm_vec2_scale_as(tooltip_to_offscreen.raw, tooltip_radius + triangle_height, to_corner_0.raw);
+
+		NVGcontext *vg = g_engine->vg;
+		nvgBeginPath  (vg);
+		nvgCircle     (vg, clamped_screen_pos.x, clamped_screen_pos.y, tooltip_radius);
+		nvgMoveTo     (vg, clamped_screen_pos.x + to_corner_0.x, clamped_screen_pos.y + to_corner_0.y);
+		nvgLineTo     (vg, clamped_screen_pos.x + to_corner_1.x, clamped_screen_pos.y + to_corner_1.y);
+		nvgLineTo     (vg, clamped_screen_pos.x + to_corner_2.x, clamped_screen_pos.y + to_corner_2.y);
+		nvgLineTo     (vg, clamped_screen_pos.x + to_corner_0.x, clamped_screen_pos.y + to_corner_0.y);
+		nvgStrokeWidth(vg, 4.5f * offscreen_percentage_eased);
+		nvgMiterLimit (vg, 2.0f);
+		nvgStrokeColor(vg, nvgRGB(0x26, 0x14, 0x11));
+		nvgFillColor  (vg, nvgRGB(0xC6, 0x6B, 0x5B));
+		nvgStroke     (vg);
+		nvgFill       (vg);
 	}
 }
 

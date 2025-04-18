@@ -16,6 +16,10 @@ int point_in_rect(float px, float py, float x, float y, float w, float h) {
 	return (px >= x && py >= y && px <= x + w && py <= y + h);
 }
 
+int vec2s_in_rect(vec2s p, float x, float y, float w, float h) {
+	return point_in_rect(p.x, p.y, x, y, w, h);
+}
+
 int drag_in_rect(struct input_drag_s *drag, float x, float y, float w, float h) {
 	return (drag->state == INPUT_DRAG_BEGIN || drag->state == INPUT_DRAG_IN_PROGRESS || drag->state == INPUT_DRAG_END)
 	        && (drag->x >= x && drag->y >= y && drag->x <= x + w && drag->y <= y + h);

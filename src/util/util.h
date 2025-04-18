@@ -44,6 +44,12 @@ struct camera;
 	 || (filter) == GL_LINEAR_MIPMAP_NEAREST  \
 	 || (filter) == GL_LINEAR_MIPMAP_LINEAR)
 
+#define vec2_unpack(v)  v[0], v[1]
+#define vec2s_unpack(v) v.x, v.y
+#define vec3_unpack(v)  v[0], v[1], v[2]
+#define vec3s_unpack(v) v.x, v.y, v.z
+
+
 // Data Structures
 
 #define RINGBUFFER(TYPE, NAME, CAPACITY) \
@@ -74,6 +80,8 @@ struct camera;
 
 // math
 int point_in_rect(float px, float py, float x, float y, float w, float h);
+int vec2s_in_rect(vec2s p, float x, float y, float w, float h);
+
 int drag_in_rect(struct input_drag_s *, float x, float y, float w, float h);
 int drag_clicked_in_rect(struct input_drag_s *, float x, float y, float w, float h);
 int nearest_pow2(int value);
