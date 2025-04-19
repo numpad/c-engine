@@ -45,7 +45,7 @@ struct shader {
 			GLint is_rigged;
 			GLint normal_matrix;
 			GLint highlight;
-			GLint player_world_pos
+			GLint player_world_pos;
 		} model;
 		struct {
 			GLint albedo;

@@ -147,6 +147,12 @@ typedef struct {
 } c_move_along_path;
 
 typedef struct {
+	int is_on_screen;
+	float animation;
+	NVGcolor color;
+} c_offscreen_tooltip;
+
+typedef struct {
 	int armor;
 } c_statuseffect_armor;
 
@@ -162,6 +168,7 @@ ECS_COMPONENT_DECLARE(c_velocity);
 ECS_COMPONENT_DECLARE(c_health);
 ECS_COMPONENT_DECLARE(c_npc);
 ECS_COMPONENT_DECLARE(c_move_along_path);
+ECS_COMPONENT_DECLARE(c_offscreen_tooltip);
 ECS_COMPONENT_DECLARE(c_statuseffect_armor);
 
 
@@ -189,17 +196,18 @@ static void         trigger_card_effect(c_card *, enum effect_trigger);
 static void         update_animations(float dt);
 static void         interact_with_camera(void);
 static void         draw_entity_component_tooltip(ecs_entity_t entity, vec3s world_position);
-static void         draw_offscreen_tooltip_ui(vec3s world_pos);
+static void         draw_offscreen_tooltip_ui(const c_offscreen_tooltip *, vec3s world_pos);
 
 // systems
-static void system_move_cards           (ecs_iter_t *);
-static void system_move_models          (ecs_iter_t *);
-static void system_draw_cards           (ecs_iter_t *);
-static void system_draw_board_entities  (ecs_iter_t *);
-static void system_draw_healthbars      (ecs_iter_t *);
-static void system_enemy_turn           (ecs_iter_t *);
-static void system_move_along_path      (ecs_iter_t *);
-static void observer_on_update_handcards(ecs_iter_t *);
+static void system_move_cards               (ecs_iter_t *);
+static void system_move_models              (ecs_iter_t *);
+static void system_draw_cards               (ecs_iter_t *);
+static void system_draw_board_entities      (ecs_iter_t *);
+static void system_draw_healthbars          (ecs_iter_t *);
+static void system_enemy_turn               (ecs_iter_t *);
+static void system_move_along_path          (ecs_iter_t *);
+static void system_update_offscreen_tooltips(ecs_iter_t *);
+static void observer_on_update_handcards    (ecs_iter_t *);
 
 ECS_SYSTEM_DECLARE(system_move_cards);
 ECS_SYSTEM_DECLARE(system_move_models);
@@ -208,6 +216,7 @@ ECS_SYSTEM_DECLARE(system_draw_board_entities);
 ECS_SYSTEM_DECLARE(system_draw_healthbars);
 ECS_SYSTEM_DECLARE(system_enemy_turn);
 ECS_SYSTEM_DECLARE(system_move_along_path);
+ECS_SYSTEM_DECLARE(system_update_offscreen_tooltips);
 
 
 //
@@ -339,14 +348,16 @@ static void load(struct scene_battle *battle, struct engine *engine) {
 	ECS_COMPONENT_DEFINE(g_world, c_health);
 	ECS_COMPONENT_DEFINE(g_world, c_npc);
 	ECS_COMPONENT_DEFINE(g_world, c_move_along_path);
+	ECS_COMPONENT_DEFINE(g_world, c_offscreen_tooltip);
 	ECS_COMPONENT_DEFINE(g_world, c_statuseffect_armor);
-	ECS_SYSTEM_DEFINE(g_world, system_move_cards,          0, c_pos2d, c_handcard);
-	ECS_SYSTEM_DEFINE(g_world, system_move_models,         0, c_pos3d, c_model, c_velocity);
-	ECS_SYSTEM_DEFINE(g_world, system_draw_cards,          0, c_card, ?c_handcard, c_pos2d); _syntax_fix_label:
-	ECS_SYSTEM_DEFINE(g_world, system_draw_board_entities, 0, c_position, c_model, ?c_tile_offset); _syntax_fix_label2:
-	ECS_SYSTEM_DEFINE(g_world, system_draw_healthbars,     0, c_position, c_health, ?c_tile_offset); _syntax_fix_label3:
-	ECS_SYSTEM_DEFINE(g_world, system_enemy_turn,          0, c_position, c_npc);
-	ECS_SYSTEM_DEFINE(g_world, system_move_along_path,     0, c_position, c_tile_offset, c_move_along_path);
+	ECS_SYSTEM_DEFINE(g_world, system_move_cards,                0, c_pos2d,    c_handcard);
+	ECS_SYSTEM_DEFINE(g_world, system_move_models,               0, c_pos3d,    c_model,       c_velocity);
+	ECS_SYSTEM_DEFINE(g_world, system_draw_cards,                0, c_card,     ?c_handcard,   c_pos2d); _syntax_fix_label:
+	ECS_SYSTEM_DEFINE(g_world, system_draw_board_entities,       0, c_position, c_model,       ?c_tile_offset); _syntax_fix_label2:
+	ECS_SYSTEM_DEFINE(g_world, system_draw_healthbars,           0, c_position, c_health,      ?c_tile_offset); _syntax_fix_label3:
+	ECS_SYSTEM_DEFINE(g_world, system_enemy_turn,                0, c_position, c_npc);
+	ECS_SYSTEM_DEFINE(g_world, system_move_along_path,           0, c_position, c_tile_offset, c_move_along_path);
+	ECS_SYSTEM_DEFINE(g_world, system_update_offscreen_tooltips, 0, c_position, c_offscreen_tooltip);
 
 	g_ordered_handcards = ecs_query(g_world, {
 		.filter.terms = { {ecs_id(c_card)}, {ecs_id(c_handcard)} },
@@ -372,10 +383,11 @@ static void load(struct scene_battle *battle, struct engine *engine) {
 		// enemy
 		struct hexcoord enemy_pos = { .x=3, .y=3 };
 		e = ecs_new_id(g_world);
-		ecs_set(g_world, e, c_position,  { .x=enemy_pos.x, .y=enemy_pos.y });
-		ecs_set(g_world, e, c_model,     { .model=&g_enemy_model, .scale=1.8f });
-		ecs_set(g_world, e, c_health,    { .hp=8, .max_hp=8 });
-		ecs_set(g_world, e, c_npc,       { ._dummy=1 });
+		ecs_set(g_world, e, c_position,          { .x=enemy_pos.x, .y=enemy_pos.y });
+		ecs_set(g_world, e, c_model,             { .model=&g_enemy_model, .scale=1.8f });
+		ecs_set(g_world, e, c_health,            { .hp=8, .max_hp=8 });
+		ecs_set(g_world, e, c_npc,               { ._dummy=1 });
+		ecs_set(g_world, e, c_offscreen_tooltip, { .animation=0.0f, .is_on_screen=0, .color=nvgRGB(0xC6, 0x6B, 0x5B) });
 		hexmap_tile_at(&g_hexmap, enemy_pos)->occupied_by = e;
 		g_enemy_skeleton.animation_index = 3;
 		// player
@@ -384,6 +396,7 @@ static void load(struct scene_battle *battle, struct engine *engine) {
 		ecs_set(g_world, g_player, c_position,  { .x=player_pos.x, .y=player_pos.y });
 		ecs_set(g_world, g_player, c_model,     { .model=&g_player_model, .scale=1.8f });
 		ecs_set(g_world, g_player, c_health,    { .hp=7, .max_hp=10 });
+		ecs_set(g_world, g_player, c_offscreen_tooltip, { .animation=0.0f, .is_on_screen=0, .color=nvgRGB(0x5B, 0xB6, 0xC6) });
 		g_portrait_skeleton.animation_index = 72;
 		g_player_skeleton.animation_index = 0;
 		hexmap_tile_at(&g_hexmap, player_pos)->occupied_by = g_player;
@@ -547,9 +560,10 @@ static void update(struct scene_battle *battle, struct engine *engine, float dt)
 
 	// Game state & systems
 	update_gamestate(g_gamestate, dt);
-	ecs_run(g_world, ecs_id(system_move_cards),      g_engine->dt, NULL);
-	ecs_run(g_world, ecs_id(system_move_models),     g_engine->dt, NULL);
-	ecs_run(g_world, ecs_id(system_move_along_path), g_engine->dt, NULL);
+	ecs_run(g_world, ecs_id(system_move_cards),                g_engine->dt, NULL);
+	ecs_run(g_world, ecs_id(system_move_models),               g_engine->dt, NULL);
+	ecs_run(g_world, ecs_id(system_move_along_path),           g_engine->dt, NULL);
+	ecs_run(g_world, ecs_id(system_update_offscreen_tooltips), g_engine->dt, NULL);
 
 	particle_renderer_update(&g_particle_renderer, dt);
 
@@ -615,6 +629,7 @@ void on_callback(struct scene_battle *battle, struct engine *engine, struct engi
 		g_handcards_updated = 1;
 		break;
 	case ENGINE_EVENT_KEY:
+		// Reload shaders
 		if (event.data.key.type == SDL_KEYDOWN && event.data.key.repeat == 0 && event.data.key.keysym.sym == SDLK_r) {
 			console_log_ex(engine, CONSOLE_MSG_SUCCESS, 0.5f, "3 shaders reloaded.");
 			shader_reload_source(&g_hexmap.tile_shader);
@@ -1502,14 +1517,15 @@ static void system_draw_cards(ecs_iter_t *it) {
 }
 
 static void system_draw_board_entities(ecs_iter_t *it) {
-	c_position    *it_positions = ecs_field(it, c_position, 1);
-	c_model       *it_models    = ecs_field(it, c_model,    2);
-	c_tile_offset *it_offsets   = (ecs_field_is_set(it,     3) ? ecs_field(it, c_tile_offset, 3) : NULL);
+	c_position          *it_positions = ecs_field(it, c_position, 1);
+	c_model             *it_models    = ecs_field(it, c_model,    2);
+	c_tile_offset       *it_offsets   = (ecs_field_is_set(it,     3) ? ecs_field(it, c_tile_offset,       3) : NULL);
 
 	for (int i = 0; i < it->count; ++i) {
-		c_position pos = it_positions[i];
-		c_model *model = &it_models[i];
-		c_tile_offset *tile_offset = (it_offsets == NULL ? NULL : &it_offsets[i]);
+		ecs_entity_t e = it->entities[i];
+		c_position          pos          = it_positions[i];
+		c_model             *model       = &it_models[i];
+		c_tile_offset       *tile_offset = (it_offsets  == NULL ? NULL : &it_offsets [i]);
 
 		vec2s offset = hexmap_coord_to_world_position(&g_hexmap, pos);
 		vec3s world_pos = { .x=offset.x, .y=0.0f, .z=offset.y };
@@ -1532,7 +1548,11 @@ static void system_draw_board_entities(ecs_iter_t *it) {
 			model_draw(model->model, &g_character_model_shader, &g_camera, model_matrix, NULL);
 		}
 
-		draw_offscreen_tooltip_ui(world_pos);
+		const c_offscreen_tooltip *tooltip = ecs_get(g_world, e, c_offscreen_tooltip);
+		if (tooltip) {
+			draw_offscreen_tooltip_ui(tooltip, world_pos);
+		}
+
 		if (g_debug_draw_pathfinder) {
 			draw_entity_component_tooltip(it->entities[i], world_pos);
 		}
@@ -1662,6 +1682,28 @@ static void system_move_along_path(ecs_iter_t *it) {
 	}
 }
 
+static void system_update_offscreen_tooltips(ecs_iter_t *it) {
+	c_position          *it_positions = ecs_field(it, c_position,          1);
+	c_offscreen_tooltip *it_tooltips  = ecs_field(it, c_offscreen_tooltip, 2);
+
+	for (int i = 0; i < it->count; ++i) {
+		ecs_entity_t e = it->entities[i];
+		c_position           pos     = it_positions[i];
+		c_offscreen_tooltip *tooltip = &it_tooltips[i];
+
+		vec2s world_pos = hexmap_coord_to_world_position(&g_hexmap, pos);
+		vec2s screen_pos = world_to_screen_camera(g_engine, &g_camera, GLM_MAT4_IDENTITY, (vec3s){{ world_pos.x, 0.0f, world_pos.y }});
+		const float offset_padding = 30.0f;
+		const int is_on_screen = (vec2s_in_rect(screen_pos, 0.0f - offset_padding, 0.0f - offset_padding, g_engine->window_width + offset_padding * 2, g_engine->window_height + offset_padding * 2));
+		if (is_on_screen) tooltip->animation -= it->delta_time * 2.0f;
+		else              tooltip->animation += it->delta_time;
+		tooltip->is_on_screen = is_on_screen;
+		tooltip->animation = glm_clamp(tooltip->animation, 0.0f, 1.0f);
+
+		ecs_modified(g_world, e, c_offscreen_tooltip);
+	}
+}
+
 static void observer_on_update_handcards(ecs_iter_t *it) {
 	//c_card *changed_cards = ecs_field(it, c_card, 1);
 	//c_handcard *changed_handcards = ecs_field(it, c_handcard, 2);
@@ -1754,13 +1796,18 @@ static void draw_entity_component_tooltip(ecs_entity_t e, vec3s world_pos) {
 	nvgFontFaceId(vg, g_engine->font_default_bold);
 }
 
-static void draw_offscreen_tooltip_ui(vec3s world_pos) {
+static void draw_offscreen_tooltip_ui(const c_offscreen_tooltip *tooltip, vec3s world_pos) {
 	// draw offscreen tooltip
-	vec2s screen_pos = world_to_screen_camera(g_engine, &g_camera, GLM_MAT4_IDENTITY, world_pos);
-	const float offset_padding = 30.0f;
-	if (!vec2s_in_rect(screen_pos, 0.0f - offset_padding, 0.0f - offset_padding, g_engine->window_width + offset_padding * 2, g_engine->window_height + offset_padding * 2)) {
-		float tooltip_radius = 15.0f;
+	if (tooltip->animation > 0.0f) {
+		const float offscreen_percentage_eased =
+			tooltip->is_on_screen
+				? glm_ease_back_out(tooltip->animation)
+				: glm_ease_elast_out(tooltip->animation);
+
+		const float tooltip_radius = 15.0f * offscreen_percentage_eased;
+
 		const float clamp_padding = tooltip_radius + 25.0f;
+		vec2s screen_pos = world_to_screen_camera(g_engine, &g_camera, GLM_MAT4_IDENTITY, world_pos);
 		vec2s clamped_screen_pos = (vec2s){
 			.x=glm_clamp(screen_pos.x, 0.0f + clamp_padding, g_engine->window_width  - clamp_padding),
 			.y=glm_clamp(screen_pos.y, 0.0f + clamp_padding, g_engine->window_height - clamp_padding),
@@ -1771,15 +1818,14 @@ static void draw_offscreen_tooltip_ui(vec3s world_pos) {
 		glm_vec2_sub(screen_pos.raw, clamped_screen_pos.raw, tooltip_to_offscreen.raw);
 
 		// calculate how far away from screen
-		const float far_offscreen_distance = 100.0f;
-		const float distance = glm_vec2_norm(tooltip_to_offscreen.raw) - offset_padding - clamp_padding;
-		const float offscreen_percentage = glm_clamp(distance / far_offscreen_distance, 0.0f, 1.0f);
-		const float offscreen_percentage_eased = glm_ease_quint_out(glm_clamp(offscreen_percentage, 0.09f, 1.0f));
-		tooltip_radius *= offscreen_percentage_eased;
+		//const float offset_padding = 30.0f;
+		//const float far_offscreen_distance = 100.0f;
+		//const float distance = glm_vec2_norm(tooltip_to_offscreen.raw) - offset_padding - clamp_padding;
+		//const float offscreen_percentage = glm_clamp(distance / far_offscreen_distance, 0.0f, 1.0f);
 
 		// triangle/arrow indicator corners
 		const float triangle_width = 30.0f + 7.0f * offscreen_percentage_eased;
-		const float triangle_height = 6.0f * offscreen_percentage_eased;
+		const float triangle_height = 6.0f * offscreen_percentage_eased * offscreen_percentage_eased;
 		vec2s to_corner_0;
 		glm_vec2_scale_as(tooltip_to_offscreen.raw, tooltip_radius, to_corner_0.raw);
 		vec2s to_corner_1;
@@ -1795,10 +1841,10 @@ static void draw_offscreen_tooltip_ui(vec3s world_pos) {
 		nvgLineTo     (vg, clamped_screen_pos.x + to_corner_1.x, clamped_screen_pos.y + to_corner_1.y);
 		nvgLineTo     (vg, clamped_screen_pos.x + to_corner_2.x, clamped_screen_pos.y + to_corner_2.y);
 		nvgLineTo     (vg, clamped_screen_pos.x + to_corner_0.x, clamped_screen_pos.y + to_corner_0.y);
-		nvgStrokeWidth(vg, 4.5f * offscreen_percentage_eased);
+		nvgStrokeWidth(vg, 2.5f + 2.25f * offscreen_percentage_eased);
 		nvgMiterLimit (vg, 2.0f);
 		nvgStrokeColor(vg, nvgRGB(0x26, 0x14, 0x11));
-		nvgFillColor  (vg, nvgRGB(0xC6, 0x6B, 0x5B));
+		nvgFillColor  (vg, tooltip->color);
 		nvgStroke     (vg);
 		nvgFill       (vg);
 	}
