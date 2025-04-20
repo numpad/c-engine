@@ -541,6 +541,7 @@ static void destroy(struct scene_battle *battle, struct engine *engine) {
 	model_skeleton_destroy(&g_portrait_skeleton);
 	model_skeleton_destroy(&g_player_skeleton);
 	model_skeleton_destroy(&g_enemy_skeleton);
+	particle_renderer_destroy(&g_particle_renderer);
 
 	gbuffer_destroy(&g_gbuffer);
 }
@@ -1548,6 +1549,7 @@ static void system_draw_board_entities(ecs_iter_t *it) {
 			model_draw(model->model, &g_character_model_shader, &g_camera, model_matrix, NULL);
 		}
 
+		// TODO: draw tooltips in own system, maybe add overlap-protection
 		const c_offscreen_tooltip *tooltip = ecs_get(g_world, e, c_offscreen_tooltip);
 		if (tooltip) {
 			draw_offscreen_tooltip_ui(tooltip, world_pos);
