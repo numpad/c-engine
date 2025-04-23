@@ -60,22 +60,25 @@ struct hexcoord {
 	int y;
 };
 
-struct hexmap {
-	// General
-	int w, h;
-	float tilesize;
-
-	// Tiles
+struct hexmap_chunk {
+	ivec2s chunk_coords;
 	struct hextile *tiles;
 	usize *edges;
+};
+
+struct hexmap {
+	// General
+	float tilesize;
+
+	// Chunks
+	ivec2s chunk_size;
+	usize chunks_count;
+	struct hexmap_chunk **chunks;
 
 	// Rendering
 	shader_t tile_shader;
 	vec2s tile_offsets;
 	model_t models[10];
-
-	// Special tiles
-	usize highlight_tile_index;
 };
 
 struct hexmap_path {
@@ -88,8 +91,6 @@ struct hexmap_path {
 
 // coordinates
 int hexcoord_equal(struct hexcoord a, struct hexcoord b);
-int hexmap_is_valid_coord(struct hexmap *, struct hexcoord);
-int hexmap_is_valid_index(struct hexmap *, usize index);
 
 //
 void hexmap_init(struct hexmap *, struct engine *);

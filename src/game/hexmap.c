@@ -11,11 +11,13 @@
 // PRIVATE //
 /////////////
 
-static const usize NO_EDGE = (usize)-1;
-static const usize NODE_NONE = (usize)-2;
+static const usize NO_EDGE          = (usize)-1;
+static const usize NODE_NONE        = (usize)-2;
 static const usize NODE_NOT_VISITED = (usize)-1;
 
 static void load_hextile_models(struct hexmap *);
+static struct hexmap_chunk *new_hexmap_chunk(struct hexmap *, ivec2s coordinates);
+static struct hexmap_chunk *find_chunk_by_worldcoords(struct hexmap *, ivec2s world_coordinates);
 
 ////////////
 // PUBLIC //
@@ -25,63 +27,17 @@ int hexcoord_equal(struct hexcoord a, struct hexcoord b) {
 	return a.x == b.x && a.y == b.y;
 }
 
-int hexmap_is_valid_coord(struct hexmap *map, struct hexcoord coord) {
-	assert(map != NULL);
-	return (coord.x >= 0 && coord.y >= 0 && coord.x < map->w && coord.y < map->h);
-}
-
-int hexmap_is_valid_index(struct hexmap *map, usize index) {
-	assert(map != NULL);
-	return (index < (usize)map->w * map->h);
-}
-
 void hexmap_init(struct hexmap *map, struct engine *engine) {
-	map->w = 7;
-	map->h = 11;
 	map->tilesize = 2.0f;
-	map->edges = malloc(map->w * map->h * sizeof(*map->edges) * HEXMAP_MAX_EDGES);
-	map->tiles = calloc(map->w * map->h, sizeof(*map->tiles));
-	for (usize i = 0; i < (usize)map->w * map->h; ++i) {
-		map->tiles[i].movement_cost = 1;
-		map->tiles[i].occupied_by = 0;
-	}
+	map->chunk_size = (ivec2s){ .x=7, .y=11 };
+	map->chunks_count = 0;
+	map->chunks = NULL;
+	new_hexmap_chunk(map, (ivec2s){ .x=0, .y=0 });
+
 	shader_init_from_dir(&map->tile_shader, "res/shader/model/hexmap_tile/");
 	shader_use(&map->tile_shader);
 	shader_set_kind(&map->tile_shader, SHADER_KIND_MODEL);
 	shader_set_uniform_buffer(&map->tile_shader, "Global", &engine->shader_global_ubo);
-
-	// Make some map
-#define M(x, y, T, R, M) \
-	map->tiles[x + map->w * y].tile = T;     \
-	map->tiles[x + map->w * y].rotation = R; \
-	map->tiles[x + map->w * y].movement_cost = M;
-	
-	M(0, 0, 1,  0, HEXMAP_MOVEMENT_COST_MAX);
-	M(1, 0, 4, -1, HEXMAP_MOVEMENT_COST_MAX);
-	M(2, 0, 6, -1, 1);
-	M(0, 1, 1,  0, HEXMAP_MOVEMENT_COST_MAX);
-	M(1, 1, 1,  0, HEXMAP_MOVEMENT_COST_MAX);
-	M(2, 1, 4, -2, HEXMAP_MOVEMENT_COST_MAX);
-	M(0, 2, 1,  0, HEXMAP_MOVEMENT_COST_MAX);
-	M(1, 2, 5, -3, HEXMAP_MOVEMENT_COST_MAX);
-	M(2, 2, 6, -2, 1);
-	M(0, 3, 3, -4, HEXMAP_MOVEMENT_COST_MAX);
-	M(1, 3, 4, -3, HEXMAP_MOVEMENT_COST_MAX);
-	M(2, 3, 6, -2, 1);
-	M(0, 4, 6, -3, 1);
-
-	M(4, 0, 8,  1, 1);
-	M(4, 1, 8, -2, 1);
-	M(4, 2, 9, -1, 1);
-	M(5, 2, 7,  0, 1);
-	M(6, 2, 7,  0, 1);
-	M(5, 3, 8,  1, 1);
-	M(4, 4, 7, -2, 1);
-	M(4, 5, 8, -2, 1);
-	M(4, 6, 8,  1, 1);
-	M(4, 7, 8, -2, 1);
-	M(4, 8, 7, -1, 1);
-#undef M
 
 	// precomputed
 	map->tile_offsets = (vec2s){
@@ -98,10 +54,16 @@ void hexmap_init(struct hexmap *map, struct engine *engine) {
 void hexmap_destroy(struct hexmap *map) {
 	assert(map != NULL);
 	// TODO: Store this...
-	for (usize i = 0; i < count_of(map->models); ++i) {
+	for (uindex i = 0; i < count_of(map->models); ++i) {
 		model_destroy(&map->models[i]);
 	}
-	free(map->tiles);
+
+	for (uindex i = 0; i < map->chunks_count; ++i) {
+		free(map->chunks[i]->tiles);
+		free(map->chunks[i]->edges);
+		free(map->chunks[i]);
+	}
+	free(map->chunks);
 }
 
 vec2s hexmap_coord_to_world_position(struct hexmap *map, struct hexcoord coord) {
@@ -184,71 +146,75 @@ struct hextile *hexmap_tile_at(struct hexmap *map, struct hexcoord at) {
 }
 
 void hexmap_draw(struct hexmap *map, struct camera *camera, vec3 player_pos) {
-	usize n_tiles = map->w * map->h;
+	assert(map != NULL);
+	assert(camera != NULL);
+	assert(map->chunks_count > 0); // TODO: remove?
 
-	// Highlight tile.
-	//usize index = map->highlight_tile_index;
-	//if (index < (usize)map->w * map->h) {
-	//	vec2s wp = hexmap_index_to_world_position(map, index);
-	//	{
-	//		mat4 model = GLM_MAT4_IDENTITY_INIT;
-	//		glm_translate(model, (vec3){ wp.x, 40.0f, wp.y });
-	//		glm_scale(model, (vec3){ 100.0f, 100.0f, 100.0f});
-	//		model_draw(&map->models[1], &map->tile_shader, camera, model, NULL);
-	//	}
-	//}
-	
 	shader_use(&map->tile_shader);
-	for (usize i = 0; i < n_tiles; ++i) {
-		vec2s pos = hexmap_index_to_world_position(map, i);
-		
-		// TODO: model matrices wont change often: lets cache them...
-		mat4 model = GLM_MAT4_IDENTITY_INIT;
-		//glm_translate(model, (vec3){ -map->tile_offsets.x * 3.f, 0.0f, map->tile_offsets.y * -2.0f });
-		glm_translate(model, (vec3){ pos.x, 0.0f, pos.y });
-		glm_rotate_y(model, map->tiles[i].rotation * glm_rad(60.0f), model);
-		glm_scale_uni(model, 1.733f);
+	for (uindex chunk_i = 0; chunk_i < map->chunks_count; ++chunk_i) {
+		struct hexmap_chunk *chunk = map->chunks[chunk_i];
 
-		mat4 modelView = GLM_MAT4_IDENTITY_INIT;
-		glm_mat4_mul(camera->view, model, modelView);
-		mat3 normalMatrix = GLM_MAT3_IDENTITY_INIT;
-		glm_mat4_pick3(modelView, normalMatrix);
-		glm_mat3_inv(normalMatrix, normalMatrix);
-		glm_mat3_transpose(normalMatrix);
-		// Set uniforms
-		shader_set_mat3(&map->tile_shader,  map->tile_shader.uniforms.model.normal_matrix,    (float*)normalMatrix);
-		shader_set_float(&map->tile_shader, map->tile_shader.uniforms.model.highlight,        map->tiles[i].highlight);
-		shader_set_vec3(&map->tile_shader,  map->tile_shader.uniforms.model.player_world_pos, player_pos);
+		for (int tile_y = 0; tile_y < map->chunk_size.y; ++tile_y) {
+			for (int tile_x = 0; tile_x < map->chunk_size.x; ++tile_x) {
+				const uindex tile_i = tile_x * map->chunk_size.x + tile_y;
+				vec2s pos = hexmap_index_to_world_position(map, tile_i);
+				struct hextile *tile = &chunk->tiles[tile_i];
+				
+				// TODO: model matrices wont change often: lets cache them...
+				mat4 model = GLM_MAT4_IDENTITY_INIT;
+				//glm_translate(model, (vec3){ -map->tile_offsets.x * 3.f, 0.0f, map->tile_offsets.y * -2.0f });
+				glm_translate(model, (vec3){ pos.x, 0.0f, pos.y });
+				glm_rotate_y(model, tile->rotation * glm_rad(60.0f), model);
+				glm_scale_uni(model, 1.733f);
 
-		usize model_index = map->tiles[i].tile;
-		model_draw(&map->models[model_index], &map->tile_shader, camera, model, NULL);
-		// Draw water for waterless coast tiles
-		if (model_index >= 2 && model_index <= 6) {
-			model_draw(&map->models[1], &map->tile_shader, camera, model, NULL);
+				mat4 modelView = GLM_MAT4_IDENTITY_INIT;
+				glm_mat4_mul(camera->view, model, modelView);
+				mat3 normalMatrix = GLM_MAT3_IDENTITY_INIT;
+				glm_mat4_pick3(modelView, normalMatrix);
+				glm_mat3_inv(normalMatrix, normalMatrix);
+				glm_mat3_transpose(normalMatrix);
+				// Set uniforms
+				shader_set_mat3(&map->tile_shader,  map->tile_shader.uniforms.model.normal_matrix,    (float*)normalMatrix);
+				shader_set_float(&map->tile_shader, map->tile_shader.uniforms.model.highlight,        tile->highlight);
+				shader_set_vec3(&map->tile_shader,  map->tile_shader.uniforms.model.player_world_pos, player_pos);
+
+				usize model_index = tile->tile;
+				model_draw(&map->models[model_index], &map->tile_shader, camera, model, NULL);
+				// Draw water for waterless coast tiles
+				if (model_index >= 2 && model_index <= 6) {
+					model_draw(&map->models[1], &map->tile_shader, camera, model, NULL);
+				}
+			}
 		}
 	}
 }
 
 void hexmap_set_tile_effect(struct hexmap *map, struct hexcoord coord, enum hexmap_tile_effect effect) {
 	assert(map != NULL);
-	assert(hexmap_is_valid_coord(map, coord) && "Invalid coord");
+	struct hextile *tile = hexmap_tile_at(map, coord);
 
-	usize index = hexmap_coord_to_index(map, coord);
+	// TODO: assert, this shouldnt happen by accident
+	//assert(tile != NULL);
+	if (tile == NULL) {
+		return;
+	}
+
 	switch (effect) {
 	case HEXMAP_TILE_EFFECT_NONE:
-		map->tiles[index].highlight = 0;
+		tile->highlight = 0;
 		break;
 	case HEXMAP_TILE_EFFECT_ATTACKABLE:
-		map->tiles[index].highlight = 1;
+		tile->highlight = 1;
 		break;
 	case HEXMAP_TILE_EFFECT_MOVEABLE_AREA:
-		map->tiles[index].highlight = 2;
+		tile->highlight = 2;
 		break;
 	}
 }
 
 void hexmap_clear_tile_effect(struct hexmap *map, enum hexmap_tile_effect effect_to_reset) {
 	assert(map != NULL);
+	assert("TODO: not implemented :3");
 	for (usize i = 0; i < (usize)map->w * map->h; ++i) {
 		if (map->tiles[i].highlight == effect_to_reset) {
 			map->tiles[i].highlight = HEXMAP_TILE_EFFECT_NONE;
@@ -526,5 +492,87 @@ static void load_hextile_models(struct hexmap *map) {
 		int err = model_init_from_file(&map->models[i], models[i]);
 		assert(err == 0);
 	}
+}
+
+static struct hexmap_chunk *new_hexmap_chunk(struct hexmap *map, ivec2s coordinates) {
+	assert(map != NULL);
+
+#ifndef NDEBUG
+	// Ensure chunk doesn't exist yet
+	for (usize i = 0; i < map->chunks_count; ++i) {
+		const int coords_already_exist = (
+				map->chunks[i]->chunk_coords.x == coordinates.x
+				&& map->chunks[i]->chunk_coords.y == coordinates.y);
+		assert(!coords_already_exist);
+	}
+#endif
+
+	const usize new_index = map->chunks_count;
+	++map->chunks_count;
+	map->chunks = realloc(map->chunks, map->chunks_count * sizeof(struct hexmap_chunk *));
+
+	// initialize new chunk
+	struct hexmap_chunk *new_chunk = malloc(sizeof(struct hexmap_chunk));
+	map->chunks[new_index] = new_chunk;
+	new_chunk->chunk_coords.x = coordinates.x;
+	new_chunk->chunk_coords.y = coordinates.y;
+	new_chunk->edges = malloc(map->chunk_size.x * map->chunk_size.y * sizeof(*map->edges) * HEXMAP_MAX_EDGES);
+	new_chunk->tiles = calloc(map->chunk_size.x * map->chunk_size.y, sizeof(*map->tiles));
+	for (usize i = 0; i < (usize)map->chunk_size.x * map->chunk_size.y; ++i) {
+		new_chunk->tiles[i].movement_cost = 1;
+		new_chunk->tiles[i].occupied_by = 0;
+	}
+
+	// TODO: generate map
+#define M(x, y, T, R, M) \
+	new_chunk->tiles[x + map->chunk_size.x * y].tile = T;     \
+	new_chunk->tiles[x + map->chunk_size.x * y].rotation = R; \
+	new_chunk->tiles[x + map->chunk_size.x * y].movement_cost = M;
+	
+	M(0, 0, 1,  0, HEXMAP_MOVEMENT_COST_MAX);
+	M(1, 0, 4, -1, HEXMAP_MOVEMENT_COST_MAX);
+	M(2, 0, 6, -1, 1);
+	M(0, 1, 1,  0, HEXMAP_MOVEMENT_COST_MAX);
+	M(1, 1, 1,  0, HEXMAP_MOVEMENT_COST_MAX);
+	M(2, 1, 4, -2, HEXMAP_MOVEMENT_COST_MAX);
+	M(0, 2, 1,  0, HEXMAP_MOVEMENT_COST_MAX);
+	M(1, 2, 5, -3, HEXMAP_MOVEMENT_COST_MAX);
+	M(2, 2, 6, -2, 1);
+	M(0, 3, 3, -4, HEXMAP_MOVEMENT_COST_MAX);
+	M(1, 3, 4, -3, HEXMAP_MOVEMENT_COST_MAX);
+	M(2, 3, 6, -2, 1);
+	M(0, 4, 6, -3, 1);
+
+	M(4, 0, 8,  1, 1);
+	M(4, 1, 8, -2, 1);
+	M(4, 2, 9, -1, 1);
+	M(5, 2, 7,  0, 1);
+	M(6, 2, 7,  0, 1);
+	M(5, 3, 8,  1, 1);
+	M(4, 4, 7, -2, 1);
+	M(4, 5, 8, -2, 1);
+	M(4, 6, 8,  1, 1);
+	M(4, 7, 8, -2, 1);
+	M(4, 8, 7, -1, 1);
+#undef M
+
+	return new_chunk;
+}
+
+static struct hexmap_chunk *find_chunk_by_worldcoords(struct hexmap *map, ivec2s world_coordinates) {
+	assert(map != NULL);
+
+	// TODO: fix for negative coordinates.
+	usize chunk_x = world_coordinates.x / map->chunk_size.x;
+	usize chunk_y = world_coordinates.y / map->chunk_size.y;
+
+	for (uindex i = 0; i < map->chunks_count; ++i) {
+		const hexmap_chunk *chunk = &map->chunks[i];
+		if (chunk->chunk_coords.x == chunk_x && chunk->chunk_coords.y == chunk_y) {
+			return chunk;
+		}
+	}
+
+	return NULL;
 }
 

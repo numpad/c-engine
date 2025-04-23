@@ -32,6 +32,8 @@ cache all `glGetUniformLocation` calls instead of doing them each frame
 
 plan pile:
 ----------
+chunked map with dynamic growing
+
 context menu when long-pressing a tile
 render cartoon fire particles
  - 2 particle with same XY pos but Z offset (small white circle in front, bigger orange circle behind, ...) (Z need to be fixed at spawn/particle system origin, and/or include enough "padding")

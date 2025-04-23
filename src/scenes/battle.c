@@ -637,6 +637,15 @@ void on_callback(struct scene_battle *battle, struct engine *engine, struct engi
 			shader_reload_source(&g_character_model_shader);
 			shader_reload_source(&g_gbuffer.shader);
 		}
+		// Place tile
+		if (event.data.key.type == SDL_KEYDOWN && event.data.key.repeat == 0 && event.data.key.keysym.sym == SDLK_e) {
+			vec3s worldpos = screen_to_world(g_engine->window_width, g_engine->window_height, g_camera.projection, g_camera.view, g_engine->input_drag.begin_x, g_engine->input_drag.begin_y);
+			struct hexcoord coord = hexmap_world_position_to_coord(&g_hexmap, (vec2s){ .x=worldpos.x, .y=worldpos.z });
+			struct hextile *tile = hexmap_tile_at(&g_hexmap, coord);
+			tile->tile = 1;
+
+			REPEAT(20) particle_spawn_flame(&g_particle_renderer, worldpos.raw);
+		}
 		break;
 	case ENGINE_EVENT_CLOSE_SCENE: {
 		struct scene_menu *menu_scene = malloc(sizeof(struct scene_menu));

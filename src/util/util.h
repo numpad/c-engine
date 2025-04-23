@@ -21,6 +21,7 @@ typedef unsigned char uchar;
 typedef unsigned int uint;
 typedef size_t usize;
 typedef i64 isize;
+typedef usize uindex;
 
 struct engine;
 struct camera;
@@ -48,6 +49,8 @@ struct camera;
 #define vec2s_unpack(v) v.x, v.y
 #define vec3_unpack(v)  v[0], v[1], v[2]
 #define vec3s_unpack(v) v.x, v.y, v.z
+
+#define REPEAT(n) for (usize __REPEAT_i = (n); __REPEAT_i > 0; --__REPEAT_i)
 
 
 // Data Structures
